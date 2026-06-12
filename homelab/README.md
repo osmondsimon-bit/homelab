@@ -10,7 +10,7 @@
 
 ### admin
 - Role: Admin VM
-- IP: YOUR_MGMT_VM_IP
+- IP: YOUR_HA_TEMP_IP
 - Status: initial build
 - Services: Git, Claude Code, scripts, SSH client, future Ansible
 
@@ -26,14 +26,29 @@
 ## Current network
 - Gateway: YOUR_GATEWAY_IP
 - Proxmox host: YOUR_PROXMOX_IP
-- Admin VM: YOUR_MGMT_VM_IP
+- Admin VM: YOUR_HA_TEMP_IP
 - Bridge: vmbr0
 - Initial VLAN: Home / untagged
 
+## Repo layout
+
+```
+decisions/   Architecture decision records (ADR-NNN-title.md)
+scripts/     Shell scripts for provisioning and maintenance
+ansible/     Playbooks and inventory (not yet active)
+```
+
+## Hosts
+
+### home-assistant
+- Role: Home Assistant OS VM (VMID 200)
+- IP: YOUR_HA_IP
+- MAC: YOUR_HA_MAC
+- Status: running — migrated from dedicated machine, Zigbee confirmed working
+- Services: Home Assistant OS, Zigbee2MQTT, SLZB-06 coordinator at YOUR_ZIGBEE_COORD_IP
+
 ## Next services
-- Home Assistant VM migration
-- Admin tooling
-- Git repo
-- Backups
-- Monitoring
-- Later: Ansible
+- [x] Home Assistant VM migration (ADR-004)
+- [ ] Backups to NAS (longer term)
+- [ ] Monitoring
+- [ ] Ansible
