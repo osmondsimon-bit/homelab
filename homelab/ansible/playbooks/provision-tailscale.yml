@@ -3,7 +3,7 @@
 # First Ansible-managed service (see decisions/005-activate-ansible.md).
 # Idempotent — safe to re-run.
 #
-# Run from the admin VM (control node), inside homelab/ansible/:
+# Run from the mgmt-vm (control node), inside homelab/ansible/:
 #   ansible-playbook playbooks/provision-tailscale.yml
 #
 # You'll be prompted for the Tailscale auth key (never stored). Generate one at

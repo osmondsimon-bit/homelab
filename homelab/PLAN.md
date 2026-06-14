@@ -9,7 +9,7 @@
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
-| mgmt-vm | — | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, scripts, Ansible control node (ADR-005) |
+| mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, scripts, Ansible control node (ADR-005) |
 | home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.

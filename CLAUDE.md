@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Documentation, scripts, and configuration for Simon's homelab. The primary host is **apophis** (Proxmox VE, `YOUR_PROXMOX_IP`). All work is done from the **admin VM** (`YOUR_MGMT_VM_IP`).
+Documentation, scripts, and configuration for Simon's homelab. The primary host is **apophis** (Proxmox VE, `YOUR_PROXMOX_IP`). All work is done from the **mgmt-vm** (`YOUR_MGMT_VM_IP`).
 
 ## Key infrastructure
 
 | Host | Role | IP |
 |------|------|----|
 | apophis | Proxmox VE hypervisor | YOUR_PROXMOX_IP |
-| admin VM | This machine — git, scripts, Claude Code, future Ansible | YOUR_MGMT_VM_IP |
+| mgmt-vm | This machine — git, scripts, Claude Code, Ansible control node | YOUR_MGMT_VM_IP |
 | home-assistant | HAOS VM (VMID 200), Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP | YOUR_HA_IP |
 
 ## Repo layout
@@ -20,17 +20,17 @@ Documentation, scripts, and configuration for Simon's homelab. The primary host 
 homelab/
   decisions/     Architecture Decision Records (ADR-NNN-title.md)
   scripts/       Bash scripts for provisioning and maintenance
-  ansible/       Inventory and playbooks (not yet in active use)
+  ansible/       Ansible control node — inventory + playbooks (ADR-005)
   docs/          Service-specific notes
   network/       Network layout diagrams/notes
   inventory/     Hardware inventory
   backups/       Backup config/notes
-decisions/       Top-level one-off decisions (e.g. admin VM sizing)
+decisions/       Top-level one-off decisions (e.g. mgmt-vm sizing)
 ```
 
 ## Running scripts
 
-Scripts are written for bash and assume they run from the admin VM. Always check prerequisites in the script header.
+Scripts are written for bash and assume they run from the mgmt-vm. Always check prerequisites in the script header.
 
 ```bash
 bash homelab/scripts/<target>-<action>.sh
@@ -38,13 +38,13 @@ bash homelab/scripts/<target>-<action>.sh
 
 ## Running Ansible
 
-Ansible is the primary provisioning layer (ADR-005). Run playbooks from the admin VM:
+Ansible is the primary provisioning layer (ADR-005). Run playbooks from the mgmt-vm:
 
 ```bash
 cd homelab/ansible && ansible-playbook playbooks/<name>.yml
 ```
 
-First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the admin VM on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime or stored with ansible-vault — never committed.
+First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the mgmt-vm on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime or stored with ansible-vault — never committed.
 
 ## Conventions
 

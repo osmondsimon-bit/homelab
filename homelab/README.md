@@ -9,10 +9,10 @@
 - Services: Home Assistant planned
 
 ### admin
-- Role: Admin VM
+- Role: mgmt-vm
 - IP: YOUR_MGMT_VM_IP
 - Status: initial build
-- Services: Git, Claude Code, scripts, SSH client, future Ansible
+- Services: Git, Claude Code, scripts, SSH client, Ansible control node
 
 ## Design principles
 - Keep Proxmox host clean
@@ -26,7 +26,7 @@
 ## Current network
 - Gateway: YOUR_GATEWAY_IP
 - Proxmox host: YOUR_PROXMOX_IP
-- Admin VM: YOUR_MGMT_VM_IP
+- mgmt-vm: YOUR_MGMT_VM_IP
 - Bridge: vmbr0
 - Initial VLAN: Home / untagged
 

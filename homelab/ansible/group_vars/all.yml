@@ -6,7 +6,7 @@
 # --- Proxmox / LXC general ---------------------------------------------------
 rootfs_storage: local-lvm                                   # rootfs pool for new LXCs
 template_store: local                                       # where LXC templates live
-lxc_template: debian-12-standard_12.7-1_amd64.tar.zst       # base template
+lxc_template: debian-12-standard_12.12-1_amd64.tar.zst       # base template
 bridge: vmbr0
 gateway: YOUR_GATEWAY_IP
 

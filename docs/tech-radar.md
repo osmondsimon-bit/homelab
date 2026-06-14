@@ -11,7 +11,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Notes |
 |------------|------|-------|
-| AI coding agent | Claude Code | Primary tool, runs on admin VM |
+| AI coding agent | Claude Code | Primary tool, runs on mgmt-vm |
 | On-demand infra review | `infra-designer` agent | Invoked before any new VM/LXC/network change |
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
 | DNS + ad blocking | Technitium DNS | Phase 2 — LXC planned |
@@ -21,7 +21,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Media server | Plex | Phase 3 — VM planned, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 3 — LXC planned |
 | Monitoring | Prometheus + Grafana | Phase 3 — VM planned |
-| Infrastructure as code | Ansible | Active (ADR-005) — control node = admin VM; first playbook: Tailscale |
+| Infrastructure as code | Ansible | Active (ADR-005) — control node = mgmt-vm; first playbook: Tailscale |
 | Secret handling | Ansible Vault / env vars | Convention only — no tooling yet |
 
 ---

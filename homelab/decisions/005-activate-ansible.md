@@ -16,13 +16,13 @@ services accumulate as bash scripts that later need converting.
 ## Decision
 
 Ansible is now the primary provisioning and configuration layer. New services are
-deployed via playbooks run from the **admin VM** (the control node), not by scripts
+deployed via playbooks run from the **mgmt-vm** (the control node), not by scripts
 executed on the hosts.
 
 **Auth / connectivity model (deliberately minimal for the first iteration):**
 
 - The control node connects to the **Proxmox host over SSH as root** (one credential:
-  an SSH key from the admin VM in `root@apophis`'s `authorized_keys`).
+  an SSH key from the mgmt-vm in `root@apophis`'s `authorized_keys`).
 - LXC/VM lifecycle is driven via `pct` / `qm` commands over that SSH connection, with
   idempotency guards (existence checks, `blockinfile`, `creates`). This mirrors the
   verified manual steps exactly and keeps the dependency surface to a single credential.
@@ -43,7 +43,7 @@ ansible/
 
 ## Consequences
 
-- **Bootstrap cost (one-time):** install Ansible on the admin VM; add the admin VM's
+- **Bootstrap cost (one-time):** install Ansible on the mgmt-vm; add the mgmt-vm's
   SSH key to `root@apophis`. No Proxmox API token or per-container keys needed yet.
 - Provisioning is now declarative, idempotent, version-controlled, and re-runnable.
   The curl-to-host pattern is retired as the primary path.

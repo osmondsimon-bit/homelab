@@ -43,14 +43,14 @@ Zigbee2MQTT connects to SLZB-06 at `YOUR_ZIGBEE_COORD_IP`. If Zigbee devices sto
 
 ---
 
-## Admin VM
+## mgmt-vm
 
-### Check admin VM connectivity
+### Check mgmt-vm connectivity
 ```bash
 ping -c 3 YOUR_MGMT_VM_IP
 ```
 
-### SSH to admin VM
+### SSH to mgmt-vm
 ```bash
 ssh simon@YOUR_MGMT_VM_IP
 ```

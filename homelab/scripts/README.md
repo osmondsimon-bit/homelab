@@ -7,7 +7,7 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 - Scripts are written for bash unless noted otherwise.
 - Each script prints what it is about to do before doing it.
 - Destructive or irreversible steps prompt for confirmation.
-- Scripts assume they run from the admin VM (YOUR_MGMT_VM_IP) unless the filename says otherwise.
+- Scripts assume they run from the mgmt-vm (YOUR_MGMT_VM_IP) unless the filename says otherwise.
 
 ## Layout
 

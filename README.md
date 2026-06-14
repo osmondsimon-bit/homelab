@@ -3,7 +3,7 @@
 Infrastructure documentation, provisioning scripts, and configuration for a Proxmox-based home server.
 
 **Host:** apophis — Intel i7-8700T, 16 GB RAM, ~500 GB SSD, running Proxmox VE at `YOUR_PROXMOX_IP`  
-**Admin VM:** Ubuntu Server at `YOUR_MGMT_VM_IP` — git, Claude Code, scripts, future Ansible
+**mgmt-vm:** Ubuntu Server at `YOUR_MGMT_VM_IP` — git, Claude Code, scripts, Ansible control node
 
 ## Key docs
 

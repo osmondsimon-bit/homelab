@@ -1,10 +1,10 @@
 # ansible/
 
 Ansible is the primary provisioning and configuration layer for the homelab
-(see `../decisions/005-activate-ansible.md`). Playbooks run from the **admin VM**
+(see `../decisions/005-activate-ansible.md`). Playbooks run from the **mgmt-vm**
 (the control node) and reach the Proxmox host over SSH.
 
-## Bootstrap (one-time, on the admin VM)
+## Bootstrap (one-time, on the mgmt-vm)
 
 ```bash
 # 1. Install Ansible
@@ -13,7 +13,7 @@ sudo apt update && sudo apt install -y ansible
 # 2. Create an SSH key if you don't have one
 ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -C "admin-vm"
 
-# 3. Authorise the admin VM on the Proxmox host (asks for apophis root password once)
+# 3. Authorise the mgmt-vm on the Proxmox host (asks for apophis root password once)
 ssh-copy-id root@YOUR_PROXMOX_IP
 
 # 4. Verify connectivity (run from this directory so ansible.cfg is picked up)

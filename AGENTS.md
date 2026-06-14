@@ -112,7 +112,7 @@ Follows Microsoft's best practice for cloud API throttling.
 
 ### **Homelab Projects**
 
-* Developed in **VSCode** using **Claude Code** (admin VM: Ubuntu Server, YOUR_MGMT_VM_IP).
+* Developed in **VSCode** using **Claude Code** (mgmt-vm: Ubuntu Server, YOUR_MGMT_VM_IP).
 * Hypervisor: **Proxmox VE** on apophis (YOUR_PROXMOX_IP, Intel i7-8700T, 16 GB RAM). Services run as **VMs or LXCs** — not Docker containers. See `homelab/PLAN.md` for service inventory and RAM budget.
 * The AI agent cannot reach the Proxmox host or any VM/LXC directly — they are on a private network. SSH commands must be run by the user unless Tailscale is confirmed active.
 * Remote access: **Cloudflare Tunnel** (Home Assistant only) + **Tailscale** (admin/SSH, Phase 2). No ports forwarded from the internet.
