@@ -36,8 +36,9 @@ executed on the hosts.
 ```
 ansible/
   ansible.cfg                 # inventory path, no host-key prompt, pipelining
-  inventory/hosts.ini         # apophis (root), admin (simon)
-  group_vars/all.yml          # non-secret defaults (CTIDs, IPs, sizing)
+  inventory/
+    hosts.ini                 # apophis (root), mgmt-vm (simon), home-assistant
+    group_vars/all.yml        # non-secret defaults (CTIDs, IPs, sizing) — must sit next to the inventory
   playbooks/<service>.yml     # one playbook per service
 ```
 

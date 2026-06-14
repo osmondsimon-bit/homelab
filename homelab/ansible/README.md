@@ -29,10 +29,11 @@ refinement to the `community.general.proxmox` API modules.
 
 ```
 ansible/
-  ansible.cfg            # inventory path, host-key prompt off, pipelining
-  inventory/hosts.ini    # apophis (root), admin (simon)
-  group_vars/all.yml     # non-secret defaults (CTIDs, IPs, sizing)
-  playbooks/             # one playbook per service
+  ansible.cfg                  # inventory path, host-key prompt off, pipelining
+  inventory/
+    hosts.ini                  # apophis (root), mgmt-vm (simon), home-assistant
+    group_vars/all.yml         # non-secret defaults (CTIDs, IPs, sizing)
+  playbooks/                   # one playbook per service
 ```
 
 ## Running a playbook
