@@ -21,7 +21,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Media server | Plex | Phase 3 — VM planned, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 3 — LXC planned |
 | Monitoring | Prometheus + Grafana | Phase 3 — VM planned |
-| Infrastructure as code | Ansible | Planned — inventory exists, playbooks pending |
+| Infrastructure as code | Ansible | Active (ADR-005) — control node = admin VM; first playbook: Tailscale |
 | Secret handling | Ansible Vault / env vars | Convention only — no tooling yet |
 
 ---
@@ -79,5 +79,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | Date | Phase | Outcome |
 |------|-------|---------|
 | 2026-06-14 | Phase 1 complete | Initial radar populated from TadMSTR reference review |
+| 2026-06-14 | Phase 2 start | Ansible activated (ADR-005) as the provisioning layer; Tailscale is the first managed service |
 
 *Add a row each time this radar is reviewed at a phase boundary.*

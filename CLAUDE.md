@@ -38,13 +38,13 @@ bash homelab/scripts/<target>-<action>.sh
 
 ## Running Ansible
 
-Ansible is not yet active (needs `sudo apt install ansible` on the admin VM first).
+Ansible is the primary provisioning layer (ADR-005). Run playbooks from the admin VM:
 
 ```bash
-ansible-playbook -i homelab/ansible/inventory/hosts.ini homelab/ansible/playbooks/<name>.yml
+cd homelab/ansible && ansible-playbook playbooks/<name>.yml
 ```
 
-Test against a Proxmox snapshot before running against any production host. Keep secrets out of the repo — use ansible-vault or environment variables.
+First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the admin VM on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime or stored with ansible-vault — never committed.
 
 ## Conventions
 

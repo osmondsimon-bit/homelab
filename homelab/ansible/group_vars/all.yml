@@ -1,0 +1,20 @@
+---
+# Non-secret defaults for homelab Ansible.
+# Secrets (e.g. the Tailscale auth key) are prompted at runtime, never stored here.
+# See decisions/005-activate-ansible.md.
+
+# --- Proxmox / LXC general ---------------------------------------------------
+rootfs_storage: local-lvm                                   # rootfs pool for new LXCs
+template_store: local                                       # where LXC templates live
+lxc_template: debian-12-standard_12.7-1_amd64.tar.zst       # base template
+bridge: vmbr0
+gateway: YOUR_GATEWAY_IP
+
+# --- Tailscale LXC -----------------------------------------------------------
+tailscale_ctid: 110                                         # ensure this VMID is free
+tailscale_hostname: tailscale
+tailscale_ram_mb: 256
+tailscale_cores: 1
+tailscale_disk_gb: 4
+tailscale_ip: YOUR_TAILSCALE_LAN_IP/24                                # verify free; reserve in UniFi
+tailscale_advertise_routes: "YOUR_LAN_CIDR"                # add IoT/mgmt subnets if wanted

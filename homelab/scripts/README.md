@@ -16,6 +16,9 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 | `ha-vm-migrate.sh` | Create the HAOS VM on Proxmox from a downloaded qcow2 image | Proxmox host |
 | `tailscale-lxc-provision.sh` | Create an unprivileged Tailscale LXC as a subnet router | Proxmox host |
 
+> Provisioning is now primarily done via Ansible (`../ansible/`, ADR-005). These
+> scripts are manual fallbacks and references the playbooks encode — not the primary path.
+
 ## Adding a script
 
 1. Name it `<target>-<action>.sh` (e.g. `proxmox-snapshot.sh`, `lxc-create-base.sh`).

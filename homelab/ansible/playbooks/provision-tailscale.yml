@@ -1,0 +1,132 @@
+---
+# Provision the Tailscale LXC on Proxmox and bring it up as a subnet router.
+# First Ansible-managed service (see decisions/005-activate-ansible.md).
+# Idempotent — safe to re-run.
+#
+# Run from the admin VM (control node), inside homelab/ansible/:
+#   ansible-playbook playbooks/provision-tailscale.yml
+#
+# You'll be prompted for the Tailscale auth key (never stored). Generate one at
+# https://login.tailscale.com/admin/settings/keys (reusable + pre-approved recommended).
+#
+# Variables live in group_vars/all.yml. The CT lifecycle is driven via `pct` over
+# SSH to the Proxmox host (single credential). Migrating LXC creation to the
+# community.general.proxmox API modules is a planned refinement (see ADR-005).
+
+- name: Provision Tailscale LXC subnet router
+  hosts: proxmox
+  gather_facts: false
+
+  vars_prompt:
+    - name: ts_authkey
+      prompt: "Tailscale auth key (tskey-auth-...)"
+      private: true
+
+  tasks:
+    - name: Validate auth key format
+      ansible.builtin.assert:
+        that: ts_authkey is match('^tskey-')
+        fail_msg: "That doesn't look like a Tailscale auth key (expected to start with 'tskey-')."
+        quiet: true
+
+    - name: Check whether CT {{ tailscale_ctid }} already exists
+      ansible.builtin.command: "pct status {{ tailscale_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Tailscale LXC
+      ansible.builtin.command: >
+        pct create {{ tailscale_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ tailscale_hostname }}
+        --cores {{ tailscale_cores }}
+        --memory {{ tailscale_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ tailscale_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ tailscale_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+      when: ct_status.rc != 0
+
+    - name: Add /dev/net/tun passthrough to the CT config
+      ansible.builtin.blockinfile:
+        path: "/etc/pve/lxc/{{ tailscale_ctid }}.conf"
+        marker: "# {mark} TAILSCALE TUN PASSTHROUGH (managed by ansible)"
+        block: |
+          lxc.cgroup2.devices.allow: c 10:200 rwm
+          lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+      register: tun_conf
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ tailscale_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Reboot CT if TUN passthrough was just added
+      ansible.builtin.command: "pct reboot {{ tailscale_ctid }}"
+      when: tun_conf.changed
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ tailscale_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    - name: Install Tailscale inside the CT (if not present)
+      ansible.builtin.shell: |
+        pct exec {{ tailscale_ctid }} -- bash -c '
+          export DEBIAN_FRONTEND=noninteractive
+          command -v tailscale >/dev/null && exit 0
+          apt-get update -qq
+          apt-get install -y -qq curl >/dev/null
+          curl -fsSL https://tailscale.com/install.sh | sh
+        '
+      register: ts_install
+      changed_when: "'Installing' in ts_install.stdout or 'Setting up' in ts_install.stdout"
+
+    - name: Enable IP forwarding in the CT (needed for subnet routing)
+      ansible.builtin.shell: |
+        pct exec {{ tailscale_ctid }} -- bash -c '
+          printf "net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n" \
+            > /etc/sysctl.d/99-tailscale.conf
+          sysctl -p /etc/sysctl.d/99-tailscale.conf
+        '
+      register: ipfwd
+      changed_when: false
+
+    - name: Bring Tailscale up as a subnet router
+      ansible.builtin.command: >
+        pct exec {{ tailscale_ctid }} -- tailscale up
+        --authkey={{ ts_authkey }}
+        --advertise-routes={{ tailscale_advertise_routes }}
+        --accept-routes
+        --hostname={{ tailscale_hostname }}
+      no_log: true
+      changed_when: true
+
+    - name: Get the Tailscale IPv4 address
+      ansible.builtin.command: "pct exec {{ tailscale_ctid }} -- tailscale ip -4"
+      register: ts_ip
+      changed_when: false
+
+    - name: Report result and next steps
+      ansible.builtin.debug:
+        msg:
+          - "Tailscale LXC {{ tailscale_ctid }} is up. Tailscale IP: {{ ts_ip.stdout }}"
+          - "LAN IP: {{ tailscale_ip }} (add a UniFi DHCP reservation if desired)"
+          - "NEXT (Tailscale admin console):"
+          - "  1. Approve the subnet route {{ tailscale_advertise_routes }} for this node."
+          - "  2. Disable key expiry for this node (it's infrastructure)."
+          - "  3. From a remote Tailscale device, ping YOUR_PROXMOX_IP and YOUR_HA_IP to confirm routing."
