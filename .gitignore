@@ -30,6 +30,29 @@ id_ecdsa
 *_rsa
 *_ed25519
 
-# OS noise
+# OS / shell noise
 .DS_Store
 Thumbs.db
+.bash_history
+.bash_logout
+.bashrc
+.profile
+.wget-hsts
+.gitconfig
+
+# SSH — keys and known hosts don't belong in the repo
+.ssh/
+
+# Claude Code internals
+.claude/
+.claude.json
+
+# Editor / IDE
+.vscode-server/
+.config/
+
+# Runtime / package caches
+.cache/
+.local/
+.npm/
+.dotnet/

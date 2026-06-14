@@ -10,7 +10,7 @@
 
 ### admin
 - Role: Admin VM
-- IP: YOUR_HA_TEMP_IP
+- IP: YOUR_MGMT_VM_IP
 - Status: initial build
 - Services: Git, Claude Code, scripts, SSH client, future Ansible
 
@@ -26,7 +26,7 @@
 ## Current network
 - Gateway: YOUR_GATEWAY_IP
 - Proxmox host: YOUR_PROXMOX_IP
-- Admin VM: YOUR_HA_TEMP_IP
+- Admin VM: YOUR_MGMT_VM_IP
 - Bridge: vmbr0
 - Initial VLAN: Home / untagged
 
