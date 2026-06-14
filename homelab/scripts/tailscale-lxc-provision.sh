@@ -22,6 +22,9 @@
 
 set -euo pipefail
 
+# Proxmox keeps pct/pveam/pvesh in /usr/sbin; `su` (without -l) drops it from PATH.
+export PATH="/usr/sbin:/sbin:$PATH"
+
 # --- Configuration -----------------------------------------------------------
 CTID="${CTID:-$(pvesh get /cluster/nextid)}"  # next free VMID unless overridden
 HOSTNAME_CT="tailscale"
