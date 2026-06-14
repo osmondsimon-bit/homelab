@@ -11,9 +11,10 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 
 ## Layout
 
-| Script | Purpose |
-|--------|---------|
-| `ha-vm-migrate.sh` | Create the HAOS VM on Proxmox from a downloaded qcow2 image |
+| Script | Purpose | Runs on |
+|--------|---------|---------|
+| `ha-vm-migrate.sh` | Create the HAOS VM on Proxmox from a downloaded qcow2 image | Proxmox host |
+| `tailscale-lxc-provision.sh` | Create an unprivileged Tailscale LXC as a subnet router | Proxmox host |
 
 ## Adding a script
 
