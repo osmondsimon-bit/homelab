@@ -51,3 +51,28 @@
 3. Plex + Monitoring
 4. Vaultwarden + HA expansion
 5. Everything else waits until the new house (NAS, cameras, second server, Frigate)
+
+## Open tasks & decisions (carry-over)
+
+Living backlog to pick up next session. Detail and rationale: `docs/reviews/2026-06-14-session-closeout.md`.
+
+### Next build
+- [ ] **Technitium DNS** — write `provision-technitium.yml`, an ADR for the DNS-engine choice (Technitium vs Pi-hole/AdGuard), and a careful DHCP→DNS cutover plan. Completes Phase 2.
+
+### Security / infra — needs hands on Proxmox/UniFi/Tailscale/GitHub
+- [ ] **[High]** Replace root-over-SSH to apophis with a scoped `provision` user (sudo limited to `pct`/`qm`/`pveam`, connect via `become`); then disable root SSH. Confirm the mgmt-vm SSH key has a passphrase.
+- [ ] **[High]** Restrict the Proxmox management plane now (don't wait for VLANs): firewall SSH (22) + UI (8006) to mgmt-vm + the Tailscale CGNAT range; add a non-root Proxmox admin with TOTP.
+- [ ] **[Med]** Harden the GitHub token on mgmt-vm — fine-grained single-repo expiring PAT, or switch the remote to an SSH deploy key (replaces the cleartext `~/.git-credentials` token).
+- [ ] **[Med]** Tailscale hardening: mint ephemeral single-use enrollment keys; pass the key via stdin/file not the `pct exec` argv; define + document a tailnet ACL and tag the node `tag:infra`; confirm node key-expiry is disabled.
+
+### Small / quick
+- [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
+- [ ] Confirm `YOUR_TAILSCALE_LAN_IP` is reserved/excluded in UniFi (a fixed-IP entry or outside the DHCP pool).
+- [ ] Document the cross-subnet Zigbee path: how HA on `the LAN subnet` reaches the SLZB-06 at `YOUR_ZIGBEE_COORD_IP` today (becomes a firewall/route rule once VLANs land).
+- [ ] Convert the security-hardening list (fail2ban, VLAN firewall rules, Proxmox lockdown) into tracked tasks with owners/dates so they don't drift.
+
+### Decisions to make
+- [ ] **RAM trim before Phase 3:** mgmt-vm 4→2 GB *or* Monitoring 1 GB→768 MB — then freeze the committed total here (currently ~16.5 GB vs 16 GB physical).
+- [ ] **Proxmox API modules:** keep the `community.general.proxmox` migration deferred until Plex/Phase 3 forces it (recommended) — confirm.
+- [ ] **Version the agents?** `.claude/agents/*.md` (infra-designer, infra-manager, doc-auditor) are gitignored / local-only, but index.md, CLAUDE.md, and the cloud routine reference them. Add a narrow `.gitignore` exception for `.claude/agents/*.md` only (transcripts/memory/settings stay private) to publish them to the repo? No secrets in them. Outward-facing — your call.
+- [ ] Optional: drop the literal Tailscale `100.x` IP from this file (public-repo exposure, low).
