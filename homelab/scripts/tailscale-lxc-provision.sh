@@ -36,7 +36,7 @@ TEMPLATE_STORE="local"         # where the LXC template lives
 BRIDGE="vmbr0"
 # VLAN_TAG=""                   # leave empty = native/Home VLAN (matches mgmt-vm). Set e.g. 2 to tag.
 ADVERTISE_ROUTES="YOUR_LAN_CIDR"  # add IoT/mgmt subnets comma-separated if you want them reachable
-TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
+TEMPLATE="debian-12-standard_12.12-1_amd64.tar.zst"
 # -----------------------------------------------------------------------------
 
 command -v pct >/dev/null || { echo "ERROR: pct not found — run this on the Proxmox host."; exit 1; }

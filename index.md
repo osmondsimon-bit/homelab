@@ -13,18 +13,20 @@ homelab/
   PLAN.md              # Authoritative service plan, RAM budget, phase order
   decisions/           # Architecture Decision Records (ADR-NNN-title.md)
   scripts/             # Bash provisioning scripts (<target>-<action>.sh)
-  ansible/             # Inventory and playbooks (not yet active)
-decisions/             # Top-level one-off decisions (admin VM sizing etc.)
+  ansible/             # Ansible control node — inventory + playbooks (ADR-005, active)
+decisions/             # Top-level one-off decisions (mgmt-vm sizing etc.)
 docs/
   components/          # Per-service operational reference — one .md per deployed service
   operations/
     runbooks.md        # Common procedures: restarts, health checks, recovery
   phases/              # Phase completion records — written when a phase is marked done
   tech-radar.md        # Capabilities evaluated, adopted, deferred, or monitoring
+  reviews/             # Review reports (session closeouts, audits)
 .claude/
   agents/
     infra-designer.md  # On-demand: review infra proposals before execution
     infra-manager.md   # Weekly scheduled + on-demand: status report
+    doc-auditor.md     # On-demand + phase-gate: documentation drift/conflict check
 README.md              # Human-facing overview (GitHub landing page)
 AGENTS.md              # AI agent behaviour rules (all tools)
 CLAUDE.md              # Claude Code specific guidance and agent table
@@ -47,13 +49,16 @@ index.md               # THIS FILE
 
 ### "How do I provision a service?"
 → `homelab/scripts/` for Bash scripts  
-→ `homelab/ansible/` for Ansible (not yet active)
+→ `homelab/ansible/` for Ansible playbooks (primary provisioning path, ADR-005)
 
 ### "What are the conventions for this repo?"
 → `AGENTS.md` (all-agent rules) + `CLAUDE.md` (Claude-specific)
 
 ### "Which agent should I use for this task?"
 → `CLAUDE.md` Agents section
+
+### "Are the docs consistent / is anything contradictory or stale?"
+→ Use the `doc-auditor` agent
 
 ### "How do I do X operationally (restart, recover, check health)?"
 → `docs/operations/runbooks.md`
@@ -86,6 +91,8 @@ index.md               # THIS FILE
 | `index.md` | All AI agents | Where to find things | Behaviour rules — use AGENTS.md |
 | `homelab/PLAN.md` | Humans + AI | Services, phases, RAM, decisions | Per-service detail — use docs/components/ |
 | `docs/tech-radar.md` | Humans + AI | Capability tracking, re-evaluation triggers | Day-to-day work |
+
+**Single source of truth:** Live facts — inventory/IPs, RAM budget, phase status, service status, canonical hostnames — live only in `homelab/PLAN.md` (and the Ansible inventory for machine use). Every other doc links to PLAN.md rather than restating them; the `doc-auditor` agent enforces this.
 
 ---
 

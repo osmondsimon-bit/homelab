@@ -19,6 +19,8 @@ Key addresses:
 - Proxmox host (apophis): YOUR_PROXMOX_IP
 - Admin VM: YOUR_MGMT_VM_IP
 
+> **Note (2026-06-14, superseded detail):** The "Admin VM" is now named **mgmt-vm** at **YOUR_MGMT_VM_IP**. This ADR records the original plan; see `homelab/PLAN.md` for current addressing.
+
 ## Consequences
 
 - IoT and trusted devices share the same broadcast domain initially — acceptable short-term risk.

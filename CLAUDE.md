@@ -52,20 +52,23 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **ADRs:** Use `homelab/decisions/template.md`. Filename: `NNN-short-title.md`. Status is `Draft → Accepted → Superseded`. Capture context, decision, and consequences — not implementation detail.
 
-**Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or WireGuard/Tailscale (full network). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
+**Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or Tailscale (full network; WireGuard is superseded — see ADR-003). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
+
+**Single source of truth:** Live facts — inventory/IPs, RAM budget, phase status, service status, canonical hostnames — are owned by `homelab/PLAN.md` (and the Ansible inventory for machine use). Other docs link to PLAN.md rather than restating them.
 
 ## Agents
 
-Three agents assist with this homelab. Invoke them at the right moment — don't skip the gates.
+Reviewers assist with this homelab (three agents + the `/security-review` skill). Invoke them at the right moment — don't skip the gates.
 
-| Agent | When to invoke | How |
+| Reviewer | When to invoke | How |
 |-------|---------------|-----|
 | `infra-designer` | Before provisioning any new VM, LXC, or significant network change | "Use the infra-designer agent to review…" |
 | `infra-manager` | Weekly automated (Mondays 08:00) + on-demand for a status snapshot | "Use the infra-manager agent" |
+| `doc-auditor` | On-demand, and before marking a phase complete — checks docs for drift/contradictions vs PLAN.md | "Use the doc-auditor agent" |
 | `/security-review` | Before marking any phase complete; before committing significant config changes | `/security-review` |
 
 **Security review gates:** run `/security-review` at the end of each phase before marking it done in PLAN.md. Also run it before committing any Ansible playbook, firewall rule, or service configuration.
 
 ## Roadmap
 
-See `homelab/PLAN.md` for the phased build-out plan. Current phase: VLAN-aware Proxmox + UniFi firewall rules → Technitium DNS + Tailscale → Plex + Monitoring → Vaultwarden + HA expansion.
+See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 2** — Tailscale ✓ deployed (CT 110), Technitium DNS next. Order: Phase 1 VLAN-aware Proxmox ✓ → Phase 2 Tailscale + Technitium → Phase 3 Plex + Monitoring → Phase 4 Vaultwarden + HA expansion.

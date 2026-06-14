@@ -33,6 +33,7 @@ id_ecdsa
 # OS / shell noise
 .DS_Store
 Thumbs.db
+.sudo_as_admin_successful
 .bash_history
 .bash_logout
 .bashrc
