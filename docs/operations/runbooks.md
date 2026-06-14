@@ -57,6 +57,34 @@ ssh simon@YOUR_MGMT_VM_IP
 
 ---
 
+## Tailscale (CT 110, subnet router)
+
+Unprivileged LXC 110 on apophis (LAN `YOUR_TAILSCALE_LAN_IP`, Tailscale IP `YOUR_TAILSCALE_IP`).
+Advertises `YOUR_LAN_CIDR` for remote LAN access. Provisioned via Ansible
+(`ansible-playbook playbooks/provision-tailscale.yml`, idempotent).
+
+### Check status (from apophis)
+```bash
+pct exec 110 -- tailscale status
+```
+
+### Restart Tailscale
+```bash
+pct exec 110 -- systemctl restart tailscaled
+```
+
+### Change advertised routes
+Edit `tailscale_advertise_routes` in `ansible/inventory/group_vars/all.yml`, re-run
+the playbook, then **approve the new route** in the Tailscale admin console.
+
+### If remote access stops working
+1. `pct status 110` — is the CT running?
+2. `pct exec 110 -- tailscale status` — is Tailscale up?
+3. Confirm the subnet route is still approved (admin console → Machines → node).
+4. `pct exec 110 -- sysctl net.ipv4.ip_forward` — should be `1`.
+
+---
+
 ## Git / repo
 
 ### Push latest changes

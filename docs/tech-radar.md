@@ -16,7 +16,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
 | DNS + ad blocking | Technitium DNS | Phase 2 — LXC planned |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
-| Remote access (admin) | Tailscale | Phase 2 — LXC planned |
+| Remote access (admin) | Tailscale | Deployed — CT 110, advertises YOUR_LAN_CIDR |
 | Password manager | Vaultwarden | Phase 4 — LXC planned |
 | Media server | Plex | Phase 3 — VM planned, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 3 — LXC planned |
@@ -80,5 +80,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 |------|-------|---------|
 | 2026-06-14 | Phase 1 complete | Initial radar populated from TadMSTR reference review |
 | 2026-06-14 | Phase 2 start | Ansible activated (ADR-005) as the provisioning layer; Tailscale is the first managed service |
+| 2026-06-14 | Phase 2 | Tailscale deployed (CT 110) via Ansible — first fully Ansible-provisioned service, validated remotely |
 
 *Add a row each time this radar is reviewed at a phase boundary.*
