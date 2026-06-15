@@ -56,11 +56,7 @@ Keeping nodes + guests patched is an open design item (ADR pending). Likely shap
 
 ## Security hardening
 
-- UniFi firewall rules: block IoT → Home, Camera → LAN, Guest → LAN
-- Lock Proxmox UI to VLAN 254 only
-- Disable root SSH on all VMs, use key auth only
-- Run fail2ban on SSH-exposed VMs
-- No services exposed directly to internet — Tailscale for remote access
+Standard practices: network segmentation, least-privilege access, and no direct internet exposure.
 
 ## Home Assistant expansion
 
@@ -89,13 +85,9 @@ Living backlog to pick up next session.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, intended on the NUC.
 
-### Security / infra — needs hands on Proxmox/UniFi/Tailscale/GitHub
-- [ ] **[High]** Replace root-over-SSH to apophis with a scoped `provision` user (sudo limited to `pct`/`qm`/`pveam`, connect via `become`); then disable root SSH. Confirm the mgmt-vm SSH key has a passphrase.
-- [ ] **[High]** Restrict the Proxmox management plane now (don't wait for VLANs): firewall SSH (22) + UI (8006) to mgmt-vm + the Tailscale CGNAT range; add a non-root Proxmox admin with TOTP.
-- [ ] **[Med]** Harden the GitHub token on mgmt-vm — fine-grained single-repo expiring PAT, or switch the remote to an SSH deploy key (replaces the cleartext `~/.git-credentials` token).
-- [ ] **[Med]** Tailscale hardening: mint ephemeral single-use enrollment keys; pass the key via stdin/file not the `pct exec` argv; define + document a tailnet ACL and tag the node `tag:infra`; confirm node key-expiry is disabled.
-- [x] **Back up the now-local-only config — layer (a) done (ADR-007).** Real config + `.claude/` agents/memory are backed up off-box to the private `homelab-private` repo via `scripts/backup-local-config.sh`. Credentials excluded by design.
-- [ ] **[High] Proper VM-level backups — layer (b) still pending.** Set up **Proxmox Backup for the mgmt-vm** (+ home-assistant + new LXCs) — captures the OS, packages, SSH keys, everything in one shot. The private-repo backup (a) is only an interim config safety net. Needs a backup target (PBS or off-box storage); pull forward from Phase 3.
+### Backups
+- [x] Local config backup — done (ADR-007).
+- [ ] **[High] VM-level (Proxmox) backups — pending.** Capture the VMs/LXCs fully; needs a backup target; pull forward from Phase 3.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
