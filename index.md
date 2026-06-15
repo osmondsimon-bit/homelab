@@ -22,7 +22,6 @@ docs/
     runbooks.md        # Common procedures: restarts, health checks, recovery
   phases/              # Phase completion records — written when a phase is marked done
   tech-radar.md        # Capabilities evaluated, adopted, deferred, or monitoring
-  reviews/             # Review reports (session closeouts, audits)
 .claude/
   agents/
     infra-designer.md  # On-demand: review infra proposals before execution

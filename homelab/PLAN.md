@@ -82,7 +82,7 @@ Keeping nodes + guests patched is an open design item (ADR pending). Likely shap
 
 ## Open tasks & decisions (carry-over)
 
-Living backlog to pick up next session. Detail and rationale: `docs/reviews/2026-06-14-session-closeout.md`.
+Living backlog to pick up next session.
 
 ### Next build (Phase 2 → 3)
 - [ ] **Technitium DNS** — write `provision-technitium.yml`, an ADR for the DNS-engine choice (Technitium vs Pi-hole/AdGuard), and a careful DHCP→DNS cutover plan. Completes Phase 2.
