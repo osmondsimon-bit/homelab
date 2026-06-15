@@ -3,31 +3,56 @@
 ## Current infrastructure
 
 ### apophis (Proxmox host)
-- Intel i7-8700T, 16 GB RAM, ~500 GB SSD
+- Intel i7-8700T, 16 GB RAM, ~500 GB SSD (LVM-thin today; migrating to ZFS — see Cluster & HA)
 - IP: YOUR_PROXMOX_IP
 - vmbr0 is VLAN-aware — completed
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
-| mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, scripts, Ansible control node (ADR-005) |
-| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP |
-| tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — subnet router, advertises YOUR_LAN_CIDR, Tailscale IP YOUR_TAILSCALE_IP (ADR-003/005) |
+| mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
+| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP. HA-failover target once clustered. |
+| tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — subnet router, advertises YOUR_LAN_CIDR (ADR-003/005). To migrate onto the NUC. |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
+## Hardware & cluster roadmap
+
+Moving from a single host to a **3-node Proxmox cluster**, with local storage standardised on **ZFS** so HA failover works via replication (ADR-009). Still **all local storage** — no NAS/shared storage; HA comes from ZFS replication, not shared disks.
+
+| Node | Role | Status | Intended to run |
+|------|------|--------|-----------------|
+| apophis | Compute-heavy | Live | Plex (QuickSync) + media stack; HA VM or its failover target |
+| Intel NUC (name TBD) | Low-power, decent RAM | Soon | Simple services offloaded from apophis: Tailscale, Technitium, Homepage, Monitoring |
+| 2nd ThinkCentre M920Q | Cluster + HA quorum | ~1 month | HA-failover target; extra capacity |
+
+Offloading the simple services to the NUC frees apophis's CPU for Plex transcoding. Three nodes give clean cluster quorum. Mixed CPUs are fine for HA failover (restart-on-another-node); live migration between different CPU generations needs a compatible CPU type.
+
+## Provisioning & tooling
+
+- **Terraform** (`bpg/proxmox` provider) **creates** infrastructure — VMs/LXCs, disks, NICs (ADR-008). Scaffolded in `terraform/`; existing VMs to be imported.
+- **Ansible** **configures** what Terraform creates — packages, services, app config (ADR-005). The `pct create`-via-Ansible lifecycle is superseded by Terraform; Ansible keeps the config role.
+- Boundary: *Terraform = the box exists with the right shape; Ansible = the box is set up.*
+
 ## Planned VMs/LXCs
 
-| Service | Type | RAM | Disk | Purpose |
-|---------|------|-----|------|---------|
-| Technitium DNS | LXC | 512 MB | 8 GB | Ad/tracker blocking DNS for all VLANs, with blocklist support |
-| Plex | VM | 4 GB | 32 GB | Media server with Intel QuickSync GPU passthrough (media on NAS later) |
-| qBittorrent + Gluetun | LXC | 512 MB | 16 GB | Torrent client behind Gluetun VPN killswitch, routed through ProtonVPN Plus |
-| Monitoring | VM | 1 GB | 20 GB | Prometheus + Grafana, scraping Proxmox, UniFi, HA |
-| Vaultwarden | LXC | 256 MB | 8 GB | Self-hosted password manager |
+| Service | Type | Node (intended) | Purpose |
+|---------|------|-----------------|---------|
+| Technitium DNS | LXC | NUC | Ad/tracker blocking DNS for all VLANs, with blocklists |
+| Monitoring (Prometheus + Grafana) | LXC/VM | NUC | Observability — scrapes Proxmox, UniFi, HA. **Prioritised first.** |
+| Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
+| Plex | VM | apophis | Media server, Intel QuickSync passthrough |
+| qBittorrent + Gluetun | LXC | apophis | Torrent client behind Gluetun killswitch → ProtonVPN Plus |
+| Vaultwarden | LXC | cluster (HA) | Self-hosted password manager — **sequenced after the HA cluster + backups** (ADR-010) |
 
-**RAM budget:** host (2 GB) + mgmt-vm (4 GB) + home-assistant (4 GB) + Plex (4 GB) + LXCs (Technitium 512 MB + Tailscale 256 MB + qBittorrent/Gluetun 512 MB + Vaultwarden 256 MB + Monitoring 1 GB) ≈ 16.5 GB — marginally over. Monitoring may need to drop to 768 MB, or mgmt-vm trimmed to 2 GB once Ansible is stable.
+Per-service RAM/disk sizing is set when each is built; with services spread across three nodes the old single-16 GB-host budget no longer binds. Plex stays on apophis for the iGPU.
 
-**Media stack:** qBittorrent + Gluetun in a single LXC. Gluetun handles the ProtonVPN Plus WireGuard tunnel and killswitch — all qBittorrent traffic exits through ProtonVPN, drops if the tunnel goes down. Plex serves media; download location shared between the two (bind mount or NFS, NAS deferred to new house).
+**Media stack:** qBittorrent + Gluetun in one LXC — Gluetun runs the ProtonVPN Plus tunnel + killswitch (all torrent traffic exits via ProtonVPN, drops if the tunnel dies). Plex serves media; shared download path via bind mount (NAS deferred to new house).
+
+**Password manager (ADR-010):** self-host **Vaultwarden** (local Bitwarden-compatible). It's zero-knowledge — the server stores only ciphertext, so theft of a node never exposes passwords and encrypted backups are safe to store anywhere. Sequenced *after* the HA cluster (solves availability) and the backup story (solves durability). **Bridge with Bitwarden's cloud now**; migration to Vaultwarden is a trivial export/import. Infra/machine secrets stay in `ansible-vault`, not Vaultwarden.
+
+## Updates & patching
+
+Keeping nodes + guests patched is an open design item (ADR pending). Likely shape: `unattended-upgrades` for security patches on Debian/Ubuntu guests; a deliberate **monthly Proxmox update window**, rolling one node at a time once clustered, with HA failover covering the reboot. Revisit dedicated tooling (a patch dashboard) later.
 
 ## Security hardening
 
@@ -46,18 +71,23 @@
 
 ## Phase order
 
-1. VLAN-aware Proxmox + firewall rules — completed
-2. Tailscale ✓ + Technitium DNS (security/access foundation) — Tailscale deployed (CT 110); Technitium next
-3. Plex + Monitoring
-4. Vaultwarden + HA expansion
-5. Everything else waits until the new house (NAS, cameras, second server, Frigate)
+1. VLAN-aware Proxmox + firewall rules — ✓ completed
+2. Tailscale ✓ + **Technitium DNS** — Technitium next, completes Phase 2
+3. **Foundation + observability:** adopt Terraform (import existing VMs) → **Monitoring** (Prometheus + Grafana) → **Homepage**
+4. **Multi-node + HA:** Intel NUC joins the cluster → migrate simple services (Tailscale, Technitium) onto it (frees apophis); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; stand up VM-level backups
+5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
+6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
+- Cross-cutting (designed early, not deferred to the end): VM-level backups, a patching approach
+- Deferred to the new house: NAS / shared storage, cameras, Frigate
 
 ## Open tasks & decisions (carry-over)
 
 Living backlog to pick up next session. Detail and rationale: `docs/reviews/2026-06-14-session-closeout.md`.
 
-### Next build
+### Next build (Phase 2 → 3)
 - [ ] **Technitium DNS** — write `provision-technitium.yml`, an ADR for the DNS-engine choice (Technitium vs Pi-hole/AdGuard), and a careful DHCP→DNS cutover plan. Completes Phase 2.
+- [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
+- [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, intended on the NUC.
 
 ### Security / infra — needs hands on Proxmox/UniFi/Tailscale/GitHub
 - [ ] **[High]** Replace root-over-SSH to apophis with a scoped `provision` user (sudo limited to `pct`/`qm`/`pveam`, connect via `become`); then disable root SSH. Confirm the mgmt-vm SSH key has a passphrase.
@@ -74,7 +104,7 @@ Living backlog to pick up next session. Detail and rationale: `docs/reviews/2026
 - [ ] Convert the security-hardening list (fail2ban, VLAN firewall rules, Proxmox lockdown) into tracked tasks with owners/dates so they don't drift.
 
 ### Decisions to make
-- [ ] **RAM trim before Phase 3:** mgmt-vm 4→2 GB *or* Monitoring 1 GB→768 MB — then freeze the committed total here (currently ~16.5 GB vs 16 GB physical).
-- [ ] **Proxmox API modules:** keep the `community.general.proxmox` migration deferred until Plex/Phase 3 forces it (recommended) — confirm.
+- [ ] **Patching/update approach** — settle the shape (unattended-upgrades on guests + rolling monthly Proxmox window with HA failover) and write the ADR.
 - [ ] **Version the agents?** `.claude/agents/*.md` (infra-designer, infra-manager, doc-auditor) are gitignored / local-only, but index.md, CLAUDE.md, and the cloud routine reference them. Add a narrow `.gitignore` exception for `.claude/agents/*.md` only (transcripts/memory/settings stay private) to publish them to the repo? No secrets in them. Outward-facing — your call.
-- [ ] Optional: drop the literal Tailscale `100.x` IP from this file (public-repo exposure, low).
+
+_Resolved this session:_ RAM trim (moot — services now spread across 3 nodes); Proxmox API Ansible modules (superseded by Terraform, ADR-008); drop the `100.x` IP (done — full decouple, ADR-006).

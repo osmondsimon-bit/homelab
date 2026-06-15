@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored — holds the API token) and fill in real values.
+# Never commit the real terraform.tfvars (ADR-006/008).
+
+proxmox_endpoint     = "https://YOUR_PROXMOX_IP:8006/"
+proxmox_api_token    = "terraform@pve!tf=YOUR_API_TOKEN_SECRET"
+proxmox_insecure     = true
+proxmox_ssh_username = "root"

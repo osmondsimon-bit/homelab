@@ -26,6 +26,13 @@ homelab/ansible/inventory/group_vars/all.yml
 # Private backup repo working dir (off-box backup of local-only config — ADR-007)
 homelab-private/
 
+# Terraform — state (can contain secrets) + real tfvars (API token). Keep *.example + lock file.
+homelab/terraform/.terraform/
+homelab/terraform/*.tfstate
+homelab/terraform/*.tfstate.*
+homelab/terraform/terraform.tfvars
+homelab/terraform/*.auto.tfvars
+
 # WireGuard
 *.conf.bak
 privatekey

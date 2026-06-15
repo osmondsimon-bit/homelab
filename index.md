@@ -12,8 +12,9 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
 homelab/
   PLAN.md              # Authoritative service plan, RAM budget, phase order
   decisions/           # Architecture Decision Records (ADR-NNN-title.md)
-  scripts/             # Bash provisioning scripts (<target>-<action>.sh)
-  ansible/             # Ansible control node — inventory + playbooks (ADR-005, active)
+  terraform/           # Terraform — creates VMs/LXCs (bpg/proxmox, ADR-008)
+  ansible/             # Ansible — configures what Terraform creates (ADR-005)
+  scripts/             # Bash fallbacks/utilities (e.g. backup-local-config.sh)
 decisions/             # Top-level one-off decisions (mgmt-vm sizing etc.)
 docs/
   components/          # Per-service operational reference — one .md per deployed service
@@ -48,8 +49,8 @@ index.md               # THIS FILE
 → `decisions/` for top-level decisions (VM sizing etc.)
 
 ### "How do I provision a service?"
-→ `homelab/scripts/` for Bash scripts  
-→ `homelab/ansible/` for Ansible playbooks (primary provisioning path, ADR-005)
+→ `homelab/terraform/` — Terraform creates the VM/LXC (ADR-008)  
+→ `homelab/ansible/` — Ansible configures it (ADR-005)
 
 ### "What are the conventions for this repo?"
 → `AGENTS.md` (all-agent rules) + `CLAUDE.md` (Claude-specific)

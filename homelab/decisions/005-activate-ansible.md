@@ -1,7 +1,11 @@
 # ADR-005: Activate Ansible as the provisioning layer
 
 **Date:** 2026-06-14  
-**Status:** Accepted
+**Status:** Accepted (partially superseded by ADR-008)
+
+> **Note (ADR-008):** VM/LXC *lifecycle* (creation) moves to **Terraform** (`bpg/proxmox`).
+> Ansible's **configuration** role — packages, services, app config — stands. Read this ADR for the
+> control-node model and the config role; ADR-008 for the Terraform-creates / Ansible-configures split.
 
 ## Context
 

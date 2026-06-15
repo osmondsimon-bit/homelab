@@ -14,16 +14,19 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | AI coding agent | Claude Code | Primary tool, runs on mgmt-vm |
 | On-demand infra review | `infra-designer` agent | Invoked before any new VM/LXC/network change |
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
-| DNS + ad blocking | Technitium DNS | Phase 2 — LXC planned |
+| Provisioning (create) | Terraform (`bpg/proxmox`) | Adopted (ADR-008) — scaffolded in `terraform/`; import existing VMs next |
+| Provisioning (configure) | Ansible | Active (ADR-005) — config role; VM/LXC lifecycle now via Terraform |
+| Multi-node cluster + HA | Proxmox cluster + ZFS replication | Accepted direction (ADR-009) — 3 nodes (apophis + NUC + ThinkCentre), executed as hardware lands |
+| DNS + ad blocking | Technitium DNS | Phase 2 — next; intended on the NUC |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
-| Remote access (admin) | Tailscale | Deployed — CT 110, advertises YOUR_LAN_CIDR |
-| Password manager | Vaultwarden | Phase 4 — LXC planned |
-| Media server | Plex | Phase 3 — VM planned, QuickSync passthrough |
-| Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 3 — LXC planned |
-| Monitoring | Prometheus + Grafana | Phase 3 — VM planned |
-| Infrastructure as code | Ansible | Active (ADR-005) — control node = mgmt-vm; first playbook: Tailscale |
-| Secret handling | Ansible Vault / env vars | Convention only — no tooling yet |
-| Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup of local-only config + agents/memory |
+| Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
+| Monitoring | Prometheus + Grafana | Phase 3 — prioritised first; intended on the NUC |
+| Service dashboard | Homepage | Phase 3 — after Monitoring; intended on the NUC |
+| Media server | Plex | Phase 5 — apophis, QuickSync passthrough |
+| Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 5 — apophis |
+| Password manager | Vaultwarden (self-hosted) | Phase 6 (ADR-010) — sequenced after HA + backups; Bitwarden cloud bridges now |
+| Secret handling | Ansible Vault | Infra/machine secrets; human passwords → Vaultwarden |
+| Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
 
 ---
 
@@ -32,6 +35,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
 | VM-level backups | Proxmox Backup Server / Backrest | Phase 3 (pull fwd) | Config layer done (ADR-007); VM/OS backup still needed — pull forward, config is single-disk |
+| Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | Design the ADR (guests auto-patch; nodes patched rolling with HA failover) |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |
@@ -58,9 +62,8 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | Multi-agent message bus | Matrix + NATS | Requires 5+ concurrent specialised agents |
 | Inter-agent event log | agent-bus (TadMSTR) | Follows from Matrix + NATS |
 | Agent task queue | DragonflyDB + task-queue-mcp | Follows from multi-agent engine |
-| NAS | TBD (Synology / TrueNAS) | New house — media + backups |
+| NAS / shared storage | TBD (Synology / TrueNAS) | New house — media + backups (HA uses ZFS replication on local disks until then, ADR-009) |
 | Cameras + NVR | Frigate | New house — requires NAS |
-| Second server | TBD | New house — enables Gitea, HA clustering |
 
 ---
 
@@ -83,5 +86,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-14 | Phase 2 start | Ansible activated (ADR-005) as the provisioning layer; Tailscale is the first managed service |
 | 2026-06-14 | Phase 2 | Tailscale deployed (CT 110) via Ansible — first fully Ansible-provisioned service, validated remotely |
 | 2026-06-14 | Phase 2 | Config decoupled from public repo (ADR-006); local-only config backed up to private repo (ADR-007) |
+| 2026-06-14 | Phase 2/3 planning | Adopted Terraform (ADR-008); 3-node cluster + HA via ZFS replication (ADR-009); Vaultwarden self-hosted, sequenced after HA+backups (ADR-010); Monitoring→Homepage prioritised; patching to design |
 
 *Add a row each time this radar is reviewed at a phase boundary.*
