@@ -45,6 +45,10 @@ DNS deployment (Technitium is what will resolve `service.homelab.internal` names
   addresses as "was briefly public" (low risk, RFC1918/CGNAT), not "never seen."
 - The secrets policy is unchanged and still absolute (no secrets, ever); this ADR adds "no internal
   addresses either."
+- **Backup dependency (important).** Real config is now local-only on the mgmt-vm — the public
+  repo no longer backs it up. Until it's backed up (ansible-vault-encrypted commit, a private repo,
+  or a Proxmox backup of the mgmt-vm itself), a disk loss loses the real inventory/group_vars. This
+  also applies to other local-only state (SSH keys, `.claude/` agents + memory). Tracked in PLAN.md.
 - **Method 3 (FQDN/local DNS)** lands with Technitium: once services resolve by name, docs and
   playbooks can reference `name.homelab.internal` instead of any address, reducing placeholder
   sprawl. Tracked in PLAN.md.
