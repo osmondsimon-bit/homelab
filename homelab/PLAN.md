@@ -93,7 +93,6 @@ Living backlog to pick up next session.
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
 - [ ] Confirm `YOUR_TAILSCALE_LAN_IP` is reserved/excluded in UniFi (a fixed-IP entry or outside the DHCP pool).
 - [ ] Document the cross-subnet Zigbee path: how HA on `the LAN subnet` reaches the SLZB-06 at `YOUR_ZIGBEE_COORD_IP` today (becomes a firewall/route rule once VLANs land).
-- [ ] Convert the security-hardening list (fail2ban, VLAN firewall rules, Proxmox lockdown) into tracked tasks with owners/dates so they don't drift.
 
 ### Decisions to make
 - [ ] **Patching/update approach** — settle the shape (unattended-upgrades on guests + rolling monthly Proxmox window with HA failover) and write the ADR.
