@@ -64,7 +64,8 @@ Living backlog to pick up next session. Detail and rationale: `docs/reviews/2026
 - [ ] **[High]** Restrict the Proxmox management plane now (don't wait for VLANs): firewall SSH (22) + UI (8006) to mgmt-vm + the Tailscale CGNAT range; add a non-root Proxmox admin with TOTP.
 - [ ] **[Med]** Harden the GitHub token on mgmt-vm — fine-grained single-repo expiring PAT, or switch the remote to an SSH deploy key (replaces the cleartext `~/.git-credentials` token).
 - [ ] **[Med]** Tailscale hardening: mint ephemeral single-use enrollment keys; pass the key via stdin/file not the `pct exec` argv; define + document a tailnet ACL and tag the node `tag:infra`; confirm node key-expiry is disabled.
-- [ ] **[High] Back up the now-local-only config (and the mgmt-vm generally).** Decoupling (ADR-006) moved real IPs/inventory out of the repo, so GitHub no longer backs them up. Two layers: (a) immediate — `ansible-vault`-encrypt the real vars and commit the encrypted file (restores off-site backup, stays private), or keep them in a private repo; (b) proper — set up **Proxmox Backup for the mgmt-vm** (captures config + SSH keys + `.claude/` agents/memory in one shot). Pull the backup story forward from Phase 3, since critical config is now single-disk-only.
+- [x] **Back up the now-local-only config — layer (a) done (ADR-007).** Real config + `.claude/` agents/memory are backed up off-box to the private `homelab-private` repo via `scripts/backup-local-config.sh`. Credentials excluded by design.
+- [ ] **[High] Proper VM-level backups — layer (b) still pending.** Set up **Proxmox Backup for the mgmt-vm** (+ home-assistant + new LXCs) — captures the OS, packages, SSH keys, everything in one shot. The private-repo backup (a) is only an interim config safety net. Needs a backup target (PBS or off-box storage); pull forward from Phase 3.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).

@@ -23,6 +23,9 @@ secrets.yaml
 homelab/ansible/inventory/hosts.ini
 homelab/ansible/inventory/group_vars/all.yml
 
+# Private backup repo working dir (off-box backup of local-only config — ADR-007)
+homelab-private/
+
 # WireGuard
 *.conf.bak
 privatekey

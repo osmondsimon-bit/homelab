@@ -15,6 +15,7 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 |--------|---------|---------|
 | `ha-vm-migrate.sh` | Create the HAOS VM on Proxmox from a downloaded qcow2 image | Proxmox host |
 | `tailscale-lxc-provision.sh` | Create an unprivileged Tailscale LXC as a subnet router | Proxmox host |
+| `backup-local-config.sh` | Back up local-only config (real IPs, `.claude/` agents + memory) to the private `homelab-private` repo — no credentials (ADR-007) | mgmt-vm |
 
 > Provisioning is now primarily done via Ansible (`../ansible/`, ADR-005). These
 > scripts are manual fallbacks and references the playbooks encode — not the primary path.

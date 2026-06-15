@@ -23,6 +23,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Monitoring | Prometheus + Grafana | Phase 3 — VM planned |
 | Infrastructure as code | Ansible | Active (ADR-005) — control node = mgmt-vm; first playbook: Tailscale |
 | Secret handling | Ansible Vault / env vars | Convention only — no tooling yet |
+| Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup of local-only config + agents/memory |
 
 ---
 
@@ -30,7 +31,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| Automated backups | Backrest / Proxmox Backup Server | Phase 3 | Before Plex goes live — media needs backup strategy |
+| VM-level backups | Proxmox Backup Server / Backrest | Phase 3 (pull fwd) | Config layer done (ADR-007); VM/OS backup still needed — pull forward, config is single-disk |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |
@@ -81,5 +82,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-14 | Phase 1 complete | Initial radar populated from TadMSTR reference review |
 | 2026-06-14 | Phase 2 start | Ansible activated (ADR-005) as the provisioning layer; Tailscale is the first managed service |
 | 2026-06-14 | Phase 2 | Tailscale deployed (CT 110) via Ansible — first fully Ansible-provisioned service, validated remotely |
+| 2026-06-14 | Phase 2 | Config decoupled from public repo (ADR-006); local-only config backed up to private repo (ADR-007) |
 
 *Add a row each time this radar is reviewed at a phase boundary.*

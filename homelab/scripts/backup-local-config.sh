@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Back up local-only homelab config to the private `homelab-private` GitHub repo.
+# Run from the mgmt-vm:  bash homelab/scripts/backup-local-config.sh
+#
+# Why: the public repo intentionally excludes real IPs/config (ADR-006) and the
+# `.claude/` agents + memory. Those live only on this machine — this script gives
+# them an off-box, off-site backup until proper Proxmox VM backups exist (ADR-007).
+#
+# IMPORTANT: credentials are NEVER backed up here — no SSH private keys, no tokens,
+# no ~/.git-credentials. Those are regenerated/rotated on restore, not stored in a repo.
+#
+# Restore: clone homelab-private and copy the files back to the same paths under $HOME.
+
+set -euo pipefail
+
+PRIVATE_REPO_URL="https://github.com/osmondsimon-bit/homelab-private.git"
+WORKDIR="$HOME/homelab-private"     # gitignored by the public repo
+SRC="$HOME"
+
+# Local-only paths to back up (relative to $HOME). Add new sensitive/local-only
+# files here as they appear. Do NOT add private keys or credential files.
+PATHS=(
+  "homelab/ansible/inventory/hosts.ini"
+  "homelab/ansible/inventory/group_vars/all.yml"
+  ".claude/agents"
+  ".claude/projects/-home-simon/memory"
+)
+
+echo "==> Syncing private backup repo..."
+if [[ -d "$WORKDIR/.git" ]]; then
+  git -C "$WORKDIR" pull --quiet --ff-only 2>/dev/null || true
+else
+  git clone --quiet "$PRIVATE_REPO_URL" "$WORKDIR"
+fi
+
+echo "==> Copying local-only config in..."
+for p in "${PATHS[@]}"; do
+  if [[ -e "$SRC/$p" ]]; then
+    mkdir -p "$WORKDIR/$(dirname "$p")"
+    cp -a "$SRC/$p" "$WORKDIR/$(dirname "$p")/"
+    echo "    + $p"
+  else
+    echo "    (skip, not found) $p"
+  fi
+done
+
+# Safety net: ensure nothing obviously credential-like sneaks in.
+if grep -rIlE 'BEGIN (OPENSSH|RSA|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{30,}|tskey-' "$WORKDIR" \
+    --exclude-dir=.git 2>/dev/null; then
+  echo "ERROR: a credential-like value was found in the backup set above — aborting."
+  echo "Remove it from the PATHS list; credentials must not be backed up to a repo."
+  exit 1
+fi
+
+cd "$WORKDIR"
+git add -A
+if git diff --cached --quiet; then
+  echo "==> No changes — backup already current."
+else
+  git commit -q -m "Backup local config $(date -u +%Y-%m-%dT%H:%MZ)"
+  git push -q -u origin HEAD
+  echo "==> Backed up to $PRIVATE_REPO_URL"
+fi
