@@ -54,7 +54,7 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or Tailscale (full network; WireGuard is superseded — see ADR-003). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
 
-**Single source of truth:** Live facts — inventory/IPs, RAM budget, phase status, service status, canonical hostnames — are owned by `homelab/PLAN.md` (and the Ansible inventory for machine use). Other docs link to PLAN.md rather than restating them.
+**Single source of truth (two-tier):** Logical facts — which hosts/VMs/LXCs exist, VMIDs, RAM budget, phase/service status, canonical hostnames — are owned by `homelab/PLAN.md`; other docs link to it. **Real network addresses (IPs, subnets, MACs) are never published** — they live only in the gitignored Ansible config (`ansible/inventory/`, `group_vars/`) and the operator's private notes. Committed files use `YOUR_*` placeholders only (ADR-006).
 
 ## Agents
 

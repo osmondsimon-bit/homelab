@@ -129,4 +129,4 @@
           - "NEXT (Tailscale admin console):"
           - "  1. Approve the subnet route {{ tailscale_advertise_routes }} for this node."
           - "  2. Disable key expiry for this node (it's infrastructure)."
-          - "  3. From a remote Tailscale device, ping YOUR_PROXMOX_IP and YOUR_HA_IP to confirm routing."
+          - "  3. From a remote Tailscale device, reach your Proxmox/Home Assistant hosts to confirm routing."

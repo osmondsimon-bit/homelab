@@ -18,6 +18,11 @@ secrets.yaml
 .vault_pass
 .vault-pass
 
+# Local Ansible config — real IPs/hosts live here, never published.
+# Copy the committed *.example templates and fill in your values (see ADR-006).
+homelab/ansible/inventory/hosts.ini
+homelab/ansible/inventory/group_vars/all.yml
+
 # WireGuard
 *.conf.bak
 privatekey

@@ -92,7 +92,7 @@ index.md               # THIS FILE
 | `homelab/PLAN.md` | Humans + AI | Services, phases, RAM, decisions | Per-service detail — use docs/components/ |
 | `docs/tech-radar.md` | Humans + AI | Capability tracking, re-evaluation triggers | Day-to-day work |
 
-**Single source of truth:** Live facts — inventory/IPs, RAM budget, phase status, service status, canonical hostnames — live only in `homelab/PLAN.md` (and the Ansible inventory for machine use). Every other doc links to PLAN.md rather than restating them; the `doc-auditor` agent enforces this.
+**Single source of truth (two-tier):** Logical facts — hosts/VMs/LXCs, VMIDs, RAM budget, phase/service status, canonical hostnames — live in `homelab/PLAN.md`; every other doc links to it. **Real network addresses (IPs, subnets, MACs) are never committed** — they live only in the gitignored Ansible config and the operator's private notes; committed files use `YOUR_*` placeholders (ADR-006). The `doc-auditor` agent enforces both rules.
 
 ---
 
