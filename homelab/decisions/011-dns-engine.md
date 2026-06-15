@@ -1,0 +1,72 @@
+# ADR-011: DNS engine — Technitium, in a DNS-only role
+
+**Date:** 2026-06-15  
+**Status:** Accepted
+
+## Context
+
+Phase 2 calls for a network-wide resolver with ad/tracker blocking for all VLANs
+(see `homelab/PLAN.md`). Two decisions are bundled here:
+
+1. **Which engine** — Technitium DNS vs Pi-hole vs AdGuard Home.
+2. **Which role** — DNS only, or DNS *and* DHCP.
+
+Today UniFi runs DHCP for the network and hands out a public/UniFi resolver. Whatever
+we deploy has to slot in without a disruptive cutover, and must be reversible if it
+misbehaves — DNS is load-bearing for the whole house.
+
+## Decision
+
+**Use Technitium DNS Server, in a DNS-only role.** UniFi keeps DHCP; it simply hands
+out the Technitium LXC as the network's DNS resolver.
+
+### Engine: Technitium
+
+| Engine | Why / why not |
+|--------|---------------|
+| **Technitium** ✓ | Full authoritative + recursive/forwarding resolver, not just a blocker. Per-network/per-client blocking, DNS-over-HTTPS/TLS upstreams, conditional forwarding, a proper API, and built-in DHCP if ever wanted. Single self-contained service. |
+| Pi-hole | Great blocker, but DNS is `dnsmasq` underneath — thinner as a real resolver; config split across `dnsmasq`/`lighttpd`/FTL. |
+| AdGuard Home | Close second; clean UI and DoH/DoT. Technitium edges it on resolver depth (zones, conditional forwarding) and a richer API, and keeps a clean DHCP upgrade path on one engine. |
+
+Technitium also matches the direction in `docs/tech-radar.md` (already listed adopted
+for Phase 2).
+
+### Role: DNS only (UniFi keeps DHCP)
+
+- **Blast radius.** If Technitium fails, recovery is flipping a *single* UniFi DHCP
+  field (the handed-out DNS server) back to a fallback resolver. No DHCP outage, no
+  lease confusion.
+- **No overlap.** One DHCP authority (UniFi), one DNS authority (Technitium). Clean
+  ownership; no split-brain leases.
+- **Reversible cutover.** The handover is one DHCP setting plus a lease renewal, not a
+  service migration. See the cutover runbook in `docs/operations/runbooks.md`.
+
+Technitium *can* run DHCP, and the engine choice deliberately keeps that door open —
+but taking DHCP off UniFi is a separate, higher-risk decision that we are **not** making
+now. If we revisit it, it gets its own ADR.
+
+### Placement
+
+Unprivileged LXC on **apophis** now (CTID **111**), provisioned by
+`ansible/playbooks/provision-technitium.yml`. Like Tailscale (CT 110), it **migrates to
+the NUC in Phase 4** to free apophis for Plex. DNS-only keeps it portable — a migration
+is "new resolver IP in one DHCP field", not a data migration.
+
+## Consequences
+
+- **Single resolver = single point of failure for name resolution.** Mitigated three
+  ways: (1) the LXC is lightweight and `onboot`; (2) UniFi can hand out a *secondary*
+  DNS (e.g. `1.1.1.1`) so clients still resolve if Technitium is down — at the cost of
+  bypassing blocking for those queries; (3) Phase 4 migration to the NUC + the cluster
+  opens the door to a second Technitium instance later. The secondary-resolver trade-off
+  (resilience vs. guaranteed blocking) is called out in the cutover runbook; default is
+  **no public secondary** so blocking is never silently bypassed.
+- Technitium needs a static LAN IP, reserved/excluded in UniFi (same discipline as the
+  Tailscale CT). Clients only get the benefit once UniFi advertises it as their DNS.
+- Blocklists, upstream forwarders (DoH/DoT), and the admin password are configured in
+  the Technitium console on first run — the playbook provisions and installs; it does
+  not bake in blocklists. The cutover runbook lists the recommended first-run config.
+- Local-only secrets posture holds: the admin password is prompted at runtime and set
+  via the API (`no_log`), never committed (ADR-006/007).
+- Keeping DHCP on UniFi means no per-client DNS identity by hostname unless we later add
+  conditional forwarding or move DHCP to Technitium — accepted for now.

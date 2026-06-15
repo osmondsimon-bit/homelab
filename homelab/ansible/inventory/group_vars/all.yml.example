@@ -18,3 +18,11 @@ tailscale_cores: 1
 tailscale_disk_gb: 4
 tailscale_ip: YOUR_TAILSCALE_LAN_IP/24                                # verify free; reserve in UniFi
 tailscale_advertise_routes: "YOUR_LAN_CIDR"                # add IoT/mgmt subnets if wanted
+
+# --- Technitium DNS LXC (DNS-only resolver, ADR-011) -------------------------
+technitium_ctid: 111                                        # ensure this VMID is free
+technitium_hostname: technitium
+technitium_ram_mb: 1024                                     # headroom for blocklists in memory
+technitium_cores: 1
+technitium_disk_gb: 4
+technitium_ip: YOUR_TECHNITIUM_IP/24                        # verify free; reserve in UniFi

@@ -1,4 +1,7 @@
-# Decision 0001: Admin VM
+# Decision 0001: mgmt-vm (admin/automation workstation)
+
+> Originally titled "Admin VM" — the role description. The VM was named **mgmt-vm**;
+> "Admin VM" is not a separate machine. See `homelab/PLAN.md` for current state.
 
 ## Decision
 Create a dedicated Ubuntu Server VM called `mgmt-vm`.

@@ -37,7 +37,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
-| Technitium DNS | LXC | NUC | Ad/tracker blocking DNS for all VLANs, with blocklists |
+| Technitium DNS | LXC | apophis now → NUC (Ph4) | DNS-only resolver, ad/tracker blocking for all VLANs (ADR-011). UniFi keeps DHCP. CT 111 — deployed, OISD blocklist active; DHCP cutover pending |
 | Monitoring (Prometheus + Grafana) | LXC/VM | NUC | Observability — scrapes Proxmox, UniFi, HA. **Prioritised first.** |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
@@ -81,7 +81,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### Next build (Phase 2 → 3)
-- [ ] **Technitium DNS** — write `provision-technitium.yml`, an ADR for the DNS-engine choice (Technitium vs Pi-hole/AdGuard), and a careful DHCP→DNS cutover plan. Completes Phase 2.
+- [~] **Technitium DNS** — deployed and verified: CT 111 on apophis (`YOUR_TECHNITIUM_IP`), DNS-only, OISD Big blocklist active, console secured. ADR-011, `provision-technitium.yml`, group_vars, and the cutover runbook are all in. **Remaining (operator, tomorrow):** the DHCP cutover — point UniFi's DHCP DNS at `YOUR_TECHNITIUM_IP` (runbook in `docs/operations/runbooks.md`). That completes Phase 2.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, intended on the NUC.
 

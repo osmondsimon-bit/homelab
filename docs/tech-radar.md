@@ -17,7 +17,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Provisioning (create) | Terraform (`bpg/proxmox`) | Adopted (ADR-008) — scaffolded in `terraform/`; import existing VMs next |
 | Provisioning (configure) | Ansible | Active (ADR-005) — config role; VM/LXC lifecycle now via Terraform |
 | Multi-node cluster + HA | Proxmox cluster + ZFS replication | Accepted direction (ADR-009) — 3 nodes (apophis + NUC + ThinkCentre), executed as hardware lands |
-| DNS + ad blocking | Technitium DNS | Phase 2 — next; intended on the NUC |
+| DNS + ad blocking | Technitium DNS | Phase 2 — deployed, CT 111 on apophis. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big blocklist active. **DHCP cutover pending.** Migrates to the NUC in Phase 4 |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
 | Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
 | Monitoring | Prometheus + Grafana | Phase 3 — prioritised first; intended on the NUC |
