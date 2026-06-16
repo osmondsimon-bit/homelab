@@ -24,6 +24,7 @@ PATHS=(
   "homelab/ansible/inventory/group_vars/all.yml"
   "homelab/ansible/inventory/host_vars"
   ".claude/agents"
+  ".claude/skills"
   ".claude/projects/-home-simon/memory"
 )
 
