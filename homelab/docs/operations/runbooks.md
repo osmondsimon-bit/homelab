@@ -227,15 +227,18 @@ don't need image backups — only genuinely stateful or hand-built things do.
 
 | Layer | Recreates | Lives |
 |---|---|---|
-| Terraform (ADR-008) | VM/LXC existence + shape | git (public) |
-| Ansible playbooks | service config (Technitium, Tailscale, PBS, share) | git (public) |
+| Ansible playbooks | **the LXCs end-to-end** — `pct create` + config (Tailscale, Technitium, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** only (hand-built, not in code) | oneill |
-| HA native partial | HA config + Zigbee2MQTT + add-ons | oneill share |
+| PBS images | **mgmt-vm** (hand-built, no playbook) | oneill |
+| HA native partial | HA config + Zigbee2MQTT + add-ons (restore onto a fresh HAOS) | oneill share |
+| Terraform (ADR-008) | **planned** — declarative VM/LXC definitions; not yet imported (empty scaffold) | git (public) |
 
-The only guest in PBS is **mgmt-vm** — it isn't reproducible from a playbook. The CTs
-(Technitium, Tailscale) are deliberately **not** imaged: they rebuild from their playbooks
-(`provision-technitium.yml` / `provision-tailscale.yml`), so PBS images would only duplicate code.
+**Reality check (2026-06-16):** Terraform manages nothing yet (no state) — the four LXCs are
+created **and** configured by their Ansible playbooks today (re-run to rebuild). The CTs are
+deliberately not in PBS (the playbooks rebuild them). **mgmt-vm and the HA VM are the exceptions
+— neither is recreatable from code:** mgmt-vm relies on its PBS image; HA relies on manually
+creating a HAOS VM then restoring the native partial. The playbook rebuild path is unproven
+until the **CT 111 reprovision drill** (pending) actually runs it.
 
 **Restore by scenario:**
 - **A guest is lost/corrupted:** reproducible service → re-run its playbook; mgmt-vm (or any
