@@ -1,0 +1,50 @@
+---
+# Dead-man's-switch on apophis: independently checks oneill's monitoring + Technitium
+# DNS and alerts via ntfy if either is unreachable. A monitor running ON oneill can't
+# report oneill being down — this lives on apophis to cover that (ADR-013). Idempotent.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, targeting apophis:
+#   ansible-playbook playbooks/provision-deadmans-switch.yml --limit apophis
+#
+# Uses ntfy_base_url/ntfy_topic + monitoring_ip/technitium_ip from group_vars.
+# Subscribe the ntfy app to the topic to receive alerts.
+
+- name: Install the oneill dead-man's-switch on apophis
+  hosts: proxmox
+  gather_facts: false
+
+  tasks:
+    - name: Install the watch script
+      ansible.builtin.copy:
+        dest: /usr/local/bin/oneill-watch.sh
+        mode: "0755"
+        content: |
+          #!/usr/bin/env bash
+          # Dead-man's-switch (managed by ansible — provision-deadmans-switch.yml).
+          # From apophis, check oneill's monitoring + Technitium DNS; ntfy on failure.
+          set -u
+          NTFY="{{ ntfy_base_url }}/{{ ntfy_topic }}"
+          fail=""
+          curl -fsS --max-time 5 "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy" >/dev/null 2>&1 \
+            || fail="${fail}monitoring(:9090) "
+          timeout 3 bash -c '</dev/null >/dev/tcp/{{ technitium_ip | regex_replace('/.*$','') }}/53' 2>/dev/null \
+            || fail="${fail}technitium-DNS(:53) "
+          if [ -n "$fail" ]; then
+            curl -fsS -H "Title: Homelab alert (from apophis)" -H "Priority: high" -H "Tags: rotating_light" \
+              -d "oneill check FAILED: ${fail}" "$NTFY" >/dev/null 2>&1
+          fi
+      no_log: true
+
+    - name: Schedule the check every 5 minutes
+      ansible.builtin.copy:
+        dest: /etc/cron.d/oneill-watch
+        mode: "0644"
+        content: |
+          # oneill dead-man's-switch (managed by ansible)
+          */5 * * * * root /usr/local/bin/oneill-watch.sh
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Dead-man's-switch installed on {{ inventory_hostname }} — runs every 5 min."
+          - "Alerts to ntfy topic (subscribe the app). Test: run /usr/local/bin/oneill-watch.sh"

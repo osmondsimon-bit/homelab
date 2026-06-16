@@ -180,6 +180,24 @@ backlog item.)
 
 ---
 
+## Monitoring + alerting (CT 114 on oneill) — ADR-013
+
+- **Prometheus + Grafana** in unprivileged CT 114 on oneill (needs `features nesting=1` — their
+  systemd sandboxing fails 226/NAMESPACE without it). TSDB on a quota'd ZFS bind-mount, 30d.
+  - Prometheus: `http://YOUR_MONITORING_IP:9090` (`/targets` for scrape health).
+  - Grafana: `http://YOUR_MONITORING_IP:3000` (admin) — LAN/Tailscale only. Import dashboards
+    (e.g. 1860 Node Exporter Full); export edits back to the repo per ADR-013.
+- **node_exporter** on apophis + oneill (`:9100`) via `install-node-exporter.yml`.
+- **Alerting → ntfy** (private topic; subscribe the app). The topic is a secret — in gitignored
+  `group_vars/all.yml` (`ntfy_topic`), never committed.
+- **Dead-man's-switch:** `provision-deadmans-switch.yml` installs a 5-min cron on **apophis**
+  (`/usr/local/bin/oneill-watch.sh`) that checks oneill's Prometheus + Technitium DNS and ntfy-alerts
+  on failure — so "oneill/Technitium down" is caught even though Alertmanager lives on oneill.
+  Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh` (silent when healthy).
+- **Pending (Step 2 cont.):** Alertmanager + rules, pve-exporter, UniFi + HA exporters.
+
+---
+
 ## Backups (PBS + Home Assistant) — ADR-012
 
 **oneill is the backup hub.** Two layers, local cross-host (cloud off-site deferred).

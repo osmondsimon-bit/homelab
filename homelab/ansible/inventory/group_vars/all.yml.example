@@ -78,3 +78,7 @@ monitoring_scrape_interval: 30s
 monitoring_node_targets:                                    # node_exporter on the PVE hosts (:9100)
   - "YOUR_PROXMOX_IP:9100"                                  # apophis
   - "YOUR_NUC_IP:9100"                                      # oneill
+
+# --- Alerting: ntfy (ADR-013) — topic is PRIVATE, treat as a secret ----------
+ntfy_base_url: https://ntfy.sh
+ntfy_topic: YOUR_NTFY_TOPIC                                 # pick a random topic; subscribe the ntfy app to it
