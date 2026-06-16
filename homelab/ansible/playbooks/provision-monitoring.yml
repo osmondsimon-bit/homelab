@@ -71,6 +71,7 @@
         --net0 name=eth0,bridge={{ bridge }},ip={{ monitoring_ip }},gw={{ gateway }}
         --mp0 /{{ monitoring_tsdb_dataset }},mp={{ monitoring_tsdb_mount }}
         --unprivileged 1
+        --features nesting=1
         --onboot 1
       when: ct_status.rc != 0
 
