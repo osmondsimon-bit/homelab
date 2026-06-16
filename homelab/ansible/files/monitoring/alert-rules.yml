@@ -1,0 +1,54 @@
+# Prometheus alert rules for the homelab (ADR-013).
+# Loaded by Prometheus via rule_files: /etc/prometheus/rules/*.yml and routed to
+# Alertmanager -> the am-ntfy bridge -> ntfy. This is a STATIC file: it is copied
+# into the CT verbatim (lookup('file') | b64encode), so the {{ $labels }} below are
+# Prometheus templating, NOT Ansible/Jinja — do not edit them as Jinja.
+#
+# Keep this conservative: alerts that are definitely correct against the metrics we
+# already scrape (node_exporter, pve-exporter, up). Tune thresholds against reality.
+groups:
+  - name: homelab
+    rules:
+      # Any scrape target unreachable (node/pve/unifi/home-assistant/prometheus self).
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target down: {{ $labels.job }} ({{ $labels.instance }})"
+          description: "Prometheus has failed to scrape {{ $labels.job }} at {{ $labels.instance }} for 5m."
+
+      # Real filesystems under 10% free (excludes pseudo/overlay/squashfs mounts).
+      - alert: NodeFilesystemSpaceLow
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|overlay|ramfs"}
+           / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|overlay|ramfs"}) < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk: {{ $labels.instance }} {{ $labels.mountpoint }} <10% free"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} is below 10% free space."
+
+      # Host memory nearly exhausted.
+      - alert: NodeMemoryHigh
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low memory: {{ $labels.instance }} <10% available"
+          description: "{{ $labels.instance }} has had under 10% memory available for 10m."
+
+      # A PVE storage (datastore/rpool/local-*) running out — pve-exporter metrics.
+      - alert: PVEStorageFull
+        expr: >
+          (pve_disk_usage_bytes{id=~"storage/.*"}
+           / pve_disk_size_bytes{id=~"storage/.*"}) > 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVE storage >90% full: {{ $labels.id }}"
+          description: "{{ $labels.id }} (scraped via {{ $labels.instance }}) is over 90% used."

@@ -1,8 +1,9 @@
 ---
 # Provision the Monitoring stack on oneill: Prometheus (scrape + TSDB) + Grafana +
-# pve-exporter, native packages, unprivileged LXC (needs nesting=1 for the services'
-# systemd sandboxing), TSDB on a quota'd ZFS bind-mount (ADR-013). node_exporter on
-# the hosts is install-node-exporter.yml (run that first). Idempotent.
+# pve-exporter + Alertmanager (-> am-ntfy bridge -> ntfy) + alert rules, native
+# packages, unprivileged LXC (needs nesting=1 for the services' systemd sandboxing),
+# TSDB on a quota'd ZFS bind-mount (ADR-013). node_exporter on the hosts is
+# install-node-exporter.yml (run that first). Idempotent.
 #
 # Run from the mgmt-vm, inside homelab/ansible/ — NO --limit (play 1 mints PVE tokens
 # on BOTH hosts, play 2 builds the CT on oneill):
@@ -262,10 +263,19 @@
         prom_yml: |
           global:
             scrape_interval: {{ monitoring_scrape_interval }}
+          alerting:
+            alertmanagers:
+              - static_configs:
+                  - targets: ["localhost:{{ monitoring_alertmanager_port }}"]
+          rule_files:
+            - /etc/prometheus/rules/*.yml
           scrape_configs:
             - job_name: prometheus
               static_configs:
                 - targets: ["localhost:9090"]
+            - job_name: alertmanager
+              static_configs:
+                - targets: ["localhost:{{ monitoring_alertmanager_port }}"]
             - job_name: node
               static_configs:
                 - targets: {{ monitoring_node_targets | to_json }}
@@ -315,12 +325,108 @@
         EOF'
       changed_when: true
 
+    # --- Alertmanager + am-ntfy bridge + alert rules (ADR-013) ---------------
+    - name: Check whether Alertmanager is installed
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- dpkg -s prometheus-alertmanager"
+      register: am_present
+      changed_when: false
+      failed_when: false
+
+    - name: Install Alertmanager inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y -qq prometheus-alertmanager >/dev/null
+        '
+      when: am_present.rc != 0
+      changed_when: true
+
+    - name: Disable Alertmanager's cluster listener (single instance; don't expose :9094)
+      ansible.builtin.shell: >
+        pct exec {{ monitoring_ctid }} -- bash -c
+        'echo "ARGS=\"--cluster.listen-address=\"" > /etc/default/prometheus-alertmanager'
+      changed_when: true
+
+    - name: Write Alertmanager config (routes everything to the ntfy bridge)
+      ansible.builtin.shell: >
+        echo '{{ am_yml | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/alertmanager.yml'
+      vars:
+        am_yml: |
+          route:
+            receiver: ntfy
+            group_by: ['alertname', 'instance']
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+          receivers:
+            - name: ntfy
+              webhook_configs:
+                - url: http://127.0.0.1:{{ monitoring_amntfy_port }}/alert
+                  send_resolved: true
+      changed_when: true
+
+    - name: Install the am-ntfy bridge script
+      ansible.builtin.shell: >
+        echo '{{ lookup('file', playbook_dir + '/../files/monitoring/am-ntfy.py') | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /usr/local/bin/am-ntfy.py && chmod 0755 /usr/local/bin/am-ntfy.py'
+      changed_when: true
+
+    - name: Write the am-ntfy environment file (private ntfy topic — 0600, root)
+      ansible.builtin.shell: >
+        echo '{{ amntfy_env | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/am-ntfy && cat > /etc/am-ntfy/env && chmod 0600 /etc/am-ntfy/env'
+      vars:
+        amntfy_env: |
+          NTFY_URL={{ ntfy_base_url }}/{{ ntfy_topic }}
+          PORT={{ monitoring_amntfy_port }}
+      no_log: true
+      changed_when: true
+
+    - name: Install the am-ntfy systemd unit (hardened, DynamicUser)
+      ansible.builtin.shell: >
+        echo '{{ amntfy_unit | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/systemd/system/am-ntfy.service'
+      vars:
+        amntfy_unit: |
+          [Unit]
+          Description=Alertmanager -> ntfy webhook bridge
+          After=network-online.target
+          [Service]
+          ExecStart=/usr/bin/python3 /usr/local/bin/am-ntfy.py
+          EnvironmentFile=/etc/am-ntfy/env
+          DynamicUser=yes
+          NoNewPrivileges=yes
+          ProtectSystem=strict
+          ProtectHome=yes
+          PrivateTmp=yes
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    - name: Drop the alert rules into the CT
+      ansible.builtin.shell: >
+        echo '{{ lookup('file', playbook_dir + '/../files/monitoring/alert-rules.yml') | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/prometheus/rules && cat > /etc/prometheus/rules/homelab.yml'
+      changed_when: true
+
+    - name: Validate alert rules + Alertmanager config before (re)starting
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          set -e
+          promtool check rules /etc/prometheus/rules/homelab.yml
+          amtool check-config /etc/prometheus/alertmanager.yml
+        '
+      changed_when: false
+
     - name: Enable + (re)start the services
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           systemctl daemon-reload
-          systemctl enable --now prometheus grafana-server pve-exporter unpoller >/dev/null 2>&1
-          systemctl restart prometheus grafana-server pve-exporter unpoller
+          systemctl enable --now prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy >/dev/null 2>&1
+          systemctl restart prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy
         '
       changed_when: true
 
@@ -338,3 +444,5 @@
           - "Monitoring CT {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
           - "Grafana :3000 (admin) / Prometheus :9090/targets — LAN/Tailscale only."
           - "Targets: prometheus + node (x{{ monitoring_node_targets | length }}) + pve (x{{ monitoring_pve_nodes | length }})."
+          - "Alerting: Prometheus rules -> Alertmanager :{{ monitoring_alertmanager_port }} -> am-ntfy :{{ monitoring_amntfy_port }} -> ntfy."
+          - "Alerts at :9090/alerts, AM at :{{ monitoring_alertmanager_port }}. Test: amtool alert add (see runbook)."

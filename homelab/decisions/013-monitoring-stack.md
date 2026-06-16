@@ -70,3 +70,14 @@ backup prerequisite (ADR-012, PBS) now exists.
 
 Provisioned by `provision-monitoring.yml` (+ `node_exporter` on the nodes). Run `/security-review`
 before marking the Phase 3 monitoring item done.
+
+## Implementation note — Alertmanager → ntfy (Step 2, done 2026-06-16)
+
+ntfy has **no native Alertmanager receiver**, so rather than add a Go binary or a Docker layer we
+route Alertmanager's `webhook_configs` to a tiny **stdlib-Python bridge** (`am-ntfy.py`) on
+`127.0.0.1:9095` that translates each alert into an ntfy push (title/priority/tags by status +
+severity). It runs as a hardened systemd unit (`DynamicUser`, `ProtectSystem=strict`) and reads the
+private topic from `/etc/am-ntfy/env` (0600) so the topic never lands in the unit file or logs — no
+pip/Docker deps, fully reproducible from code. Alertmanager's **cluster port (`:9094`) is disabled**
+(single instance, and it otherwise binds all interfaces). Rules + AM config are validated with
+`promtool`/`amtool` before each (re)start. Both halves verified end-to-end against ntfy.

@@ -46,7 +46,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
 | ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP; serves the **home VLAN** (IoT/guest use the gateway — ADR-011 DNS-by-VLAN-role). |
-| Monitoring (Prometheus + Grafana + Alertmanager) | LXC | oneill (CT 114, `.9`) | Observability + alerting — scrapes Proxmox, UniFi, HA (ADR-013). Dashboards/alerts as code; apophis dead-man's-switch. **Next build, in 2 steps.** |
+| ~~Monitoring (Prometheus + Grafana + Alertmanager)~~ | LXC | oneill (CT 114, `.9`) | ✅ Live — scrapes Proxmox/UniFi/HA, Alertmanager → am-ntfy bridge → ntfy with starter rules, apophis dead-man's-switch (ADR-013). Dashboards/alerts as code. |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
 | qBittorrent + Gluetun | LXC | apophis | Torrent client behind Gluetun killswitch → ProtonVPN Plus |
@@ -89,7 +89,8 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### ▶ Pick up next session (immediate)
-- **Build next:** **Homepage on oneill** (Phase 3's last service — ADR + infra-designer + `provision-homepage.yml`), *or* finish **Monitoring Alertmanager + alert rules** (proactive disk/node alerts → ntfy; needs an alertmanager→ntfy bridge). Either; Homepage closes Phase 3.
+- **Build next:** **Homepage on oneill** (Phase 3's last service — ADR + infra-designer + `provision-homepage.yml`). Closes Phase 3, then run `/phase-gate`.
+- **Done 2026-06-16:** Monitoring **Alertmanager + alert rules** — Prometheus rules → Alertmanager → `am-ntfy.py` stdlib bridge → ntfy (ntfy has no native AM receiver). Starter rules: TargetDown / NodeFilesystemSpaceLow / NodeMemoryHigh / PVEStorageFull. Verified end-to-end. Monitoring Step 2 now complete.
 - **HA backup:** confirm the automatic HA partial backup landed on the oneill share, then delete the interim local `vzdump-qemu-200` (+ `100`) safety net (runbook → Backups).
 - **Operator quick wins:** import Grafana dashboards (1860 node, unpoller UniFi, an HA one) at `http://YOUR_MONITORING_IP:3000`; reserve `.9`/`.4` in UniFi.
 - **Parked:** UniFi read-only MCP eval (verify MCP works in this env first); off-site backup copy (ADR-012); CT 111 reprovision drill.
@@ -99,7 +100,7 @@ Living backlog to pick up next session.
 - [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet). Old apophis CT 111 destroyed; `.5` freed.
 - [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
 - [ ] **Terraform import — DEFERRED to cluster scale** (ADR-008). Ansible (`pct`) creates + configures the LXCs for now and recovers cleanly; scaffold kept in `terraform/`. Revisit when the 3-node cluster lands (then: PVE API token, import live guests, refactor playbooks to config-only).
-- [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.
+- [x] **Monitoring stack** (Prometheus + Grafana + Alertmanager → ntfy, all exporters) — ✅ done (CT 114, ADR-013). **Homepage** is the remaining Phase 3 build.
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.

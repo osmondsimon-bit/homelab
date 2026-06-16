@@ -198,13 +198,25 @@ backlog item.)
   - Grafana: `http://YOUR_MONITORING_IP:3000` (admin) — LAN/Tailscale only. Import dashboards
     (e.g. 1860 Node Exporter Full); export edits back to the repo per ADR-013.
 - **node_exporter** on apophis + oneill (`:9100`) via `install-node-exporter.yml`.
-- **Alerting → ntfy** (private topic; subscribe the app). The topic is a secret — in gitignored
-  `group_vars/all.yml` (`ntfy_topic`), never committed.
+- **Exporters:** pve-exporter (`:9221`, PVE API, read-only `PVEAuditor` token), unpoller
+  (`:9130`, UniFi read-only user), Home Assistant `/api/prometheus` (long-lived token). All creds
+  are `vars_prompt`/vault — never committed (ADR-006).
+- **Alerting chain:** Prometheus rules (`/etc/prometheus/rules/*.yml`, sourced from
+  `ansible/files/monitoring/alert-rules.yml`) → **Alertmanager** (`:9093`, localhost-routed) →
+  **am-ntfy bridge** (`/usr/local/bin/am-ntfy.py`, a stdlib webhook→ntfy translator on
+  `127.0.0.1:9095`, since ntfy isn't a native AM receiver) → **ntfy** (private topic; subscribe the
+  app). The topic is a secret — gitignored `group_vars/all.yml` (`ntfy_topic`), never committed; the
+  bridge reads it from `/etc/am-ntfy/env` (0600). AM's cluster port (`:9094`) is disabled (single
+  instance). Starter rules: `TargetDown`, `NodeFilesystemSpaceLow`, `NodeMemoryHigh`, `PVEStorageFull`.
+  - **Test the pipeline:** `pct exec 114 -- amtool --alertmanager.url=http://localhost:9093 alert add
+    alertname=PipelineTest severity=critical --annotation=summary="test"` → ntfy push after the 30s
+    group_wait (auto-resolves ~5 min later). Confirm delivery without a phone:
+    `curl -s "https://ntfy.sh/<topic>/json?poll=1&since=3m"`.
 - **Dead-man's-switch:** `provision-deadmans-switch.yml` installs a 5-min cron on **apophis**
   (`/usr/local/bin/oneill-watch.sh`) that checks oneill's Prometheus + Technitium DNS and ntfy-alerts
-  on failure — so "oneill/Technitium down" is caught even though Alertmanager lives on oneill.
-  Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh` (silent when healthy).
-- **Pending (Step 2 cont.):** Alertmanager + rules, pve-exporter, UniFi + HA exporters.
+  on failure — so "oneill/Technitium down" is caught even though Alertmanager lives on oneill (it
+  can't alert on its own host being down). Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh`
+  (silent when healthy).
 
 ---
 
