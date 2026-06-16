@@ -20,7 +20,7 @@
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
-| technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Live** — DHCP serves it on home/IoT/guest VLANs (camera + management excluded, no internet). |
+| technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Live on the home VLAN** (same subnet). IoT/guest use the gateway (Auto) for DNS — isolated VLANs can't reach a main-LAN resolver + appliances break on blocklists (DNS-by-VLAN-role); camera/management have no internet. |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
@@ -45,7 +45,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
-| ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP, serves it on home/IoT/guest VLANs. |
+| ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP; serves the **home VLAN** (IoT/guest use the gateway — ADR-011 DNS-by-VLAN-role). |
 | Monitoring (Prometheus + Grafana + Alertmanager) | LXC | oneill (CT 114, `.9`) | Observability + alerting — scrapes Proxmox, UniFi, HA (ADR-013). Dashboards/alerts as code; apophis dead-man's-switch. **Next build, in 2 steps.** |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
@@ -76,7 +76,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 ## Phase order
 
 1. VLAN-aware Proxmox + firewall rules — ✓ completed
-2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, live on home/IoT/guest VLANs) — **✓ completed**
+2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, serving the home VLAN; IoT/guest use the gateway) — **✓ completed**
 3. **Foundation + observability:** **VM-level backups first** (entry task) → **Monitoring** (Prometheus + Grafana) → **Homepage**. (Terraform import deferred to cluster scale — ADR-008; Ansible-pct creates the boxes for now.)
 4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
 5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
@@ -89,7 +89,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### Next build (Phase 3)
-- [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on home/IoT/guest VLANs (camera + management intentionally excluded — no internet). Old apophis CT 111 destroyed; `.5` freed.
+- [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet). Old apophis CT 111 destroyed; `.5` freed.
 - [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
 - [ ] **Terraform import — DEFERRED to cluster scale** (ADR-008). Ansible (`pct`) creates + configures the LXCs for now and recovers cleanly; scaffold kept in `terraform/`. Revisit when the 3-node cluster lands (then: PVE API token, import live guests, refactor playbooks to config-only).
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.

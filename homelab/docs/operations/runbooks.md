@@ -88,9 +88,16 @@ the playbook, then **approve the new route** in the Tailscale admin console.
 ## Technitium DNS (CT 111, DNS-only resolver)
 
 Unprivileged LXC 111 on **oneill** (NUC, `YOUR_NUC_IP`). **DNS only — UniFi keeps DHCP**
-(ADR-011), serving home/IoT/guest VLANs. Provisioned via Ansible
+(ADR-011). Provisioned via Ansible
 (`ansible-playbook playbooks/provision-technitium.yml --limit oneill`, idempotent). Web
 console on port `5380`, DNS on `53`.
+
+> **DNS-by-VLAN-role (important):** Technitium serves the **home VLAN only** (same subnet as
+> the resolver). **IoT + guest VLANs use the gateway (Auto) for DNS** — they're isolated and
+> can't reach a main-LAN resolver at `.6`, and cloud appliances (Sensibo, Roborock…) break on
+> blocklist NXDOMAINs. Pointing an isolated/appliance VLAN at Technitium silently breaks its
+> devices (queries never arrive — confirmed by zero such clients in Technitium's logs).
+> Camera/management have no internet, so no resolver.
 
 > **Config invariant:** all Technitium config (forwarders, blocking, blocklists) is applied
 > by the playbook via the API from `technitium_*` group_vars. Treat the web console as
@@ -147,7 +154,10 @@ The switch is **one UniFi DHCP field**, not a service migration. Reversible.
 3. **Propagate:** clients pick up the new resolver on lease renewal. Force it on a test
    client (`ipconfig /renew`, or toggle Wi-Fi) and confirm `nslookup` shows the new server.
 4. **Watch** the Technitium dashboard — query volume should climb as clients renew.
-5. **Roll out** to remaining VLANs once the test network is healthy.
+5. **Per-VLAN policy (DNS-by-VLAN-role):** only point a VLAN at Technitium if it can *reach*
+   `.6` and benefits from blocking — i.e. the **home VLAN**. **Leave isolated/appliance VLANs
+   (IoT, guest) on the gateway (Auto)** — they can't reach a main-LAN resolver and appliances
+   break on blocklists. Don't blanket-roll-out to every VLAN.
 
 ### Rollback (if DNS misbehaves)
 
@@ -159,7 +169,7 @@ The switch is **one UniFi DHCP field**, not a service migration. Reversible.
 ### Planned maintenance on oneill (DNS goes down with it)
 
 Technitium is a single instance with no DHCP secondary (ADR-011), so taking oneill down
-drops DNS for home/IoT/guest VLANs. Before planned maintenance:
+drops DNS for the **home VLAN** (IoT/guest use the gateway, so they're unaffected). Before planned maintenance:
 1. UniFi → each affected network's DHCP → set **DNS Server 2 = `1.1.1.1`** (temporary fallback).
 2. Do the maintenance.
 3. **Remove** the `1.1.1.1` secondary afterwards (so blocking is never silently bypassed).

@@ -5,7 +5,8 @@
 
 ## Context
 
-Phase 2 calls for a network-wide resolver with ad/tracker blocking for all VLANs
+Phase 2 calls for a network-wide resolver with ad/tracker blocking (scope refined to
+the home VLAN — see the DNS-by-VLAN-role consequence)
 (see `homelab/PLAN.md`). Two decisions are bundled here:
 
 1. **Which engine** — Technitium DNS vs Pi-hole vs AdGuard Home.
@@ -60,6 +61,15 @@ CT 110) to free apophis for Plex.
 
 ## Consequences
 
+- **DNS-by-VLAN-role (update 2026-06-16, learned the hard way).** Technitium serves the
+  **home VLAN only** (the resolver's own subnet). **IoT + guest VLANs use the gateway (Auto)
+  for DNS**, not Technitium, because: (1) they're isolated and can't reach a main-LAN resolver
+  at `.6` — queries never arrive (confirmed by zero such clients in Technitium's logs), and
+  (2) cloud appliances (Sensibo, Roborock…) hard-fail on blocklist NXDOMAINs. The original
+  "resolver for all VLANs" framing was wrong for isolated/appliance segments; pointing them at
+  Technitium silently broke their devices. Camera/management have no internet (no resolver).
+  If guest ad-blocking is ever wanted, it needs a firewall exception (guest → `.6:53`) **plus**
+  the guest subnet in Technitium's blocking-bypass — not worth it for now.
 - **Single resolver = single point of failure for name resolution.** Mitigated three
   ways: (1) the LXC is lightweight and `onboot`; (2) UniFi can hand out a *secondary*
   DNS (e.g. `1.1.1.1`) so clients still resolve if Technitium is down — at the cost of
