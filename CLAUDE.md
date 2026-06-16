@@ -82,6 +82,19 @@ Reviewers assist with this homelab (four agents + the `/security-review` skill).
 
 **Security review gates:** run `/security-review` at the end of each phase before marking it done in PLAN.md. Also run it before committing any Ansible playbook, firewall rule, or service configuration.
 
+## Context, subagents & effort
+
+Two goals: **stretch session runway** (minimize token/compute cost without adding real risk) and **keep the main agent's context clean** (unneeded tool/work output stays out of it).
+
+- **Offload to a subagent when the work is large but the answer needed back is small** — broad searches, multi-file reads, noisy tool runs, research. Ask it for **conclusions, uncertainty, and `file:line` refs — not transcripts or dumps**. **Verify a subagent's claims** (read the cited lines) before relying on them.
+- **Tight guidance + constraints; pass minimal context.** Don't feed history/prior context into a subagent unless essential — it biases results and burns tokens.
+- **Parallelize disjoint work** (multiple subagents at once when their targets don't overlap). **Sequence** anything that might touch the same files — "parallel-safe" means disjoint write targets.
+- **Pick the cheapest model/effort that does the job reliably:** comprehension *difficulty → model tier*; labor *volume → effort*.
+  - **Haiku 4.5** — Low tier/cost: simple, mechanical, well-specified tasks.
+  - **Sonnet 4.6** — Medium: most coding, research, doc work (efforts low→max).
+  - **Opus 4.8** — High: hard reasoning, architecture/security reviews (efforts low→max). The reviewer agents above are this class.
+  - Set the Agent tool's `model` to the right tier. Where a model/skill exposes **effort**, scale it to labor volume (more steps/output → higher effort), not to difficulty.
+
 ## Roadmap
 
 See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 2 ✓ complete** (Tailscale CT 110 + Technitium CT 111 live on oneill/NUC) — **starting Phase 3**, whose entry task is VM-level backups, then Terraform import → Monitoring → Homepage. Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 backups + Terraform + Monitoring + Homepage → 4 Multi-node cluster + HA (NUC + ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.
