@@ -34,7 +34,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| VM-level backups | Proxmox Backup Server / Backrest | Phase 3 (pull fwd) | Config layer done (ADR-007); VM/OS backup still needed — pull forward, config is single-disk |
+| VM-level backups | Proxmox Backup Server (on oneill) + HA native partial | Phase 3 entry task | **Approach decided (ADR-012):** oneill as backup hub — PBS for VM/CT images (cross-host) + HA partial backups to an oneill SMB/NFS share. Local-only for now; cloud off-site deferred. Build gated by infra-designer. |
 | Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | Design the ADR (guests auto-patch; nodes patched rolling with HA failover) |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |

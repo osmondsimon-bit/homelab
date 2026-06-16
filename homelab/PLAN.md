@@ -91,13 +91,13 @@ Living backlog to pick up next session.
 
 ### Next build (Phase 3)
 - [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on home/IoT/guest VLANs (camera + management intentionally excluded — no internet). Old apophis CT 111 destroyed; `.5` freed.
-- [ ] **[High] VM-level (Proxmox) backups — Phase 3 ENTRY task.** Stand up a backup target (PBS vs remote SSH vs rclone-to-cloud — write the ADR) **before** any stateful service lands on oneill. Closes the largest BC gap (covers mgmt-vm 100, HA 200, Tailscale 110, CT 111, and all future guests). Continuity-reviewer made this the Phase 3 kickoff, not a parallel task.
+- [ ] **[High] VM-level (Proxmox) backups — Phase 3 ENTRY task.** Approach decided — **ADR-012**: oneill as backup hub (PBS for VM/CT images, cross-host from apophis) + HA native *partial* backups to an SMB/NFS share on oneill (media excluded; recorder retention tuned). Local-only; cloud off-site deferred. **Next:** infra-designer review, then build the PBS + share LXCs and schedule. Must exist before any stateful service lands on oneill.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
-- [ ] **[High] VM-level (Proxmox) backups — Phase 3 entry task** (see above). No backup target exists yet; every VM/LXC is currently a single-disk hypothesis.
+- [ ] **[High] VM-level (Proxmox) backups — Phase 3 entry task** (see above; **ADR-012**). No backup target stood up yet; every VM/LXC is currently a single-disk hypothesis.
 - [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows. Do before Phase 3.
 
 ### Small / quick
