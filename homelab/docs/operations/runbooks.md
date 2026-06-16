@@ -194,8 +194,9 @@ backlog item.)
     inside CT 112.
   - apophis storage `pbs-oneill` added with that token + the datastore **fingerprint**
     (`proxmox-backup-manager cert info` on PBS).
-- **Scheduled job (apophis):** VMs/CTs `100,110` → `pbs-oneill`, daily **02:30**, retention
-  **keep-daily 7 / keep-weekly 4**. **HA (200) is excluded** — protected by native partial below.
+- **Scheduled job (apophis):** **VM 100 (mgmt-vm)** → `pbs-oneill`, daily **02:30**, retention
+  **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs rebuild from their
+  playbooks; HA uses the native partial below. (mgmt-vm is the only guest not reproducible from code.)
 - **GC:** datastore `main` runs garbage collection daily.
 
 #### Restore a guest from PBS
@@ -223,12 +224,12 @@ don't need image backups — only genuinely stateful or hand-built things do.
 | Terraform (ADR-008) | VM/LXC existence + shape | git (public) |
 | Ansible playbooks | service config (Technitium, Tailscale, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** (hand-built, not in code) + CTs (convenience) | oneill |
+| PBS images | **mgmt-vm** only (hand-built, not in code) | oneill |
 | HA native partial | HA config + Zigbee2MQTT + add-ons | oneill share |
 
-The only guest that *needs* PBS is **mgmt-vm** — it isn't reproducible from a playbook. The
-CTs are in PBS only as a fast-restore convenience (they fully rebuild from their playbooks);
-dropping them from the PBS job loses nothing but restore speed.
+The only guest in PBS is **mgmt-vm** — it isn't reproducible from a playbook. The CTs
+(Technitium, Tailscale) are deliberately **not** imaged: they rebuild from their playbooks
+(`provision-technitium.yml` / `provision-tailscale.yml`), so PBS images would only duplicate code.
 
 **Restore by scenario:**
 - **A guest is lost/corrupted:** reproducible service → re-run its playbook; mgmt-vm (or any

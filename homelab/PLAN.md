@@ -97,7 +97,7 @@ Living backlog to pick up next session.
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
-- [x] **VM/CT images via PBS** — PBS on oneill (CT 112), apophis wired (scoped token), scheduled daily (VMs/CTs 100,110 → keep 7d/4w), GC daily. mgmt-vm + Tailscale verified. (ADR-012)
+- [x] **VM images via PBS** — PBS on oneill (CT 112), apophis wired (scoped token), scheduled daily (**VM 100 mgmt-vm** → keep 7d/4w), GC daily. (ADR-012) CTs excluded — reproducible from playbooks (mgmt-vm is the only guest not in code).
 - [ ] **[High] HA native backup — NOT set up yet.** Run `provision-ha-backup-share.yml --limit oneill` (Samba CT 113), then in HAOS add the CIFS share + schedule a **PARTIAL** backup (HA + Zigbee2MQTT + add-ons; **exclude media**; tune recorder `purge_keep_days`). This is HA's primary protection (whole-VM HA is intentionally excluded from PBS).
 - [ ] **Then remove the interim safety net** — once an HA native partial backup is verified landing on the share, delete the stale local `vzdump-qemu-200` (HA) image on apophis `local` (and the redundant local `vzdump-qemu-100` images, now covered off-box by PBS). Until then, **keep them** — they're HA's only backup in the gap.
 - [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows.
