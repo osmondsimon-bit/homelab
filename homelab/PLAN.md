@@ -88,6 +88,13 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 Living backlog to pick up next session.
 
+### ▶ Pick up next session (immediate)
+- **Build next:** **Homepage on oneill** (Phase 3's last service — ADR + infra-designer + `provision-homepage.yml`), *or* finish **Monitoring Alertmanager + alert rules** (proactive disk/node alerts → ntfy; needs an alertmanager→ntfy bridge). Either; Homepage closes Phase 3.
+- **HA backup:** confirm the automatic HA partial backup landed on the oneill share, then delete the interim local `vzdump-qemu-200` (+ `100`) safety net (runbook → Backups).
+- **Operator quick wins:** import Grafana dashboards (1860 node, unpoller UniFi, an HA one) at `http://YOUR_MONITORING_IP:3000`; reserve `.9`/`.4` in UniFi.
+- **Parked:** UniFi read-only MCP eval (verify MCP works in this env first); off-site backup copy (ADR-012); CT 111 reprovision drill.
+- Monitoring is live (Prometheus/Grafana + node/pve/unifi/HA + ntfy dead-man's-switch). `/phase-gate` skill exists for closing phases. A read-only Technitium token is at `~/.technitium-ro-token` for diagnostics.
+
 ### Next build (Phase 3)
 - [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet). Old apophis CT 111 destroyed; `.5` freed.
 - [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
