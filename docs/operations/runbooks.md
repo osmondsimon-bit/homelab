@@ -115,19 +115,18 @@ Console → **Logs**, or: `pct exec 111 -- journalctl -u dns.service -n 50 --no-
 
 ---
 
-### First-run config (in the web console, http://YOUR_TECHNITIUM_IP:5380)
+### First-run config — automated by the playbook
 
-Do this **before** the DHCP cutover below. The playbook installs the engine only.
+Forwarders (DoH), blocking type (NX Domain), and the blocklist (OISD Big) are applied by
+`provision-technitium.yml` via the Technitium API from the `technitium_*` group_vars — no
+manual console setup. To change them, edit the vars and re-run the playbook (the config
+tasks are idempotent and run every time; they read the settings back and fail if anything
+didn't apply). **Verify** with the `dig` tests above; the Dashboard **Block List** count
+should read ~300k+ once OISD finishes downloading.
 
-1. **Forwarders** — Settings → Proxy & Forwarders: add encrypted upstreams
-   (e.g. Cloudflare `https://cloudflare-dns.com/dns-query` and Quad9 DoH). Forwarder
-   protocol: HTTPS (DoH) or TLS (DoT).
-2. **Blocklist** — Settings → Blocking: tick **Enable Blocking**, set **Blocking Type =
-   NX Domain**, add the OISD Big (Domains/Wildcards) URL `https://big.oisd.nl/domainswild2`,
-   set **Update Interval = 24h**, **Save Settings**, then **Update Now**. One list is enough.
-3. **Verify** with the `dig` tests above against the CT directly — a normal name resolves and
-   an in-list ad hostname returns NXDOMAIN. The Dashboard **Block List** count should read
-   ~300k+ once loaded.
+To configure manually instead (console at `http://YOUR_TECHNITIUM_IP:5380`): Settings →
+Proxy & Forwarders for upstreams; Settings → Blocking to enable, set NX Domain, add
+`https://big.oisd.nl/domainswild2`, Save, then Update Now.
 
 ### DHCP → DNS cutover (the actual switch)
 

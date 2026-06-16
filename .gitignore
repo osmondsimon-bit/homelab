@@ -14,6 +14,7 @@
 # Re-ignored inside the published folders (never publish these):
 homelab/ansible/inventory/hosts.ini
 homelab/ansible/inventory/group_vars/all.yml
+homelab/ansible/inventory/host_vars/*.yml
 homelab/terraform/.terraform/
 homelab/terraform/*.tfstate
 homelab/terraform/*.tfstate.*

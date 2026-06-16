@@ -1,0 +1,9 @@
+---
+# Template for a per-node overrides file. Copy to <node>.yml (gitignored) and
+# adjust. Only things that differ because of THIS node's hardware belong here;
+# service identity/config (CTIDs, IPs, blocklists) lives in group_vars/all.yml.
+# Run service playbooks against the node with: --limit <node>
+
+# rootfs pool for new LXCs on this node (e.g. local-zfs on a ZFS install,
+# local-lvm on an LVM-thin install).
+rootfs_storage: local-zfs

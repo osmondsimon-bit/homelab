@@ -11,7 +11,16 @@
 |--------|------|------|----|--------|
 | mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
 | home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP. HA-failover target once clustered. |
-| tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — subnet router, advertises YOUR_LAN_CIDR (ADR-003/005). To migrate onto the NUC. |
+| tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — subnet router, advertises YOUR_LAN_CIDR (ADR-003/005). To migrate onto oneill. |
+
+### oneill (Intel NUC, Proxmox host)
+- Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
+- IP: YOUR_NUC_IP — Proxmox VE 9.2, standalone (joins the cluster in Phase 4)
+- The low-power "simple services" node, offloading apophis (ADR-009 hardware roadmap)
+
+| VM/LXC | VMID | Type | IP | Status |
+|--------|------|------|----|--------|
+| technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Pending the UniFi DHCP cutover to go live.** |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
@@ -22,7 +31,7 @@ Moving from a single host to a **3-node Proxmox cluster**, with local storage st
 | Node | Role | Status | Intended to run |
 |------|------|--------|-----------------|
 | apophis | Compute-heavy | Live | Plex (QuickSync) + media stack; HA VM or its failover target |
-| Intel NUC (name TBD) | Low-power, decent RAM | Soon | Simple services offloaded from apophis: Tailscale, Technitium, Homepage, Monitoring |
+| Intel NUC (**oneill**, N150 / 16 GB / ZFS) | Low-power | **Live (standalone)** — running Technitium | Simple services offloaded from apophis: Technitium ✓, then Monitoring, Homepage, Tailscale |
 | 2nd ThinkCentre M920Q | Cluster + HA quorum | ~1 month | HA-failover target; extra capacity |
 
 Offloading the simple services to the NUC frees apophis's CPU for Plex transcoding. Three nodes give clean cluster quorum. Mixed CPUs are fine for HA failover (restart-on-another-node); live migration between different CPU generations needs a compatible CPU type.
@@ -37,7 +46,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
-| Technitium DNS | LXC | apophis now → NUC (Ph4) | DNS-only resolver, ad/tracker blocking for all VLANs (ADR-011). UniFi keeps DHCP. CT 111 — deployed, OISD blocklist active; DHCP cutover pending |
+| ~~Technitium DNS~~ | LXC | **oneill** | ✅ Deployed — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP. Only the DHCP cutover remains. |
 | Monitoring (Prometheus + Grafana) | LXC/VM | NUC | Observability — scrapes Proxmox, UniFi, HA. **Prioritised first.** |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
@@ -81,7 +90,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### Next build (Phase 2 → 3)
-- [~] **Technitium DNS** — deployed and verified: CT 111 on apophis (`YOUR_TECHNITIUM_IP`), DNS-only, OISD Big blocklist active, console secured. ADR-011, `provision-technitium.yml`, group_vars, and the cutover runbook are all in. **Remaining (operator, tomorrow):** the DHCP cutover — point UniFi's DHCP DNS at `YOUR_TECHNITIUM_IP` (runbook in `docs/operations/runbooks.md`). That completes Phase 2.
+- [~] **Technitium DNS** — deployed and verified on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist active + DoH forwarders, console secured. Config is applied declaratively by `provision-technitium.yml` via the Technitium API (forwarders/blocking/blocklists from group_vars). Old apophis CT 111 destroyed; `.5` freed. **Remaining (operator):** reserve `.6` in UniFi, do the DHCP cutover (point DHCP DNS at oneill), remove the stale `.5` reservation. That completes Phase 2.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, intended on the NUC.
 

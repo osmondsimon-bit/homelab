@@ -140,6 +140,49 @@
       failed_when: (tech_defcheck.stdout | from_json).status == "ok"
       when: dns_present.rc != 0
 
+    # ---- Apply DNS config via the Technitium API (idempotent — runs every time) ----
+    # Log in with the operator password (set above on first install, or the current
+    # one on a re-run) for a fresh token, then enforce forwarders + blocking +
+    # blocklists declaratively. Technitium returns HTTP 200 even on API errors, so
+    # every step parses the JSON status (and the last reads the config back) and
+    # fails loudly — a mistyped param can't silently no-op.
+    - name: Log in to the Technitium API
+      ansible.builtin.command: >
+        pct exec {{ technitium_ctid }} --
+        curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass={{ tech_admin_password | urlencode }}"
+      register: tech_cfg_login
+      no_log: true
+      changed_when: false
+      failed_when: (tech_cfg_login.stdout | from_json).status != "ok"
+
+    - name: Configure forwarders, blocking and blocklists
+      ansible.builtin.command: >
+        pct exec {{ technitium_ctid }} --
+        curl -fsS "http://127.0.0.1:5380/api/settings/set?token={{ (tech_cfg_login.stdout | from_json).token }}&forwarders={{ technitium_forwarders | join(',') | urlencode }}&forwarderProtocol={{ technitium_forwarder_protocol }}&enableBlocking=true&blockingType={{ technitium_blocking_type }}&blockListUrls={{ technitium_blocklist_urls | join(',') | urlencode }}&blockListUpdateIntervalHours={{ technitium_blocklist_update_hours }}"
+      register: tech_settings
+      changed_when: true
+      failed_when: (tech_settings.stdout | from_json).status != "ok"
+
+    # Run every time so the list is always populated (fresh install) and current
+    # (re-runs) — OISD is a few MB; the 24h auto-update handles refresh in between.
+    - name: Force a block list download now
+      ansible.builtin.command: >
+        pct exec {{ technitium_ctid }} --
+        curl -fsS "http://127.0.0.1:5380/api/settings/forceUpdateBlockLists?token={{ (tech_cfg_login.stdout | from_json).token }}"
+      register: tech_forceupdate
+      changed_when: true
+      failed_when: (tech_forceupdate.stdout | from_json).status != "ok"
+
+    - name: Verify blocking + blocklist are applied (read-back)
+      ansible.builtin.command: >
+        pct exec {{ technitium_ctid }} --
+        curl -fsS "http://127.0.0.1:5380/api/settings/get?token={{ (tech_cfg_login.stdout | from_json).token }}"
+      register: tech_verify
+      changed_when: false
+      failed_when: >
+        (tech_verify.stdout | from_json).response.enableBlocking != true
+        or technitium_blocklist_urls[0] not in (tech_verify.stdout | from_json).response.blockListUrls
+
     - name: Get the CT's LAN IP for reporting
       ansible.builtin.command: "pct exec {{ technitium_ctid }} -- hostname -I"
       register: tech_ip
@@ -150,9 +193,8 @@
         msg:
           - "Technitium DNS LXC {{ technitium_ctid }} is up at {{ tech_ip.stdout | trim }}."
           - "Web console: http://{{ technitium_ip | regex_replace('/.*$', '') }}:5380  (user: admin)"
-          - "NEXT (Technitium console — see docs/operations/runbooks.md for the full cutover):"
-          - "  1. Settings -> add upstream forwarders (DoH/DoT, e.g. Cloudflare/Quad9)."
-          - "  2. Blocking -> add blocklists (e.g. OISD, StevenBlack hosts); enable blocking."
-          - "  3. Test from the mgmt-vm: dig @{{ technitium_ip | regex_replace('/.*$', '') }} example.com"
-          - "  4. ONLY THEN: in UniFi, hand this IP out as the network DNS server (cutover)."
-          - "  5. Reserve/exclude {{ technitium_ip }} in UniFi so the IP never changes."
+          - "Forwarders + blocking + blocklists were configured via API (list downloads in background)."
+          - "NEXT (see docs/operations/runbooks.md for the full cutover):"
+          - "  1. Verify: dig @{{ technitium_ip | regex_replace('/.*$', '') }} example.com (resolves)"
+          - "     + dig @{{ technitium_ip | regex_replace('/.*$', '') }} securepubads.g.doubleclick.net (blocked)"
+          - "  2. Reserve {{ technitium_ip }} in UniFi, then point DHCP DNS at it (cutover)."

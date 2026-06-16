@@ -22,6 +22,7 @@ SRC="$HOME"
 PATHS=(
   "homelab/ansible/inventory/hosts.ini"
   "homelab/ansible/inventory/group_vars/all.yml"
+  "homelab/ansible/inventory/host_vars"
   ".claude/agents"
   ".claude/projects/-home-simon/memory"
 )

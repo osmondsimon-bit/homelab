@@ -63,9 +63,11 @@ is "new resolver IP in one DHCP field", not a data migration.
   **no public secondary** so blocking is never silently bypassed.
 - Technitium needs a static LAN IP, reserved/excluded in UniFi (same discipline as the
   Tailscale CT). Clients only get the benefit once UniFi advertises it as their DNS.
-- Blocklists, upstream forwarders (DoH/DoT), and the admin password are configured in
-  the Technitium console on first run — the playbook provisions and installs; it does
-  not bake in blocklists. The cutover runbook lists the recommended first-run config.
+- Blocklists, upstream forwarders (DoH/DoT), the blocking type, and the admin password
+  are all applied by the playbook via the Technitium API (declaratively, from
+  `technitium_*` group_vars) — no manual console setup. The config tasks run on every
+  invocation and read the settings back to fail loudly if anything didn't apply, so the
+  deployment is fully reproducible. Only the UniFi DHCP cutover remains a manual step.
 - Local-only secrets posture holds: the admin password is prompted at runtime and set
   via the API (`no_log`), never committed (ADR-006/007).
 - Keeping DHCP on UniFi means no per-client DNS identity by hostname unless we later add

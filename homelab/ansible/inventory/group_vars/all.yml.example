@@ -26,3 +26,13 @@ technitium_ram_mb: 1024                                     # headroom for block
 technitium_cores: 1
 technitium_disk_gb: 4
 technitium_ip: YOUR_TECHNITIUM_IP/24                        # verify free; reserve in UniFi
+
+# Technitium config applied via API on every playbook run (declarative, ADR-011)
+technitium_forwarders:                                      # encrypted upstreams
+  - https://cloudflare-dns.com/dns-query
+  - https://dns.quad9.net/dns-query
+technitium_forwarder_protocol: Https                        # Udp | Tcp | Tls | Https | Quic
+technitium_blocking_type: NxDomain                          # AnyAddress | NxDomain | CustomAddress
+technitium_blocklist_update_hours: 24
+technitium_blocklist_urls:                                  # ads/trackers/malware
+  - https://big.oisd.nl/domainswild2
