@@ -20,7 +20,7 @@
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
-| technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Pending the UniFi DHCP cutover to go live.** |
+| technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Live** — DHCP serves it on home/IoT/guest VLANs (camera + management excluded, no internet). |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
@@ -46,7 +46,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
-| ~~Technitium DNS~~ | LXC | **oneill** | ✅ Deployed — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP. Only the DHCP cutover remains. |
+| ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP, serves it on home/IoT/guest VLANs. |
 | Monitoring (Prometheus + Grafana) | LXC/VM | NUC | Observability — scrapes Proxmox, UniFi, HA. **Prioritised first.** |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
@@ -77,9 +77,9 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 ## Phase order
 
 1. VLAN-aware Proxmox + firewall rules — ✓ completed
-2. Tailscale ✓ + **Technitium DNS** — Technitium next, completes Phase 2
-3. **Foundation + observability:** adopt Terraform (import existing VMs) → **Monitoring** (Prometheus + Grafana) → **Homepage**
-4. **Multi-node + HA:** Intel NUC joins the cluster → migrate simple services (Tailscale, Technitium) onto it (frees apophis); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; stand up VM-level backups
+2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, live on home/IoT/guest VLANs) — **✓ completed**
+3. **Foundation + observability:** **VM-level backups first** (entry task — before any stateful service lands on oneill) → adopt Terraform (import existing VMs) → **Monitoring** (Prometheus + Grafana) → **Homepage**
+4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
 5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
 6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
 - Cross-cutting (designed early, not deferred to the end): VM-level backups, a patching approach
@@ -89,14 +89,16 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 Living backlog to pick up next session.
 
-### Next build (Phase 2 → 3)
-- [~] **Technitium DNS** — deployed and verified on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist active + DoH forwarders, console secured. Config is applied declaratively by `provision-technitium.yml` via the Technitium API (forwarders/blocking/blocklists from group_vars). Old apophis CT 111 destroyed; `.5` freed. **Remaining (operator):** reserve `.6` in UniFi, do the DHCP cutover (point DHCP DNS at oneill), remove the stale `.5` reservation. That completes Phase 2.
+### Next build (Phase 3)
+- [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on home/IoT/guest VLANs (camera + management intentionally excluded — no internet). Old apophis CT 111 destroyed; `.5` freed.
+- [ ] **[High] VM-level (Proxmox) backups — Phase 3 ENTRY task.** Stand up a backup target (PBS vs remote SSH vs rclone-to-cloud — write the ADR) **before** any stateful service lands on oneill. Closes the largest BC gap (covers mgmt-vm 100, HA 200, Tailscale 110, CT 111, and all future guests). Continuity-reviewer made this the Phase 3 kickoff, not a parallel task.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
-- [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, intended on the NUC.
+- [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.
 
 ### Backups
-- [x] Local config backup — done (ADR-007).
-- [ ] **[High] VM-level (Proxmox) backups — pending.** Capture the VMs/LXCs fully; needs a backup target; pull forward from Phase 3.
+- [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
+- [ ] **[High] VM-level (Proxmox) backups — Phase 3 entry task** (see above). No backup target exists yet; every VM/LXC is currently a single-disk hypothesis.
+- [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows. Do before Phase 3.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).

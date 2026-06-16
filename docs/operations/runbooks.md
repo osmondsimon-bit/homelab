@@ -87,13 +87,19 @@ the playbook, then **approve the new route** in the Tailscale admin console.
 
 ## Technitium DNS (CT 111, DNS-only resolver)
 
-Unprivileged LXC 111 on apophis. **DNS only — UniFi keeps DHCP** (ADR-011). Provisioned
-via Ansible (`ansible-playbook playbooks/provision-technitium.yml`, idempotent). Web
-console on port `5380`, DNS on `53`. Migrates to the NUC in Phase 4.
+Unprivileged LXC 111 on **oneill** (NUC, `YOUR_NUC_IP`). **DNS only — UniFi keeps DHCP**
+(ADR-011), serving home/IoT/guest VLANs. Provisioned via Ansible
+(`ansible-playbook playbooks/provision-technitium.yml --limit oneill`, idempotent). Web
+console on port `5380`, DNS on `53`.
 
-### Check status (from apophis)
+> **Config invariant:** all Technitium config (forwarders, blocking, blocklists) is applied
+> by the playbook via the API from `technitium_*` group_vars. Treat the web console as
+> **read-only** — make changes in group_vars and re-run, or they'll be overwritten and lost
+> on the next run (and the reprovision/restore path won't reproduce them).
+
+### Check status (on oneill)
 ```bash
-pct exec 111 -- systemctl status dns.service --no-pager
+ssh root@YOUR_NUC_IP 'pct exec 111 -- systemctl status dns.service --no-pager'
 ```
 
 ### Test resolution (from the mgmt-vm)
@@ -149,6 +155,28 @@ The switch is **one UniFi DHCP field**, not a service migration. Reversible.
    (gateway or `1.1.1.1`).
 2. Renew a client lease to confirm recovery.
 3. Technitium can stay running while you debug — clients no longer depend on it.
+
+### Planned maintenance on oneill (DNS goes down with it)
+
+Technitium is a single instance with no DHCP secondary (ADR-011), so taking oneill down
+drops DNS for home/IoT/guest VLANs. Before planned maintenance:
+1. UniFi → each affected network's DHCP → set **DNS Server 2 = `1.1.1.1`** (temporary fallback).
+2. Do the maintenance.
+3. **Remove** the `1.1.1.1` secondary afterwards (so blocking is never silently bypassed).
+
+A permanent fix (second Technitium instance) lands with the cluster in Phase 4.
+
+### Recover CT 111 (lost / corrupted, or oneill rebuilt)
+
+Technitium is stateless relative to Ansible — all config is in `technitium_*` group_vars.
+Recovery is a reprovision, RTO ~15–20 min:
+```bash
+ssh root@YOUR_NUC_IP 'pct stop 111 && pct destroy 111'   # if the CT still exists
+cd ~/homelab/ansible && ansible-playbook playbooks/provision-technitium.yml --limit oneill
+```
+Then verify with the `dig` tests above. If the whole oneill SSD died: fresh PVE install
+(ZFS-on-root) → `ssh-copy-id` → re-run the playbook. (Untested — see the reprovision-drill
+backlog item.)
 
 ---
 

@@ -47,10 +47,16 @@ now. If we revisit it, it gets its own ADR.
 
 ### Placement
 
-Unprivileged LXC on **apophis** now (CTID **111**), provisioned by
-`ansible/playbooks/provision-technitium.yml`. Like Tailscale (CT 110), it **migrates to
-the NUC in Phase 4** to free apophis for Plex. DNS-only keeps it portable — a migration
-is "new resolver IP in one DHCP field", not a data migration.
+Unprivileged LXC, CTID **111**, provisioned by `ansible/playbooks/provision-technitium.yml`.
+
+> **Placement update (2026-06-16):** the Intel NUC (**oneill**) arrived during Phase 2, so
+> Technitium was deployed **directly on oneill** rather than apophis-then-migrate — the
+> planned Phase 4 migration is moot. The original plan (apophis now → NUC in Phase 4) is
+> kept below for context. DNS-only kept this trivial: it was a placement choice at deploy
+> time, not a data migration.
+
+Original intent: deploy on apophis now and migrate to the NUC in Phase 4 (like Tailscale,
+CT 110) to free apophis for Plex.
 
 ## Consequences
 

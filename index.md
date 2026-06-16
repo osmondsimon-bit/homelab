@@ -27,6 +27,7 @@ docs/
     infra-designer.md  # On-demand: review infra proposals before execution
     infra-manager.md   # Weekly scheduled + on-demand: status report
     doc-auditor.md     # On-demand + phase-gate: documentation drift/conflict check
+    continuity-reviewer.md  # On-demand + phase-gate: backup/restore continuity check
 README.md              # Human-facing overview (GitHub landing page)
 AGENTS.md              # AI agent behaviour rules (all tools)
 CLAUDE.md              # Claude Code specific guidance and agent table

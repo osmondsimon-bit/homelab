@@ -77,4 +77,4 @@ Reviewers assist with this homelab (four agents + the `/security-review` skill).
 
 ## Roadmap
 
-See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 2** — Tailscale ✓ (CT 110), Technitium DNS next. Order: 1 VLANs ✓ → 2 Tailscale + Technitium → 3 Terraform + Monitoring + Homepage → 4 Multi-node cluster + HA (NUC + ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.
+See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 2 ✓ complete** (Tailscale CT 110 + Technitium CT 111 live on oneill/NUC) — **starting Phase 3**, whose entry task is VM-level backups, then Terraform import → Monitoring → Homepage. Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 backups + Terraform + Monitoring + Homepage → 4 Multi-node cluster + HA (NUC + ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.
