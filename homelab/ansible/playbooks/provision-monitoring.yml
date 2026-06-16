@@ -37,6 +37,14 @@
       prompt: "Grafana admin password (blank = keep current)"
       private: true
       default: ""
+    - name: unifi_password
+      prompt: "UniFi prometheus_user password (blank = keep current)"
+      private: true
+      default: ""
+    - name: ha_token
+      prompt: "Home Assistant long-lived token (blank = keep current)"
+      private: true
+      default: ""
 
   tasks:
     - name: Sanity-check both PVE tokens were minted (run without --limit)
@@ -192,7 +200,60 @@
           WantedBy=multi-user.target
       changed_when: true
 
-    # --- Prometheus config (self + node_exporter + pve-exporter per node) ---
+    # --- UniFi (unpoller) ---
+    - name: Check whether unpoller is installed
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- dpkg -s unpoller"
+      register: unpoller_present
+      changed_when: false
+      failed_when: false
+
+    - name: Install unpoller (latest release .deb)
+      ansible.builtin.shell: >
+        echo '{{ unpoller_install | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -s
+      vars:
+        unpoller_install: |
+          set -e
+          url=$(curl -fsSL https://api.github.com/repos/unpoller/unpoller/releases/latest | python3 -c 'import sys,json;print([a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].endswith("Tux_64-bit.deb")][0])')
+          curl -fsSL "$url" -o /tmp/unpoller.deb
+          apt-get install -y -qq /tmp/unpoller.deb >/dev/null
+          rm -f /tmp/unpoller.deb
+      when: unpoller_present.rc != 0
+      changed_when: true
+
+    - name: Write unpoller config (when a UniFi password is given)
+      ansible.builtin.shell: >
+        echo '{{ up_conf | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/unpoller && cat > /etc/unpoller/up.conf && chmod 600 /etc/unpoller/up.conf'
+      vars:
+        up_conf: |
+          [poller]
+            quiet = true
+          [prometheus]
+            disable = false
+            http_listen = "0.0.0.0:9130"
+          [influxdb]
+            disable = true
+          [[unifi.controller]]
+            url = "{{ unifi_controller_url }}"
+            user = "{{ unifi_user }}"
+            pass = "{{ unifi_password }}"
+            sites = ["all"]
+            verify_ssl = false
+      no_log: true
+      changed_when: true
+      when: unifi_password | length > 0
+
+    # --- Home Assistant token (Prometheus reads it via credentials_file) ---
+    - name: Write the HA token file (when a token is given)
+      ansible.builtin.shell: >
+        echo '{{ ha_token | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/ha_token && chmod 600 /etc/prometheus/ha_token && chown prometheus:prometheus /etc/prometheus/ha_token'
+      no_log: true
+      changed_when: true
+      when: ha_token | length > 0
+
+    # --- Prometheus config (self + node + pve + unifi + home-assistant) ---
     - name: Write prometheus.yml
       ansible.builtin.shell: >
         echo '{{ prom_yml | b64encode }}' | base64 -d |
@@ -219,6 +280,20 @@
                 - { source_labels: [__param_target], target_label: instance }
                 - { target_label: __address__, replacement: "localhost:9221" }
           {% endfor %}
+          {% if unifi_controller_url is defined %}
+            - job_name: unifi
+              static_configs:
+                - targets: ["localhost:9130"]
+          {% endif %}
+          {% if ha_ip is defined %}
+            - job_name: home-assistant
+              scheme: http
+              metrics_path: /api/prometheus
+              authorization:
+                credentials_file: /etc/prometheus/ha_token
+              static_configs:
+                - targets: ["{{ ha_ip }}:8123"]
+          {% endif %}
       changed_when: true
 
     - name: Set Prometheus TSDB retention
@@ -244,8 +319,8 @@
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           systemctl daemon-reload
-          systemctl enable --now prometheus grafana-server pve-exporter >/dev/null 2>&1
-          systemctl restart prometheus grafana-server pve-exporter
+          systemctl enable --now prometheus grafana-server pve-exporter unpoller >/dev/null 2>&1
+          systemctl restart prometheus grafana-server pve-exporter unpoller
         '
       changed_when: true
 

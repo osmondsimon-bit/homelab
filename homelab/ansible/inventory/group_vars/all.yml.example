@@ -84,6 +84,12 @@ monitoring_pve_nodes:
   - { name: apophis, host: YOUR_PROXMOX_IP }
   - { name: oneill, host: YOUR_NUC_IP }
 
+# UniFi (unpoller) + Home Assistant scrape targets (ADR-013). Passwords/tokens are
+# entered at runtime (vars_prompt), never stored here.
+unifi_controller_url: https://YOUR_GATEWAY_IP              # the UDM/gateway
+unifi_user: prometheus_user                                # UniFi read-only local user
+ha_ip: YOUR_HA_IP                                          # Home Assistant VM (scrape /api/prometheus)
+
 # --- Alerting: ntfy (ADR-013) — topic is PRIVATE, treat as a secret ----------
 ntfy_base_url: https://ntfy.sh
 ntfy_topic: YOUR_NTFY_TOPIC                                 # pick a random topic; subscribe the ntfy app to it
