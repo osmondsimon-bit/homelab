@@ -207,12 +207,18 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
 ```
 
 ### Home Assistant — native partial backup (primary for HA)
-- HA protects itself via a **scheduled partial backup** (Settings → System → Backups): HA config
-  + **Zigbee2MQTT add-on** + add-on configs; **media excluded**; recorder DB kept small via
-  `recorder` `purge_keep_days`. Written to an **NFS share on oneill** (CT 113) added in HAOS as
-  network storage. Portable — restores onto any HAOS.
-- **Interim:** until the native partial is verified, the old local `vzdump-qemu-200` image on
-  apophis `local` is HA's safety net — delete it only after a native partial is confirmed.
+- HA protects itself via a **scheduled partial backup** (Settings → System → Backups). Written
+  to the **Samba/CIFS share on oneill** (CT 113, `//YOUR_HA_BACKUP_SHARE_IP/ha-backups`, user
+  `habackup`) added in HAOS as network storage. Portable — restores onto any HAOS.
+- **Backup location must be the share**, not just "this device" — confirm the automatic backup
+  writes to oneill (files land in CT 113 `/srv/ha-backups`), otherwise it only stays local.
+- **Selection (keep current as you add apps):** HA config + the **stateful add-ons** —
+  Zigbee2MQTT (critical: avoids re-pairing), Mosquitto, Cloudflared, etc. **media excluded**;
+  recorder DB kept small via `recorder` `purge_keep_days` (~10–14). ⚠️ **When you add a new
+  stateful add-on, add it to the partial-backup selection** — it isn't picked up automatically.
+- **Interim safety net:** the old local `vzdump-qemu-200` image on apophis `local` stays as
+  HA's fallback **until the automatic backup is confirmed landing on the share** — only then
+  delete it.
 
 ### Recovery model — what recovers what (avoid doubling up)
 
