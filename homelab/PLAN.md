@@ -46,7 +46,7 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
 | ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP, serves it on home/IoT/guest VLANs. |
-| Monitoring (Prometheus + Grafana) | LXC/VM | NUC | Observability — scrapes Proxmox, UniFi, HA. **Prioritised first.** |
+| Monitoring (Prometheus + Grafana + Alertmanager) | LXC | oneill (CT 114, `.9`) | Observability + alerting — scrapes Proxmox, UniFi, HA (ADR-013). Dashboards/alerts as code; apophis dead-man's-switch. **Next build, in 2 steps.** |
 | Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
 | qBittorrent + Gluetun | LXC | apophis | Torrent client behind Gluetun killswitch → ProtonVPN Plus |
@@ -104,7 +104,7 @@ Living backlog to pick up next session.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
-- [ ] Confirm `YOUR_TAILSCALE_LAN_IP` is reserved/excluded in UniFi (a fixed-IP entry or outside the DHCP pool).
+- [ ] Confirm/reserve these in UniFi (fixed-IP entries or outside the DHCP pool): `YOUR_TAILSCALE_LAN_IP` (.4), and the monitoring CT `.9` (ADR-013, before/with that build).
 - [ ] Document the cross-subnet Zigbee path: how HA on `the LAN subnet` reaches the SLZB-06 at `YOUR_ZIGBEE_COORD_IP` today (becomes a firewall/route rule once VLANs land).
 
 ### Decisions to make
