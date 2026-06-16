@@ -244,11 +244,15 @@ until the **CT 111 reprovision drill** (pending) actually runs it.
 - **A guest is lost/corrupted:** reproducible service → re-run its playbook; mgmt-vm (or any
   quick full restore) → `qmrestore` / `pct restore` from `pbs-oneill`; HA → restore its
   partial backup from the share onto HAOS.
-- **oneill (backup hub) dies:** production is unaffected if apophis is up (oneill only holds
-  Technitium + the backups). Rebuild: fresh PVE + ZFS → `ssh-copy-id` → re-run
-  `provision-technitium.yml`, `provision-pbs.yml`, `provision-ha-backup-share.yml`. **The
-  backup data on oneill is a single copy** — protected only once the off-site sync exists; an
-  oneill SSD failure today loses restore history, not production.
+- **oneill (backup hub + simple services) dies:** production is unaffected if apophis is up
+  (oneill holds Technitium, PBS, the HA share, and monitoring — all rebuildable from code).
+  Rebuild: fresh PVE + ZFS → **switch to the PVE no-subscription repo** (a fresh PVE 9 ships
+  the enterprise repos, which 401 without a subscription and break `apt`; disable
+  `pve-enterprise`/`ceph` `.sources` and add a `pve-no-subscription.sources`) → `ssh-copy-id`
+  → re-run `install-node-exporter.yml`, `provision-technitium.yml`, `provision-pbs.yml`,
+  `provision-ha-backup-share.yml`, `provision-monitoring.yml`. **The backup data on oneill is a
+  single copy** — protected only once the off-site sync exists; an oneill SSD failure today
+  loses restore history, not production.
 - **apophis dies:** its guests' images are safe on oneill → restore to replacement hardware.
 - **Both / site disaster:** infra rebuilds from git (Terraform + Ansible + private repo); VM
   *data* is lost until the off-site copy exists — the deferred-off-site gap.
