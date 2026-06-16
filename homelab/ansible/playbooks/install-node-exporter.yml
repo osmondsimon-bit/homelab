@@ -1,0 +1,26 @@
+---
+# Install Prometheus node_exporter on the Proxmox HOSTS (apophis + oneill) so the
+# monitoring stack can scrape host OS metrics (CPU/mem/disk/net) on :9100.
+# (ADR-013. node_exporter is a read-only metrics agent — the one sanctioned
+# exception to "nothing on the host"; it's what host monitoring requires.)
+#
+# Run from the mgmt-vm, inside homelab/ansible/ — targets BOTH proxmox hosts:
+#   ansible-playbook playbooks/install-node-exporter.yml
+# Idempotent.
+
+- name: Install node_exporter on Proxmox hosts
+  hosts: proxmox
+  gather_facts: false
+
+  tasks:
+    - name: Install prometheus-node-exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+
+    - name: Ensure node_exporter is enabled and running
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        enabled: true
+        state: started

@@ -62,3 +62,19 @@ habackup_quota: 20G
 habackup_mount: /srv/ha-backups                             # bind-mount path inside the CT
 habackup_share_name: ha-backups                            # CIFS share name HAOS mounts
 habackup_user: habackup                                     # Samba user HAOS authenticates as
+
+# --- Monitoring LXC (Prometheus + Grafana, oneill — ADR-013) -----------------
+monitoring_ctid: 114
+monitoring_hostname: monitoring
+monitoring_ram_mb: 3072
+monitoring_cores: 2
+monitoring_disk_gb: 8
+monitoring_ip: YOUR_MONITORING_IP/24                        # verify free; reserve in UniFi
+monitoring_tsdb_dataset: rpool/data/monitoring-tsdb        # on the monitoring node's ZFS pool
+monitoring_tsdb_quota: 20G
+monitoring_tsdb_mount: /var/lib/prometheus                  # bind-mount path (Prometheus data dir)
+monitoring_retention_days: 30
+monitoring_scrape_interval: 30s
+monitoring_node_targets:                                    # node_exporter on the PVE hosts (:9100)
+  - "YOUR_PROXMOX_IP:9100"                                  # apophis
+  - "YOUR_NUC_IP:9100"                                      # oneill

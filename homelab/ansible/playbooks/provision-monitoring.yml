@@ -1,0 +1,179 @@
+---
+# Provision the Monitoring LXC on oneill: Prometheus (scrape + TSDB) + Grafana,
+# native packages, unprivileged, TSDB on a quota'd ZFS dataset bind-mount (ADR-013).
+# STEP 1 (core/scraping): scrapes node_exporter on both hosts (run
+# install-node-exporter.yml first). Step 2 adds pve-exporter, UniFi/HA, Alertmanager
+# + ntfy + the apophis dead-man's-switch. Idempotent — safe to re-run.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, TARGETING oneill:
+#   ansible-playbook playbooks/provision-monitoring.yml --limit oneill
+#
+# Prompts for the Grafana admin password (never stored, no_log). Vars: monitoring_*
+# in group_vars. Grafana UI on http://<ip>:3000 (admin) — LAN/Tailscale only.
+
+- name: Provision Monitoring LXC (Prometheus + Grafana)
+  hosts: proxmox
+  gather_facts: false
+
+  vars_prompt:
+    - name: grafana_admin_password
+      prompt: "Grafana admin password (user: admin)"
+      private: true
+
+  tasks:
+    - name: Validate admin password is reasonable
+      ansible.builtin.assert:
+        that: grafana_admin_password | length >= 12
+        fail_msg: "Use at least 12 characters for the Grafana admin password."
+        quiet: true
+
+    # --- TSDB dataset (quota'd so runaway metrics can't fill the SSD) ---
+    - name: Create the TSDB ZFS dataset with a quota
+      ansible.builtin.command: >
+        zfs create -o quota={{ monitoring_tsdb_quota }} -o compression=lz4 {{ monitoring_tsdb_dataset }}
+      register: zfs_create
+      changed_when: zfs_create.rc == 0
+      failed_when:
+        - zfs_create.rc != 0
+        - "'dataset already exists' not in (zfs_create.stderr | default(''))"
+
+    - name: Ensure the quota is set (idempotent)
+      ansible.builtin.command: "zfs set quota={{ monitoring_tsdb_quota }} {{ monitoring_tsdb_dataset }}"
+      changed_when: false
+
+    # Owned by the container's mapped root (100000) so CT-side can re-chown to the
+    # (dynamically-assigned) prometheus user after the package creates it.
+    - name: Own the TSDB dataset for the container's mapped root
+      ansible.builtin.command: "chown 100000:100000 /{{ monitoring_tsdb_dataset }}"
+      changed_when: false
+
+    # --- The LXC ---
+    - name: Check whether CT {{ monitoring_ctid }} already exists
+      ansible.builtin.command: "pct status {{ monitoring_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Monitoring LXC with the TSDB dataset bind-mounted
+      ansible.builtin.command: >
+        pct create {{ monitoring_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ monitoring_hostname }}
+        --cores {{ monitoring_cores }}
+        --memory {{ monitoring_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ monitoring_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ monitoring_ip }},gw={{ gateway }}
+        --mp0 /{{ monitoring_tsdb_dataset }},mp={{ monitoring_tsdb_mount }}
+        --unprivileged 1
+        --onboot 1
+      when: ct_status.rc != 0
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ monitoring_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    # --- Install Prometheus (Debian repo) + Grafana (official repo) ---
+    - name: Check whether Grafana is already installed
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- dpkg -s grafana"
+      register: graf_present
+      changed_when: false
+      failed_when: false
+
+    - name: Install Prometheus + Grafana inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq prometheus gpg curl >/dev/null
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
+            > /etc/apt/sources.list.d/grafana.list
+          apt-get update -qq
+          apt-get install -y -qq grafana >/dev/null
+        '
+      when: graf_present.rc != 0
+      changed_when: true
+
+    - name: Ensure the TSDB mount is owned by the prometheus user
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- chown -R prometheus:prometheus {{ monitoring_tsdb_mount }}"
+      changed_when: false
+
+    # --- Prometheus config (static scrape: itself + the two hosts' node_exporter) ---
+    - name: Write prometheus.yml
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/prometheus.yml <<EOF
+        global:
+          scrape_interval: {{ monitoring_scrape_interval }}
+        scrape_configs:
+          - job_name: prometheus
+            static_configs:
+              - targets: ["localhost:9090"]
+          - job_name: node
+            static_configs:
+              - targets: {{ monitoring_node_targets | to_json }}
+        EOF'
+      changed_when: true
+
+    - name: Set Prometheus TSDB retention
+      ansible.builtin.shell: >
+        pct exec {{ monitoring_ctid }} -- bash -c
+        'echo "ARGS=\"--storage.tsdb.retention.time={{ monitoring_retention_days }}d\"" > /etc/default/prometheus'
+      changed_when: true
+
+    # --- Grafana: provision the Prometheus datasource as code + set admin password ---
+    - name: Provision the Grafana Prometheus datasource
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/grafana/provisioning/datasources && cat > /etc/grafana/provisioning/datasources/prometheus.yml <<EOF
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://localhost:9090
+            isDefault: true
+        EOF'
+      changed_when: true
+
+    - name: Enable + (re)start Prometheus and Grafana
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          systemctl enable --now prometheus grafana-server >/dev/null 2>&1
+          systemctl restart prometheus grafana-server
+        '
+      changed_when: true
+
+    - name: Set the Grafana admin password
+      ansible.builtin.command: >
+        pct exec {{ monitoring_ctid }} --
+        grafana-cli --homepath /usr/share/grafana admin reset-admin-password {{ grafana_admin_password }}
+      no_log: true
+      changed_when: true
+
+    - name: Report result and next steps
+      ansible.builtin.debug:
+        msg:
+          - "Monitoring LXC {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
+          - "Grafana: http://{{ monitoring_ip | regex_replace('/.*$', '') }}:3000 (admin) — LAN/Tailscale only."
+          - "Prometheus: http://{{ monitoring_ip | regex_replace('/.*$', '') }}:9090/targets — node targets should be UP."
+          - "Import dashboards in Grafana (e.g. 1860 Node Exporter Full); export back to repo per ADR-013."
+          - "NEXT (Step 2): pve-exporter (per-node PVEAuditor tokens), UniFi + HA, Alertmanager + ntfy + dead-man's-switch."
