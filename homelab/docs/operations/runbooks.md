@@ -213,6 +213,40 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
 - **Interim:** until the native partial is verified, the old local `vzdump-qemu-200` image on
   apophis `local` is HA's safety net — delete it only after a native partial is confirmed.
 
+### Recovery model — what recovers what (avoid doubling up)
+
+Principle: **back up what code can't recreate.** Most services rebuild from git, so they
+don't need image backups — only genuinely stateful or hand-built things do.
+
+| Layer | Recreates | Lives |
+|---|---|---|
+| Terraform (ADR-008) | VM/LXC existence + shape | git (public) |
+| Ansible playbooks | service config (Technitium, Tailscale, PBS, share) | git (public) |
+| Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
+| PBS images | **mgmt-vm** (hand-built, not in code) + CTs (convenience) | oneill |
+| HA native partial | HA config + Zigbee2MQTT + add-ons | oneill share |
+
+The only guest that *needs* PBS is **mgmt-vm** — it isn't reproducible from a playbook. The
+CTs are in PBS only as a fast-restore convenience (they fully rebuild from their playbooks);
+dropping them from the PBS job loses nothing but restore speed.
+
+**Restore by scenario:**
+- **A guest is lost/corrupted:** reproducible service → re-run its playbook; mgmt-vm (or any
+  quick full restore) → `qmrestore` / `pct restore` from `pbs-oneill`; HA → restore its
+  partial backup from the share onto HAOS.
+- **oneill (backup hub) dies:** production is unaffected if apophis is up (oneill only holds
+  Technitium + the backups). Rebuild: fresh PVE + ZFS → `ssh-copy-id` → re-run
+  `provision-technitium.yml`, `provision-pbs.yml`, `provision-ha-backup-share.yml`. **The
+  backup data on oneill is a single copy** — protected only once the off-site sync exists; an
+  oneill SSD failure today loses restore history, not production.
+- **apophis dies:** its guests' images are safe on oneill → restore to replacement hardware.
+- **Both / site disaster:** infra rebuilds from git (Terraform + Ansible + private repo); VM
+  *data* is lost until the off-site copy exists — the deferred-off-site gap.
+
+**Backing up the hub itself:** don't copy oneill's backups to apophis (circular, same-site).
+The backups are protected by the **off-site copy** (ADR-012 deferred leg — encrypted sync of
+both datasets to cloud). That, not a second local copy, is "backing up oneill."
+
 ---
 
 ## Git / repo

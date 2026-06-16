@@ -101,6 +101,7 @@ Living backlog to pick up next session.
 - [ ] **[High] HA native backup — NOT set up yet.** Run `provision-ha-backup-share.yml --limit oneill` (Samba CT 113), then in HAOS add the CIFS share + schedule a **PARTIAL** backup (HA + Zigbee2MQTT + add-ons; **exclude media**; tune recorder `purge_keep_days`). This is HA's primary protection (whole-VM HA is intentionally excluded from PBS).
 - [ ] **Then remove the interim safety net** — once an HA native partial backup is verified landing on the share, delete the stale local `vzdump-qemu-200` (HA) image on apophis `local` (and the redundant local `vzdump-qemu-100` images, now covered off-box by PBS). Until then, **keep them** — they're HA's only backup in the gap.
 - [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows.
+- [ ] **Off-site copy (this is how we "back up oneill") — deferred (ADR-012).** oneill's services rebuild from code, but the backup *data* (PBS datastore + HA share) is a single copy until an encrypted off-site sync (cloud) exists. Don't copy it to apophis (circular/same-site). Recovery model in `docs/operations/runbooks.md`.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
