@@ -14,8 +14,8 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | AI coding agent | Claude Code | Primary tool, runs on mgmt-vm |
 | On-demand infra review | `infra-designer` agent | Invoked before any new VM/LXC/network change |
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
-| Provisioning (create) | Terraform (`bpg/proxmox`) | Adopted (ADR-008) — scaffolded in `terraform/`; import existing VMs next |
-| Provisioning (configure) | Ansible | Active (ADR-005) — config role; VM/LXC lifecycle now via Terraform |
+| Provisioning (create + configure) | Ansible (`pct` in playbooks) | Interim mechanism — `provision-*.yml` pct-create + configure the LXCs and recover cleanly (ADR-005) |
+| Provisioning (declarative IaC) | Terraform (`bpg/proxmox`) | Scaffolded (ADR-008) — **import deferred to cluster scale**; will take over the create role then |
 | Multi-node cluster + HA | Proxmox cluster + ZFS replication | Accepted direction (ADR-009) — 3 nodes (apophis + NUC + ThinkCentre), executed as hardware lands |
 | DNS + ad blocking | Technitium DNS | Phase 2 ✓ — live on **oneill** (NUC), CT 111. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big + DoH, config automated via API. Serves home/IoT/guest VLANs. |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |

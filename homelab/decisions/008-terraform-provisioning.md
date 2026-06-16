@@ -1,7 +1,14 @@
 # ADR-008: Terraform for infrastructure provisioning (Terraform creates, Ansible configures)
 
 **Date:** 2026-06-14  
-**Status:** Accepted
+**Status:** Accepted (import **deferred** — see update)
+
+> **Update (2026-06-16):** The `terraform import` is **deferred to cluster scale**. At 2–3 nodes
+> the Ansible `provision-*.yml` playbooks already `pct create` **and** configure each LXC and
+> recover them cleanly, so importing live VMs + refactoring those playbooks to config-only isn't
+> worth it yet. **Ansible (pct) is the interim create+config mechanism**; the `terraform/` scaffold
+> stays for when we adopt it (revisit at the 3-node cluster, ADR-009). The "Terraform creates"
+> boundary below remains the *target*, not current reality.
 
 ## Context
 

@@ -38,9 +38,8 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 
 ## Provisioning & tooling
 
-- **Terraform** (`bpg/proxmox` provider) **creates** infrastructure — VMs/LXCs, disks, NICs (ADR-008). Scaffolded in `terraform/`; existing VMs to be imported.
-- **Ansible** **configures** what Terraform creates — packages, services, app config (ADR-005). The `pct create`-via-Ansible lifecycle is superseded by Terraform; Ansible keeps the config role.
-- Boundary: *Terraform = the box exists with the right shape; Ansible = the box is set up.*
+- **Ansible currently creates *and* configures** the LXCs — `pct create` + config in the `provision-*.yml` playbooks (ADR-005). This is the interim mechanism and recovers cleanly by re-running.
+- **Terraform** (`bpg/proxmox`, ADR-008) is scaffolded but its **import is deferred to cluster scale** — it will take over the *create* role then. Target boundary: *Terraform = box exists with the right shape; Ansible = box is set up.*
 
 ## Planned VMs/LXCs
 
@@ -78,7 +77,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 1. VLAN-aware Proxmox + firewall rules — ✓ completed
 2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, live on home/IoT/guest VLANs) — **✓ completed**
-3. **Foundation + observability:** **VM-level backups first** (entry task — before any stateful service lands on oneill) → adopt Terraform (import existing VMs) → **Monitoring** (Prometheus + Grafana) → **Homepage**
+3. **Foundation + observability:** **VM-level backups first** (entry task) → **Monitoring** (Prometheus + Grafana) → **Homepage**. (Terraform import deferred to cluster scale — ADR-008; Ansible-pct creates the boxes for now.)
 4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
 5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
 6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
@@ -92,7 +91,7 @@ Living backlog to pick up next session.
 ### Next build (Phase 3)
 - [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on home/IoT/guest VLANs (camera + management intentionally excluded — no internet). Old apophis CT 111 destroyed; `.5` freed.
 - [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
-- [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
+- [ ] **Terraform import — DEFERRED to cluster scale** (ADR-008). Ansible (`pct`) creates + configures the LXCs for now and recovers cleanly; scaffold kept in `terraform/`. Revisit when the 3-node cluster lands (then: PVE API token, import live guests, refactor playbooks to config-only).
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.
 
 ### Backups
