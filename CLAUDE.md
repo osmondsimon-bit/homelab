@@ -16,17 +16,24 @@ Documentation, scripts, and configuration for Simon's homelab. The primary host 
 
 ## Repo layout
 
+**Everything homelab lives under `homelab/`** — it is the project root. Only repo
+meta (`README.md`, `CLAUDE.md`, `AGENTS.md`, `index.md`, `.gitignore`) sits at the
+git root. There is exactly one `decisions/` and one `docs/`; no per-domain top-level
+dirs (hardware/network/backup notes are files under `homelab/docs/`).
+
 ```
-homelab/
-  decisions/     Architecture Decision Records (ADR-NNN-title.md)
-  terraform/     Terraform — creates VMs/LXCs (bpg/proxmox, ADR-008)
-  ansible/       Ansible — configures what Terraform creates (ADR-005)
-  scripts/       Bash scripts (fallbacks/utilities, e.g. backup-local-config.sh)
-  docs/          Service-specific notes
-  network/       Network layout diagrams/notes
-  inventory/     Hardware inventory
-  backups/       Backup config/notes
-decisions/       Top-level one-off decisions (e.g. mgmt-vm sizing)
+homelab/                  ← the project (paths in prose are relative to here)
+  PLAN.md                 Single source of truth (phases, VMIDs, status)
+  decisions/              All Architecture Decision Records (ADR-NNN-title.md)
+  docs/                   All narrative docs:
+    components/<svc>.md    per-service reference (one per deployed service)
+    operations/runbooks.md operational procedures
+    phases/<N>-<name>.md   phase completion records
+    tech-radar.md          capability tracking
+    <topic>.md             hardware, network, etc. as flat files when needed
+  ansible/                Ansible — configures (ADR-005); inventory/ lives here
+  terraform/              Terraform — creates VMs/LXCs (bpg/proxmox, ADR-008)
+  scripts/                Bash fallbacks/utilities (e.g. backup-local-config.sh)
 ```
 
 ## Running scripts

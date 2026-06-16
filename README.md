@@ -11,14 +11,14 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 |-----|---------|
 | [homelab/PLAN.md](homelab/PLAN.md) | Services, RAM budget, phase order |
 | [homelab/decisions/](homelab/decisions/) | Architecture Decision Records |
-| [docs/tech-radar.md](docs/tech-radar.md) | Capabilities evaluated, deferred, or planned |
-| [docs/operations/runbooks.md](docs/operations/runbooks.md) | Common operational procedures |
+| [homelab/docs/tech-radar.md](homelab/docs/tech-radar.md) | Capabilities evaluated, deferred, or planned |
+| [homelab/docs/operations/runbooks.md](homelab/docs/operations/runbooks.md) | Common operational procedures |
 | [AGENTS.md](AGENTS.md) | AI agent behaviour rules |
 | [CLAUDE.md](CLAUDE.md) | Claude Code specific guidance |
 | [index.md](index.md) | AI agent navigation map |
 
 ## Current phase
 
-Phase 2 — Technitium DNS + Tailscale (security/access foundation)
+Phase 3 — Foundation + observability (Phase 2: Tailscale + Technitium DNS ✓ complete)
 
 See [PLAN.md](homelab/PLAN.md) for full phase order and service inventory.
