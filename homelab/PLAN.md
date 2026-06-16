@@ -91,14 +91,16 @@ Living backlog to pick up next session.
 
 ### Next build (Phase 3)
 - [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on home/IoT/guest VLANs (camera + management intentionally excluded — no internet). Old apophis CT 111 destroyed; `.5` freed.
-- [ ] **[High] VM-level (Proxmox) backups — Phase 3 ENTRY task.** Approach decided — **ADR-012**: oneill as backup hub (PBS for VM/CT images, cross-host from apophis) + HA native *partial* backups to an SMB/NFS share on oneill (media excluded; recorder retention tuned). Local-only; cloud off-site deferred. **Next:** infra-designer review, then build the PBS + share LXCs and schedule. Must exist before any stateful service lands on oneill.
+- [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
 - [ ] **Terraform apply/import** — scaffold done (ADR-008, `terraform/`). Next: create a Proxmox API token, fill `terraform.tfvars`, `terraform import` the running VMs (mgmt-vm, HA, tailscale) into state — carefully, against live VMs.
 - [ ] **Monitoring stack** (Prometheus + Grafana), then **Homepage** — Phase 3, on oneill.
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
-- [ ] **[High] VM-level (Proxmox) backups — Phase 3 entry task** (see above; **ADR-012**). No backup target stood up yet; every VM/LXC is currently a single-disk hypothesis.
-- [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows. Do before Phase 3.
+- [x] **VM/CT images via PBS** — PBS on oneill (CT 112), apophis wired (scoped token), scheduled daily (VMs/CTs 100,110 → keep 7d/4w), GC daily. mgmt-vm + Tailscale verified. (ADR-012)
+- [ ] **[High] HA native backup — NOT set up yet.** Run `provision-ha-backup-share.yml --limit oneill` (Samba CT 113), then in HAOS add the CIFS share + schedule a **PARTIAL** backup (HA + Zigbee2MQTT + add-ons; **exclude media**; tune recorder `purge_keep_days`). This is HA's primary protection (whole-VM HA is intentionally excluded from PBS).
+- [ ] **Then remove the interim safety net** — once an HA native partial backup is verified landing on the share, delete the stale local `vzdump-qemu-200` (HA) image on apophis `local` (and the redundant local `vzdump-qemu-100` images, now covered off-box by PBS). Until then, **keep them** — they're HA's only backup in the gap.
+- [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).

@@ -57,6 +57,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-tailscale.yml` | Tailscale LXC subnet router (prompts for the auth key) |
 | `provision-technitium.yml` | Technitium DNS LXC, DNS-only resolver (prompts for admin password; ADR-011) |
 | `provision-pbs.yml` | Proxmox Backup Server LXC on oneill — backup hub (prompts for admin password; ADR-012). Run with `--limit oneill` |
+| `provision-ha-backup-share.yml` | Samba LXC on oneill for HA native backups (prompts for share password; ADR-012). Run with `--limit oneill` |
 
 Dry-run first against production with `--check` where the modules support it, or
 test on a Proxmox snapshot.

@@ -49,3 +49,16 @@ pbs_datastore_dataset: rpool/data/pbs-datastore            # on the backup-hub n
 pbs_datastore_quota: 150G
 pbs_datastore_mount: /mnt/datastore                         # bind-mount path inside the CT
 pbs_datastore_name: main
+
+# --- HA backup share LXC (Samba, unprivileged, on oneill — ADR-012) ----------
+habackup_ctid: 113
+habackup_hostname: ha-backup-share
+habackup_ram_mb: 512
+habackup_cores: 1
+habackup_disk_gb: 4
+habackup_ip: YOUR_HA_BACKUP_SHARE_IP/24                     # verify free; reserve in UniFi
+habackup_dataset: rpool/data/ha-backup-share              # on the backup-hub node's ZFS pool
+habackup_quota: 20G
+habackup_mount: /srv/ha-backups                             # bind-mount path inside the CT
+habackup_share_name: ha-backups                            # CIFS share name HAOS mounts
+habackup_user: habackup                                     # Samba user HAOS authenticates as

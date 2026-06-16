@@ -1,0 +1,158 @@
+---
+# Provision an UNPRIVILEGED Samba LXC on oneill to receive Home Assistant's native
+# backups (HAOS mounts it as a CIFS network-storage target). Datastore is a quota'd
+# ZFS dataset bind-mounted into the container (ADR-012). Idempotent — safe to re-run.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, TARGETING oneill:
+#   ansible-playbook playbooks/provision-ha-backup-share.yml --limit oneill
+#
+# You'll be prompted for the share password (for the 'habackup' Samba user that
+# HAOS authenticates with). Never stored (no_log).
+#
+# NFS-in-unprivileged-LXC isn't reliable (kernel nfsd), so we use Samba — runs
+# cleanly unprivileged, single internal client. Vars: habackup_* in group_vars.
+
+- name: Provision Samba LXC for Home Assistant backups
+  hosts: proxmox
+  gather_facts: false
+
+  vars_prompt:
+    - name: habackup_password
+      prompt: "Samba share password (HAOS connects as user 'habackup')"
+      private: true
+
+  tasks:
+    - name: Validate share password is reasonable
+      ansible.builtin.assert:
+        that: habackup_password | length >= 12
+        fail_msg: "Use at least 12 characters for the share password."
+        quiet: true
+
+    # --- Quota'd ZFS dataset for the backups ---
+    - name: Create the HA-backup ZFS dataset with a quota
+      ansible.builtin.command: >
+        zfs create -o quota={{ habackup_quota }} -o compression=lz4 {{ habackup_dataset }}
+      register: zfs_create
+      changed_when: zfs_create.rc == 0
+      failed_when:
+        - zfs_create.rc != 0
+        - "'dataset already exists' not in (zfs_create.stderr | default(''))"
+
+    - name: Ensure the quota is set (idempotent)
+      ansible.builtin.command: "zfs set quota={{ habackup_quota }} {{ habackup_dataset }}"
+      changed_when: false
+
+    # Unprivileged maps CT uid -> host uid+100000. The Samba user 'habackup' gets
+    # uid 1000 in the CT -> host 101000; own the dataset to that so it can write.
+    - name: Own the dataset for the container's mapped habackup user (uid 1000 -> 101000)
+      ansible.builtin.command: "chown 101000:101000 /{{ habackup_dataset }}"
+      changed_when: false
+
+    # --- The LXC ---
+    - name: Check whether CT {{ habackup_ctid }} already exists
+      ansible.builtin.command: "pct status {{ habackup_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Samba LXC with the dataset bind-mounted
+      ansible.builtin.command: >
+        pct create {{ habackup_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ habackup_hostname }}
+        --cores {{ habackup_cores }}
+        --memory {{ habackup_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ habackup_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ habackup_ip }},gw={{ gateway }}
+        --mp0 /{{ habackup_dataset }},mp={{ habackup_mount }}
+        --unprivileged 1
+        --onboot 1
+      when: ct_status.rc != 0
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ habackup_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ habackup_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    # --- Samba + the share user ---
+    - name: Install Samba inside the CT (if not present)
+      ansible.builtin.shell: |
+        pct exec {{ habackup_ctid }} -- bash -c '
+          dpkg -s samba >/dev/null 2>&1 && exit 0
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq samba >/dev/null
+        '
+      register: smb_install
+      changed_when: "'Setting up samba' in smb_install.stdout or smb_install.stdout != ''"
+
+    - name: Create the habackup unix user (uid 1000, no login)
+      ansible.builtin.command: >
+        pct exec {{ habackup_ctid }} --
+        useradd -u 1000 -M -s /usr/sbin/nologin {{ habackup_user }}
+      register: useradd
+      changed_when: useradd.rc == 0
+      failed_when:
+        - useradd.rc != 0
+        - "'already exists' not in (useradd.stderr | default(''))"
+
+    - name: Ensure the share directory is owned by habackup
+      ansible.builtin.command: "pct exec {{ habackup_ctid }} -- chown {{ habackup_user }}:{{ habackup_user }} {{ habackup_mount }}"
+      changed_when: false
+
+    - name: Write the Samba share config
+      ansible.builtin.shell: |
+        pct exec {{ habackup_ctid }} -- bash -c 'cat > /etc/samba/smb.conf <<EOF
+        [global]
+           workgroup = WORKGROUP
+           server min protocol = SMB2
+           map to guest = never
+           logging = systemd
+
+        [{{ habackup_share_name }}]
+           path = {{ habackup_mount }}
+           read only = no
+           valid users = {{ habackup_user }}
+           create mask = 0640
+           directory mask = 0750
+        EOF'
+      changed_when: true
+
+    - name: Set the Samba password for habackup
+      ansible.builtin.shell: >
+        pct exec {{ habackup_ctid }} -- bash -c
+        'printf "%s\n%s\n" "{{ habackup_password }}" "{{ habackup_password }}" | smbpasswd -s -a {{ habackup_user }}'
+      no_log: true
+      changed_when: true
+
+    - name: Restart Samba
+      ansible.builtin.command: "pct exec {{ habackup_ctid }} -- systemctl restart smbd"
+      changed_when: true
+
+    - name: Report result and next steps
+      ansible.builtin.debug:
+        msg:
+          - "Samba share up: //{{ habackup_ip | regex_replace('/.*$', '') }}/{{ habackup_share_name }} (user: {{ habackup_user }})"
+          - "NEXT — in HAOS: Settings > System > Storage > Add network storage:"
+          - "  Type CIFS/SMB, Server {{ habackup_ip | regex_replace('/.*$', '') }}, Share {{ habackup_share_name }},"
+          - "  user {{ habackup_user }} + the password you set, Usage = Backup."
+          - "Then Settings > System > Backups: schedule an AUTOMATIC backup, location = this share,"
+          - "  PARTIAL (HA + Zigbee2MQTT + add-ons; exclude media). Tune recorder purge_keep_days to keep it small."
+          - "Verify a backup lands here, then delete the interim local vzdump-qemu-200 image on apophis."
