@@ -49,6 +49,25 @@ Constraints:
 ~15 GB for a full of everything today; ~30–50 GB with the above retention (dedup makes
 increments tiny); under 100 GB well past Phase 3. Trivial against oneill's ~455 GB free.
 
+### Build specifics (infra-designer review, 2026-06-16)
+
+- **PBS** runs as an **unprivileged LXC** (CTID **112**, `YOUR_PBS_IP`) with its datastore as
+  a **bind-mounted ZFS dataset** — not a VM, not privileged, not a loopback image. 2 GB RAM,
+  2 cores, 8 GB rootfs. Dataset `rpool/data/pbs-datastore`, **quota 150 G**, `compression=lz4`.
+- **NFS share** for HA backups runs as a **separate** minimal unprivileged LXC (CTID **113**,
+  `YOUR_NFS_IP`, `nfs-kernel-server` only) — 512 MB, 1 core, 4 GB rootfs. Dataset
+  `rpool/data/ha-backup-share`, **quota 20 G**, lz4. **NFS, not SMB** (single client, lower
+  surface); export **read/write to the HA VM IP only**, not the subnet.
+- Reserve both new IPs in UniFi. (Unrelated tidy-up: PLAN.md still has an open item to
+  *confirm* `.4`/Tailscale has a fixed reservation — that's a verify, not a change; `.4` is
+  active and stays.)
+- **Build in two steps:** PBS first — provision LXC + dataset + quota → add as a storage
+  target on apophis → smoke-test by backing up the **Tailscale CT (110)** first, then
+  mgmt-vm (100), then **home-assistant (200) last**. NFS share second — provision → mount in
+  HAOS as network storage → one manual partial backup, confirm it lands on oneill.
+- **Cap `zfs_arc_max`** on oneill before Monitoring lands (ARC defaults to ~50% RAM) — watch-out,
+  not a blocker.
+
 ## Consequences
 
 - **Single-host failure is covered** (apophis dies → its backups are safe on oneill, and
@@ -63,5 +82,8 @@ increments tiny); under 100 GB well past Phase 3. Trivial against oneill's ~455 
 - New services to run on oneill: a **PBS LXC** and an **SMB/NFS share LXC**. Provisioning
   these is gated by the `infra-designer` review (CLAUDE.md) before build.
 - Recorder-retention tuning trades history depth for small, fast HA backups — deliberate.
+- **PBS encryption key/passphrase must be stored off-oneill** (captured by the ADR-007
+  config-backup flow, or written down off-box). An encrypted backup whose only key lives on
+  the same SSD as the backup is a false sense of security if that SSD is what dies.
 - Complements ADR-007 (config) and is the durability prerequisite ADR-009/ADR-010 referenced
   (the password manager and apophis ZFS migration both wait on backups existing).

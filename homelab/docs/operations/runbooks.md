@@ -180,6 +180,41 @@ backlog item.)
 
 ---
 
+## Backups (PBS + Home Assistant) — ADR-012
+
+**oneill is the backup hub.** Two layers, local cross-host (cloud off-site deferred).
+
+### PBS — whole VM/CT images
+- **PBS** runs as unprivileged CT **112** on oneill (`YOUR_PBS_IP`), datastore `main` on a
+  bind-mounted ZFS dataset `rpool/data/pbs-datastore` (quota 150 G). UI: `https://YOUR_PBS_IP:8007`.
+  Provisioned by `provision-pbs.yml` (`--limit oneill`).
+- **apophis → PBS wiring** (one-time, done live; recorded here for rebuild):
+  - PBS API token `root@pam!apophis` with role **DatastorePowerUser** on `/datastore/main`
+    (backup + prune for retention) — `proxmox-backup-manager user generate-token` + `acl update`
+    inside CT 112.
+  - apophis storage `pbs-oneill` added with that token + the datastore **fingerprint**
+    (`proxmox-backup-manager cert info` on PBS).
+- **Scheduled job (apophis):** VMs/CTs `100,110` → `pbs-oneill`, daily **02:30**, retention
+  **keep-daily 7 / keep-weekly 4**. **HA (200) is excluded** — protected by native partial below.
+- **GC:** datastore `main` runs garbage collection daily.
+
+#### Restore a guest from PBS
+```bash
+ssh root@YOUR_PROXMOX_IP "pvesm list pbs-oneill"                                            # list points
+ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/100/<ISO-timestamp> <newvmid>"     # VM
+ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-timestamp>"   # CT
+```
+
+### Home Assistant — native partial backup (primary for HA)
+- HA protects itself via a **scheduled partial backup** (Settings → System → Backups): HA config
+  + **Zigbee2MQTT add-on** + add-on configs; **media excluded**; recorder DB kept small via
+  `recorder` `purge_keep_days`. Written to an **NFS share on oneill** (CT 113) added in HAOS as
+  network storage. Portable — restores onto any HAOS.
+- **Interim:** until the native partial is verified, the old local `vzdump-qemu-200` image on
+  apophis `local` is HA's safety net — delete it only after a native partial is confirmed.
+
+---
+
 ## Git / repo
 
 ### Push latest changes

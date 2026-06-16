@@ -1,0 +1,152 @@
+---
+# Provision Proxmox Backup Server (PBS) as an UNPRIVILEGED LXC on oneill, with its
+# datastore on a quota'd ZFS dataset bind-mounted into the container (ADR-012).
+# This is the backup hub; apophis backs its guests up here over the network.
+# Idempotent — safe to re-run.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, TARGETING oneill:
+#   ansible-playbook playbooks/provision-pbs.yml --limit oneill
+#
+# You'll be prompted for the PBS admin password (sets the LXC root password, used
+# for root@pam login to the PBS UI/API). Never stored (no_log).
+#
+# Vars live in inventory/group_vars/all.yml (pbs_*). After this runs, wire apophis
+# -> PBS as a storage target (separate step) and smoke-test on CT 110 first.
+
+- name: Provision Proxmox Backup Server LXC (backup hub)
+  hosts: proxmox
+  gather_facts: false
+
+  vars_prompt:
+    - name: pbs_admin_password
+      prompt: "PBS admin password (LXC root, for root@pam login)"
+      private: true
+
+  tasks:
+    - name: Validate admin password is reasonable
+      ansible.builtin.assert:
+        that: pbs_admin_password | length >= 12
+        fail_msg: "Use at least 12 characters for the PBS admin password."
+        quiet: true
+
+    # --- Datastore dataset on the host (quota'd so a runaway job can't fill the SSD) ---
+    - name: Create the PBS datastore ZFS dataset with a quota
+      ansible.builtin.command: >
+        zfs create -o quota={{ pbs_datastore_quota }} -o compression=lz4 {{ pbs_datastore_dataset }}
+      register: zfs_create
+      changed_when: zfs_create.rc == 0
+      failed_when:
+        - zfs_create.rc != 0
+        - "'dataset already exists' not in (zfs_create.stderr | default(''))"
+
+    - name: Ensure the quota is set (idempotent on re-run)
+      ansible.builtin.command: "zfs set quota={{ pbs_datastore_quota }} {{ pbs_datastore_dataset }}"
+      changed_when: false
+
+    # Unprivileged LXC maps container uids to host uid+100000. PBS runs its datastore
+    # as the 'backup' user (uid 34) -> host uid 100034. Own the dataset mountpoint to
+    # that so PBS can write without privileged mode or host-side root ownership.
+    - name: Own the datastore mountpoint for the container's mapped backup user
+      ansible.builtin.command: "chown 100034:100034 /{{ pbs_datastore_dataset }}"
+      changed_when: false
+
+    # --- The LXC ---
+    - name: Check whether CT {{ pbs_ctid }} already exists
+      ansible.builtin.command: "pct status {{ pbs_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged PBS LXC with the datastore bind-mounted
+      ansible.builtin.command: >
+        pct create {{ pbs_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ pbs_hostname }}
+        --cores {{ pbs_cores }}
+        --memory {{ pbs_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ pbs_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ pbs_ip }},gw={{ gateway }}
+        --mp0 /{{ pbs_datastore_dataset }},mp={{ pbs_datastore_mount }}
+        --unprivileged 1
+        --onboot 1
+      when: ct_status.rc != 0
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ pbs_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ pbs_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    # Must run AFTER the CT is up — pct exec needs a running container.
+    - name: Set the LXC root password (root@pam login for PBS)
+      ansible.builtin.shell: "echo 'root:{{ pbs_admin_password }}' | pct exec {{ pbs_ctid }} -- chpasswd"
+      no_log: true
+      changed_when: true
+
+    # --- Install PBS inside the CT ---
+    - name: Check whether PBS is already installed
+      ansible.builtin.command: "pct exec {{ pbs_ctid }} -- dpkg -s proxmox-backup-server"
+      register: pbs_present
+      changed_when: false
+      failed_when: false
+
+    - name: Add the Proxmox release GPG key + PBS no-subscription repo, install PBS
+      ansible.builtin.shell: |
+        pct exec {{ pbs_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq curl >/dev/null
+          curl -fsSL https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
+            -o /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+          echo "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription" \
+            > /etc/apt/sources.list.d/pbs.list
+          apt-get update -qq
+          apt-get install -y -qq proxmox-backup-server >/dev/null
+        '
+      when: pbs_present.rc != 0
+      changed_when: true
+
+    # --- Datastore ---
+    - name: Check whether the datastore already exists
+      ansible.builtin.command: "pct exec {{ pbs_ctid }} -- proxmox-backup-manager datastore list --output-format json"
+      register: ds_list
+      changed_when: false
+
+    - name: Create the PBS datastore on the bind-mounted dataset
+      ansible.builtin.command: >
+        pct exec {{ pbs_ctid }} --
+        proxmox-backup-manager datastore create {{ pbs_datastore_name }} {{ pbs_datastore_mount }}
+      when: pbs_datastore_name not in (ds_list.stdout | from_json | map(attribute='name') | list)
+      changed_when: true
+
+    # --- Report: apophis needs the fingerprint to add this as a storage target ---
+    - name: Get the PBS TLS fingerprint (for the apophis storage config)
+      ansible.builtin.command: "pct exec {{ pbs_ctid }} -- proxmox-backup-manager cert info"
+      register: pbs_cert
+      changed_when: false
+
+    - name: Report result and next steps
+      ansible.builtin.debug:
+        msg:
+          - "PBS LXC {{ pbs_ctid }} up at {{ pbs_ip | regex_replace('/.*$', '') }} — UI: https://{{ pbs_ip | regex_replace('/.*$', '') }}:8007 (root@pam)"
+          - "Datastore '{{ pbs_datastore_name }}' on {{ pbs_datastore_dataset }} (quota {{ pbs_datastore_quota }})."
+          - "Fingerprint (needed to add PBS as storage on apophis):"
+          - "{{ pbs_cert.stdout_lines | select('match', '.*[Ff]ingerprint.*') | list }}"
+          - "NEXT: on apophis add the PBS storage (Datacenter > Storage > Add > Proxmox Backup Server),"
+          - "  then smoke-test: back up CT 110 first, then VM 100, then VM 200 last (ADR-012)."

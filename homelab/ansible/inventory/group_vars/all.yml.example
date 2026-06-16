@@ -36,3 +36,16 @@ technitium_blocking_type: NxDomain                          # AnyAddress | NxDom
 technitium_blocklist_update_hours: 24
 technitium_blocklist_urls:                                  # ads/trackers/malware
   - https://big.oisd.nl/domainswild2
+
+# --- Proxmox Backup Server LXC (backup hub on oneill, ADR-012) ---------------
+# Unprivileged LXC; datastore on a quota'd ZFS dataset bind-mount. Run --limit oneill.
+pbs_ctid: 112
+pbs_hostname: pbs
+pbs_ram_mb: 2048
+pbs_cores: 2
+pbs_disk_gb: 8
+pbs_ip: YOUR_PBS_IP/24                                      # verify free; reserve in UniFi
+pbs_datastore_dataset: rpool/data/pbs-datastore            # on the backup-hub node's ZFS pool
+pbs_datastore_quota: 150G
+pbs_datastore_mount: /mnt/datastore                         # bind-mount path inside the CT
+pbs_datastore_name: main
