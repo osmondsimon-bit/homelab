@@ -1,33 +1,59 @@
 ---
-# Provision the Monitoring LXC on oneill: Prometheus (scrape + TSDB) + Grafana,
-# native packages, unprivileged, TSDB on a quota'd ZFS dataset bind-mount (ADR-013).
-# STEP 1 (core/scraping): scrapes node_exporter on both hosts (run
-# install-node-exporter.yml first). Step 2 adds pve-exporter, UniFi/HA, Alertmanager
-# + ntfy + the apophis dead-man's-switch. Idempotent — safe to re-run.
+# Provision the Monitoring stack on oneill: Prometheus (scrape + TSDB) + Grafana +
+# pve-exporter, native packages, unprivileged LXC (needs nesting=1 for the services'
+# systemd sandboxing), TSDB on a quota'd ZFS bind-mount (ADR-013). node_exporter on
+# the hosts is install-node-exporter.yml (run that first). Idempotent.
 #
-# Run from the mgmt-vm, inside homelab/ansible/, TARGETING oneill:
-#   ansible-playbook playbooks/provision-monitoring.yml --limit oneill
+# Run from the mgmt-vm, inside homelab/ansible/ — NO --limit (play 1 mints PVE tokens
+# on BOTH hosts, play 2 builds the CT on oneill):
+#   ansible-playbook playbooks/provision-monitoring.yml
 #
-# Prompts for the Grafana admin password (never stored, no_log). Vars: monitoring_*
-# in group_vars. Grafana UI on http://<ip>:3000 (admin) — LAN/Tailscale only.
+# Grafana admin password is prompted; leave blank on re-runs to keep the current one.
+# Vars: monitoring_* in group_vars. Grafana :3000 / Prometheus :9090 — LAN/Tailscale only.
 
-- name: Provision Monitoring LXC (Prometheus + Grafana)
+- name: Mint read-only PVEAuditor tokens for pve-exporter
   hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: (Re)create the monitoring API token and grant PVEAuditor
+      ansible.builtin.shell: |
+        pveum user token remove root@pam monitoring >/dev/null 2>&1 || true
+        pveum user token add root@pam monitoring --privsep 1 --output-format json
+        pveum acl modify / --roles PVEAuditor --tokens 'root@pam!monitoring' >/dev/null 2>&1
+      register: pve_tok
+      changed_when: true
+
+    - name: Stash the token value (read-only, used only in pve.yml)
+      ansible.builtin.set_fact:
+        pve_token_value: "{{ (pve_tok.stdout | from_json).value }}"
+      no_log: true
+
+- name: Provision Monitoring LXC (Prometheus + Grafana + pve-exporter)
+  hosts: oneill
   gather_facts: false
 
   vars_prompt:
     - name: grafana_admin_password
-      prompt: "Grafana admin password (user: admin)"
+      prompt: "Grafana admin password (blank = keep current)"
       private: true
+      default: ""
 
   tasks:
-    - name: Validate admin password is reasonable
+    - name: Sanity-check both PVE tokens were minted (run without --limit)
+      ansible.builtin.assert:
+        that: hostvars[item.name].pve_token_value is defined
+        fail_msg: "No token for {{ item.name }} — run without --limit so play 1 hits every host."
+        quiet: true
+      loop: "{{ monitoring_pve_nodes }}"
+
+    - name: Validate admin password length (when setting one)
       ansible.builtin.assert:
         that: grafana_admin_password | length >= 12
-        fail_msg: "Use at least 12 characters for the Grafana admin password."
+        fail_msg: "Use at least 12 characters (or leave blank to keep current)."
         quiet: true
+      when: grafana_admin_password | length > 0
 
-    # --- TSDB dataset (quota'd so runaway metrics can't fill the SSD) ---
+    # --- TSDB dataset (quota'd) ---
     - name: Create the TSDB ZFS dataset with a quota
       ansible.builtin.command: >
         zfs create -o quota={{ monitoring_tsdb_quota }} -o compression=lz4 {{ monitoring_tsdb_dataset }}
@@ -41,8 +67,6 @@
       ansible.builtin.command: "zfs set quota={{ monitoring_tsdb_quota }} {{ monitoring_tsdb_dataset }}"
       changed_when: false
 
-    # Owned by the container's mapped root (100000) so CT-side can re-chown to the
-    # (dynamically-assigned) prometheus user after the package creates it.
     - name: Own the TSDB dataset for the container's mapped root
       ansible.builtin.command: "chown 100000:100000 /{{ monitoring_tsdb_dataset }}"
       changed_when: false
@@ -91,7 +115,7 @@
       delay: 3
       changed_when: false
 
-    # --- Install Prometheus (Debian repo) + Grafana (official repo) ---
+    # --- Prometheus (Debian) + Grafana (official repo) + pve-exporter (venv) ---
     - name: Check whether Grafana is already installed
       ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- dpkg -s grafana"
       register: graf_present
@@ -104,7 +128,7 @@
           set -e
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -qq
-          apt-get install -y -qq prometheus gpg curl >/dev/null
+          apt-get install -y -qq prometheus python3-venv gpg curl >/dev/null
           mkdir -p /etc/apt/keyrings
           curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
           echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
@@ -119,20 +143,82 @@
       ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- chown -R prometheus:prometheus {{ monitoring_tsdb_mount }}"
       changed_when: false
 
-    # --- Prometheus config (static scrape: itself + the two hosts' node_exporter) ---
-    - name: Write prometheus.yml
+    - name: Install prometheus-pve-exporter into a venv
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- /opt/pve-exporter/bin/pve_exporter --help"
+      register: pve_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Create the pve-exporter venv (if missing)
       ansible.builtin.shell: |
-        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/prometheus.yml <<EOF
-        global:
-          scrape_interval: {{ monitoring_scrape_interval }}
-        scrape_configs:
-          - job_name: prometheus
-            static_configs:
-              - targets: ["localhost:9090"]
-          - job_name: node
-            static_configs:
-              - targets: {{ monitoring_node_targets | to_json }}
-        EOF'
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          python3 -m venv /opt/pve-exporter
+          /opt/pve-exporter/bin/pip install -q prometheus-pve-exporter
+        '
+      when: pve_installed.rc != 0
+      changed_when: true
+
+    - name: Write pve-exporter config (one module per node, read-only tokens)
+      ansible.builtin.shell: >
+        echo '{{ pve_yml | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} --
+        bash -c 'mkdir -p /etc/pve-exporter && cat > /etc/pve-exporter/pve.yml && chmod 600 /etc/pve-exporter/pve.yml'
+      vars:
+        pve_yml: |
+          {% for n in monitoring_pve_nodes %}
+          {{ n.name }}:
+            user: root@pam
+            token_name: monitoring
+            token_value: {{ hostvars[n.name].pve_token_value }}
+            verify_ssl: false
+          {% endfor %}
+      no_log: true
+      changed_when: true
+
+    - name: Install the pve-exporter systemd unit
+      ansible.builtin.shell: >
+        echo '{{ pve_unit | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/systemd/system/pve-exporter.service'
+      vars:
+        pve_unit: |
+          [Unit]
+          Description=Prometheus PVE Exporter
+          After=network-online.target
+          [Service]
+          ExecStart=/opt/pve-exporter/bin/pve_exporter --config.file /etc/pve-exporter/pve.yml
+          Restart=on-failure
+          User=root
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    # --- Prometheus config (self + node_exporter + pve-exporter per node) ---
+    - name: Write prometheus.yml
+      ansible.builtin.shell: >
+        echo '{{ prom_yml | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/prometheus.yml'
+      vars:
+        prom_yml: |
+          global:
+            scrape_interval: {{ monitoring_scrape_interval }}
+          scrape_configs:
+            - job_name: prometheus
+              static_configs:
+                - targets: ["localhost:9090"]
+            - job_name: node
+              static_configs:
+                - targets: {{ monitoring_node_targets | to_json }}
+          {% for n in monitoring_pve_nodes %}
+            - job_name: pve-{{ n.name }}
+              metrics_path: /pve
+              params: { module: ["{{ n.name }}"] }
+              static_configs:
+                - targets: ["{{ n.host }}"]
+              relabel_configs:
+                - { source_labels: [__address__], target_label: __param_target }
+                - { source_labels: [__param_target], target_label: instance }
+                - { target_label: __address__, replacement: "localhost:9221" }
+          {% endfor %}
       changed_when: true
 
     - name: Set Prometheus TSDB retention
@@ -141,7 +227,6 @@
         'echo "ARGS=\"--storage.tsdb.retention.time={{ monitoring_retention_days }}d\"" > /etc/default/prometheus'
       changed_when: true
 
-    # --- Grafana: provision the Prometheus datasource as code + set admin password ---
     - name: Provision the Grafana Prometheus datasource
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/grafana/provisioning/datasources && cat > /etc/grafana/provisioning/datasources/prometheus.yml <<EOF
@@ -155,26 +240,26 @@
         EOF'
       changed_when: true
 
-    - name: Enable + (re)start Prometheus and Grafana
+    - name: Enable + (re)start the services
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
-          systemctl enable --now prometheus grafana-server >/dev/null 2>&1
-          systemctl restart prometheus grafana-server
+          systemctl daemon-reload
+          systemctl enable --now prometheus grafana-server pve-exporter >/dev/null 2>&1
+          systemctl restart prometheus grafana-server pve-exporter
         '
       changed_when: true
 
-    - name: Set the Grafana admin password
+    - name: Set the Grafana admin password (when one was given)
       ansible.builtin.command: >
         pct exec {{ monitoring_ctid }} --
         grafana-cli --homepath /usr/share/grafana admin reset-admin-password {{ grafana_admin_password }}
       no_log: true
       changed_when: true
+      when: grafana_admin_password | length > 0
 
-    - name: Report result and next steps
+    - name: Report
       ansible.builtin.debug:
         msg:
-          - "Monitoring LXC {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
-          - "Grafana: http://{{ monitoring_ip | regex_replace('/.*$', '') }}:3000 (admin) — LAN/Tailscale only."
-          - "Prometheus: http://{{ monitoring_ip | regex_replace('/.*$', '') }}:9090/targets — node targets should be UP."
-          - "Import dashboards in Grafana (e.g. 1860 Node Exporter Full); export back to repo per ADR-013."
-          - "NEXT (Step 2): pve-exporter (per-node PVEAuditor tokens), UniFi + HA, Alertmanager + ntfy + dead-man's-switch."
+          - "Monitoring CT {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
+          - "Grafana :3000 (admin) / Prometheus :9090/targets — LAN/Tailscale only."
+          - "Targets: prometheus + node (x{{ monitoring_node_targets | length }}) + pve (x{{ monitoring_pve_nodes | length }})."

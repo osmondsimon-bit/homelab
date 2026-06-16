@@ -59,7 +59,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-pbs.yml` | Proxmox Backup Server LXC on oneill — backup hub (prompts for admin password; ADR-012). Run with `--limit oneill` |
 | `provision-ha-backup-share.yml` | Samba LXC on oneill for HA native backups (prompts for share password; ADR-012). Run with `--limit oneill` |
 | `install-node-exporter.yml` | Installs node_exporter on the Proxmox hosts (ADR-013). Runs on both hosts |
-| `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana (prompts for Grafana admin pw; ADR-013). Run with `--limit oneill` |
+| `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana + pve-exporter (mints read-only PVE tokens; prompts Grafana pw, blank=keep; ADR-013). Run **without** `--limit` (play 1 hits both hosts) |
 | `provision-deadmans-switch.yml` | apophis cron that ntfy-alerts if oneill monitoring/Technitium is unreachable (ADR-013). Run with `--limit apophis` |
 
 Dry-run first against production with `--check` where the modules support it, or
