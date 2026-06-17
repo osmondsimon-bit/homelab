@@ -244,6 +244,29 @@ backlog item.)
 
 ---
 
+## Patching & updates (ADR-015)
+
+- **Guest LXCs (auto):** `provision-patching.yml` puts **`unattended-upgrades`** on every running CT
+  (discovered via `pct list` on both hosts → the service LXCs; mgmt-vm + HA VM are excluded). Policy:
+  **security/point-release only** (Debian default origins, *not* `-updates`), **no auto-reboot**,
+  applied at **12:00 local** (`patching_timezone`, pinned in the systemd calendar so the UTC CTs
+  still fire at local noon), **ntfy on failure** (OnFailure hook → your topic).
+  - Apply/refresh: `cd homelab/ansible && ansible-playbook playbooks/provision-patching.yml` (idempotent, both hosts).
+  - Check a guest: `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer` (next = local noon);
+    `pct exec <ctid> -- unattended-upgrade --dry-run` (shows allowed origins + candidates).
+  - Logs: inside the CT, `/var/log/unattended-upgrades/`. A failure pushes an ntfy alert.
+- **Hosts + mgmt-vm (manual):** deliberate **monthly window — last day of month, 12:00 AEST** (be
+  present for fallout). One node at a time; pre-cluster accept brief downtime, post-cluster (Phase 4)
+  HA-failover the guests off first → `apt update && apt dist-upgrade` → reboot if
+  `node_reboot_required` → next node. Driven by Glance's *Package Updates* / *Reboot required* panes.
+- **HAOS:** update via the HA UI on your cadence; take/confirm a partial backup first (ADR-012).
+- **Note (PBS repo):** the PBS CT must stay on `pbs-no-subscription` — `provision-pbs.yml` disables
+  the shipped `pbs-enterprise` repo (it 401s and breaks `apt-get update` / unattended-upgrades).
+- **Proxmox host repos:** fresh nodes ship the enterprise repos (401 without a sub) → switch to
+  `pve-no-subscription` (done by hand on apophis + oneill; host-prep play still to be codified).
+
+---
+
 ## Backups (PBS + Home Assistant) — ADR-012
 
 **oneill is the backup hub.** Two layers, local cross-host (cloud off-site deferred).

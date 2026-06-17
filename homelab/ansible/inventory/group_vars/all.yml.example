@@ -113,3 +113,6 @@ glance_prometheus_url: "http://YOUR_MONITORING_IP:9090"     # monitoring CT — 
 glance_hosts:                                               # Proxmox nodes — host CPU/RAM/updates panes + node links
   - { name: apophis, node_exporter_instance: "YOUR_PROXMOX_IP:9100", pve_instance: "YOUR_PROXMOX_IP" }
   - { name: oneill,  node_exporter_instance: "YOUR_NUC_IP:9100",     pve_instance: "YOUR_NUC_IP" }
+
+# --- Patching (ADR-015) — set to YOUR local tz so guest security upgrades fire at LOCAL noon ---
+patching_timezone: "Etc/UTC"                                # set your IANA Region/City tz; blank/UTC = 12:00 UTC

@@ -1,0 +1,52 @@
+---
+# Configure unattended SECURITY upgrades on the Debian guest LXCs (ADR-015).
+#
+# Runs against BOTH Proxmox hosts (no --limit) and discovers the running CTs on each via `pct list`
+# — which naturally scopes to exactly the service LXCs (Tailscale, Technitium, PBS, HA-backup share,
+# Monitoring, Glance) and EXCLUDES mgmt-vm + the HA VM (they're qemu VMs, patched manually per
+# ADR-015, not CTs). Idempotent — re-run any time; safe (installs + config only, no mass upgrade is
+# forced; the first automatic run is the next 12:00 local).
+#
+#   cd homelab/ansible && ansible-playbook playbooks/provision-patching.yml
+#
+# Each guest gets: unattended-upgrades (security pocket only — distro default), no auto-reboot,
+# the apt-daily-upgrade timer pinned to 12:00, and an ntfy OnFailure hook (topic from group_vars,
+# no_log). Per-guest config = ansible/files/patching/setup-unattended.sh.
+#
+# DEFERRED (ADR-015, tracked in PLAN): the host pve-no-subscription repo prep — already done
+# manually on apophis + oneill; codify for future nodes in a later host-prep play.
+
+- name: Configure unattended security upgrades on guest LXCs
+  hosts: proxmox
+  gather_facts: false
+
+  tasks:
+    - name: Discover running guest CTs on this host
+      ansible.builtin.shell: |
+        set -o pipefail
+        pct list | awk 'NR>1 && $2=="running" {print $1}'
+      args:
+        executable: /bin/bash
+      register: guest_ctids
+      changed_when: false
+
+    - name: Report which CTs will be configured
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: configuring unattended-upgrades on CTs {{ guest_ctids.stdout_lines | default([]) }}"
+
+    - name: Configure unattended security upgrades inside each guest CT
+      ansible.builtin.shell: >
+        echo '{{ lookup('file', playbook_dir + '/../files/patching/setup-unattended.sh') | b64encode }}'
+        | base64 -d
+        | pct exec {{ item }} -- bash -s -- '{{ ntfy_base_url }}/{{ ntfy_topic }}' '{{ patching_timezone | default("") }}'
+      loop: "{{ guest_ctids.stdout_lines | default([]) }}"
+      loop_control:
+        label: "CT {{ item }}"
+      no_log: true
+      changed_when: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "{{ inventory_hostname }}: {{ guest_ctids.stdout_lines | default([]) | length }} guest CT(s) set to auto-apply SECURITY updates at 12:00, no auto-reboot."
+          - "First automatic run: next 12:00 local. Failures push to ntfy. Non-security updates: monthly window (manual)."

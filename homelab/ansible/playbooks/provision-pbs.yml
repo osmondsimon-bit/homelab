@@ -122,6 +122,14 @@
       when: pbs_present.rc != 0
       changed_when: true
 
+    - name: Disable the PBS enterprise repo (the package ships it; it 401s without a subscription)
+      ansible.builtin.command: >
+        pct exec {{ pbs_ctid }} -- rm -f /etc/apt/sources.list.d/pbs-enterprise.list
+      register: pbs_ent_rm
+      changed_when: false
+      # Idempotent + always runs (not gated on first-install) so `apt-get update` stays clean —
+      # required for unattended-upgrades (ADR-015); we use the pbs-no-subscription repo above.
+
     # --- Datastore ---
     - name: Check whether the datastore already exists
       ansible.builtin.command: "pct exec {{ pbs_ctid }} -- proxmox-backup-manager datastore list --output-format json"

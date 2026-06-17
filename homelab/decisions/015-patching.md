@@ -1,7 +1,7 @@
 # ADR-015: Patching & updates — auto security patches on guests, monthly rolling window on hosts
 
 **Date:** 2026-06-17
-**Status:** Accepted (operator-confirmed 2026-06-17; implementation pending — gated)
+**Status:** Accepted (operator-confirmed 2026-06-17). Guest track **implemented** 2026-06-17; host track deferred (see Implementation note).
 
 ## Context
 
@@ -93,3 +93,24 @@ A two-track policy, both tracks owned by Ansible so they're reproducible:
   fallout, not overnight); **mgmt-vm = manual** for now (control node); **security-only** on guests
   (no all-updates, even for disposable LXCs). Guest auto-patch timer pinned to **midday** for the
   same be-present reasoning. Revisit mgmt-vm auto-patching once clustered.
+
+## Implementation note (2026-06-17)
+
+**Guest track — done.** `provision-patching.yml` configures every running guest LXC, discovered via
+`pct list` on both hosts (naturally = the service LXCs 110–115; mgmt-vm + HA are qemu VMs, excluded).
+Per-guest setup is `ansible/files/patching/setup-unattended.sh` (idempotent): install
+`unattended-upgrades`, enable the periodic timers, assert `Automatic-Reboot "false"`, pin the
+`apt-daily-upgrade.timer` to **12:00 in the operator's timezone** (`patching_timezone` group_var →
+calendar TZ suffix, systemd ≥ 252; DST-safe — the CTs run UTC so a bare `12:00` would be 22:00 local),
+and install an ntfy **OnFailure** hook. Verified across both hosts: timer next-elapse = local noon;
+`unattended-upgrade --dry-run` runs clean with allowed origins = **Debian-Security + the base
+point-release pocket, not `-updates`** (Debian's recommended default — we don't widen it, so it's
+security/point-release only, never the regular feature/bugfix pocket).
+
+**Prerequisite fixed:** the PBS guest (CT 112) shipped the `pbs-enterprise` apt repo, which 401s
+without a subscription and broke `apt-get update` (and would have caused daily false ntfy failures).
+`provision-pbs.yml` now disables it (idempotently) in favour of the existing `pbs-no-subscription`.
+
+**Host track — deferred (tracked in PLAN).** The Proxmox hosts + mgmt-vm are still patched manually
+in the monthly window (last day, 12:00 local). The `pve-no-subscription` host-prep play (already done
+by hand on apophis + oneill) is the remaining piece to codify for reproducible new nodes.
