@@ -250,7 +250,9 @@ backlog item.)
   (discovered via `pct list` on both hosts → the service LXCs; mgmt-vm + HA VM are excluded). Policy:
   **security/point-release only** (Debian default origins, *not* `-updates`), **no auto-reboot**,
   applied at **12:00 local** (`patching_timezone`, pinned in the systemd calendar so the UTC CTs
-  still fire at local noon), **ntfy on failure** (OnFailure hook → your topic).
+  still fire at local noon), **ntfy on failure** (OnFailure hook → your topic). **`needrestart`
+  (mode `a`)** auto-restarts services on updated libs so the patch takes effect immediately — guests
+  **never need a manual reboot** (they share the host kernel; kernel fixes come via the host window).
   - Apply/refresh: `cd homelab/ansible && ansible-playbook playbooks/provision-patching.yml` (idempotent, both hosts).
   - Check a guest: `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer` (next = local noon);
     `pct exec <ctid> -- unattended-upgrade --dry-run` (shows allowed origins + candidates).

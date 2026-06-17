@@ -44,8 +44,13 @@ A two-track policy, both tracks owned by Ansible so they're reproducible:
 - **Run at ~midday, not the ~06:00 default.** Override the `apt-daily-upgrade.timer` `OnCalendar`
   to **12:00** (local/AEST) so even automated guest patches land while the operator is around to
   notice fallout — rather than breaking overnight and surfacing as failed morning automations.
-- **No automatic reboot** (`Unattended-Upgrade::Automatic-Reboot "false"`). Kernel/reboot-required
-  cases are handled in the host window or a deliberate guest restart; LXCs rarely need it.
+- **No automatic reboot** (`Unattended-Upgrade::Automatic-Reboot "false"`), and the guest LXCs
+  **share the host kernel** (no `linux-image` inside) — so kernel security fixes are applied by
+  rebooting the *host* in the monthly window, not the containers. Guests effectively never need a
+  manual reboot.
+- **Auto-restart services with `needrestart` (mode `a`)** so a patched library actually takes effect
+  immediately (the running process otherwise keeps the old in-memory lib until it restarts) — at
+  midday, no manual step. Trade-off: a brief restart blip for the affected service (seconds).
 - **Notify on failure** (ntfy via the existing channel / `mail-to-root`), so a silent failure
   surfaces.
 - **mgmt-vm excluded → patched manually** (for now): it's the Ansible/Claude control node, so an
@@ -99,10 +104,11 @@ A two-track policy, both tracks owned by Ansible so they're reproducible:
 **Guest track — done.** `provision-patching.yml` configures every running guest LXC, discovered via
 `pct list` on both hosts (naturally = the service LXCs 110–115; mgmt-vm + HA are qemu VMs, excluded).
 Per-guest setup is `ansible/files/patching/setup-unattended.sh` (idempotent): install
-`unattended-upgrades`, enable the periodic timers, assert `Automatic-Reboot "false"`, pin the
-`apt-daily-upgrade.timer` to **12:00 in the operator's timezone** (`patching_timezone` group_var →
-calendar TZ suffix, systemd ≥ 252; DST-safe — the CTs run UTC so a bare `12:00` would be 22:00 local),
-and install an ntfy **OnFailure** hook. Verified across both hosts: timer next-elapse = local noon;
+`unattended-upgrades` + **`needrestart` (mode `a` → auto-restart services on outdated libs, so the
+patch is effective without a manual restart/reboot)**, enable the periodic timers, assert
+`Automatic-Reboot "false"`, pin the `apt-daily-upgrade.timer` to **12:00 in the operator's timezone**
+(`patching_timezone` group_var → calendar TZ suffix, systemd ≥ 252; DST-safe — the CTs run UTC so a
+bare `12:00` would be 22:00 local), and install an ntfy **OnFailure** hook. Verified across both hosts: timer next-elapse = local noon;
 `unattended-upgrade --dry-run` runs clean with allowed origins = **Debian-Security + the base
 point-release pocket, not `-updates`** (Debian's recommended default — we don't widen it, so it's
 security/point-release only, never the regular feature/bugfix pocket).

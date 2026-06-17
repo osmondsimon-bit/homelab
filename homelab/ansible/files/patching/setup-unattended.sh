@@ -11,9 +11,14 @@ NTFY_URL="${1:-}"
 PATCH_TZ="${2:-}"   # IANA tz (Region/City form) so 12:00 = LOCAL noon, DST-safe; blank = UTC
 export DEBIAN_FRONTEND=noninteractive
 
-if ! dpkg -s unattended-upgrades >/dev/null 2>&1; then
+# unattended-upgrades applies the patches; needrestart auto-restarts services using the updated
+# libs so the fix takes effect without a manual restart / container reboot (ADR-015).
+need=""
+dpkg -s unattended-upgrades >/dev/null 2>&1 || need="$need unattended-upgrades"
+dpkg -s needrestart        >/dev/null 2>&1 || need="$need needrestart"
+if [ -n "$need" ]; then
   apt-get update -qq
-  apt-get install -y -qq unattended-upgrades >/dev/null
+  apt-get install -y -qq $need >/dev/null
 fi
 
 # Turn the periodic update + unattended-upgrade on (security-only is the shipped default origin set).
@@ -27,6 +32,15 @@ EOF
 cat > /etc/apt/apt.conf.d/52homelab-unattended <<'EOF'
 // Managed by Ansible (provision-patching.yml, ADR-015) — do not edit by hand.
 Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+
+# needrestart: auto-restart (mode 'a') services running outdated libraries after an upgrade, so a
+# security patch is effective immediately — no manual service restart, no container reboot. Runs at
+# midday with the upgrade, so the brief restart blip lands while the operator is around.
+mkdir -p /etc/needrestart/conf.d
+cat > /etc/needrestart/conf.d/50homelab.conf <<'EOF'
+# Managed by Ansible (provision-patching.yml, ADR-015).
+$nrconf{restart} = 'a';
 EOF
 
 # Apply at 12:00 LOCAL (override the vendor ~06:00 randomized schedule). The CTs run in UTC, so we
