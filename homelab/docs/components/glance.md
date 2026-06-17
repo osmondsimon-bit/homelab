@@ -29,8 +29,10 @@ validates the config (`glance ... config:print`), and starts it. The tiles' real
 in gitignored `group_vars`; committed files use `YOUR_*` placeholders (ADR-006).
 
 Dashboard content draft: `docs/components/glance-dashboard-draft.yml`. Treat it as the desired
-Glance page shape (groups, widgets, and links), separate from the current Ansible rendering
-mechanism. When wiring it into IaC, keep real URLs in gitignored variables.
+Glance page shape (groups, widgets, links, and health-check URLs), separate from the current
+Ansible rendering mechanism. When wiring it into IaC, keep real URLs in gitignored variables.
+The draft deliberately avoids token-backed widgets for now; add Technitium `dns-stats` later only
+after the read-only token is supplied from private config.
 
 > **Invariant:** add/change a tile in `glance_services` + re-run the playbook, **not** by hand —
 > the config is overwritten on the next run and won't survive a reprovision.

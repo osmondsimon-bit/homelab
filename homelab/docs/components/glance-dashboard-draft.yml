@@ -1,6 +1,10 @@
 # Draft Glance dashboard content for the homelab admin front-door.
 # This is intentionally dashboard YAML, not provisioning logic. Keep real IPs in
 # gitignored group_vars or local runtime config; committed examples use YOUR_*.
+#
+# Design: one quiet admin cockpit. Use monitor widgets only for HTTP(S) checks
+# that Glance can reach. Use bookmarks for non-HTTP checks, procedures, and
+# external consoles. Grafana owns graphs; Home Assistant owns household control.
 
 server:
   host: 0.0.0.0
@@ -59,8 +63,10 @@ pages:
             sites:
               - title: Proxmox Backup Server
                 url: https://YOUR_PBS_IP:8007
+                check-url: https://YOUR_PBS_IP:8007
                 icon: di:proxmox-backup-server
                 allow-insecure: true
+                alt-status-codes: [401, 403]
 
           - type: bookmarks
             title: Recovery Checks
@@ -85,6 +91,7 @@ pages:
               - title: Technitium DNS
                 url: http://YOUR_TECHNITIUM_IP:5380
                 icon: di:technitium
+                alt-status-codes: [401, 403]
 
           - type: monitor
             title: Observability
@@ -92,12 +99,15 @@ pages:
             sites:
               - title: Grafana
                 url: http://YOUR_MONITORING_IP:3000
+                check-url: http://YOUR_MONITORING_IP:3000/api/health
                 icon: di:grafana
               - title: Prometheus
                 url: http://YOUR_MONITORING_IP:9090
+                check-url: http://YOUR_MONITORING_IP:9090/-/healthy
                 icon: di:prometheus
               - title: Alertmanager
                 url: http://YOUR_MONITORING_IP:9093
+                check-url: http://YOUR_MONITORING_IP:9093/-/healthy
                 icon: di:alertmanager
 
           - type: bookmarks
@@ -127,16 +137,22 @@ pages:
             sites:
               - title: Proxmox apophis
                 url: https://YOUR_PROXMOX_IP:8006
+                check-url: https://YOUR_PROXMOX_IP:8006
                 icon: di:proxmox
                 allow-insecure: true
+                alt-status-codes: [401, 403]
               - title: Proxmox oneill
                 url: https://YOUR_NUC_IP:8006
+                check-url: https://YOUR_NUC_IP:8006
                 icon: di:proxmox
                 allow-insecure: true
+                alt-status-codes: [401, 403]
               - title: UniFi
                 url: https://YOUR_GATEWAY_IP
+                check-url: https://YOUR_GATEWAY_IP
                 icon: di:unifi
                 allow-insecure: true
+                alt-status-codes: [401, 403]
 
           - type: bookmarks
             title: External Admin
@@ -156,3 +172,55 @@ pages:
                     url: https://github.com/osmondsimon-bit/homelab
                     description: Public IaC and docs
                     icon: di:github-light
+
+  - name: Build
+    columns:
+      - size: full
+        widgets:
+          - type: bookmarks
+            title: Build Workbench
+            groups:
+              - title: Current IaC
+                color: 173 58 52
+                links:
+                  - title: Ansible
+                    url: https://github.com/osmondsimon-bit/homelab/tree/master/homelab/ansible
+                    description: Current create + configure path for LXCs
+                    icon: di:ansible
+                  - title: Terraform
+                    url: https://github.com/osmondsimon-bit/homelab/tree/master/homelab/terraform
+                    description: Scaffolded; import deferred to cluster scale
+                    icon: di:terraform
+                  - title: Scripts
+                    url: https://github.com/osmondsimon-bit/homelab/tree/master/homelab/scripts
+                    description: Manual fallbacks and utilities
+                    icon: mdi:script-text
+              - title: Review Gates
+                color: 45 80 55
+                links:
+                  - title: Infra Designer
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/.claude/agents/infra-designer.md
+                    description: Review before new VM/LXC/network changes
+                    icon: mdi:account-hard-hat
+                  - title: Doc Auditor
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/.claude/agents/doc-auditor.md
+                    description: Drift and placeholder checks
+                    icon: mdi:file-search
+                  - title: Continuity Reviewer
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/.claude/agents/continuity-reviewer.md
+                    description: Backups, RPO/RTO, restore drills
+                    icon: mdi:lifebuoy
+
+      - size: small
+        widgets:
+          - type: releases
+            title: Watch Releases
+            cache: 12h
+            limit: 6
+            collapse-after: 6
+            show-source-icon: true
+            repositories:
+              - glanceapp/glance
+              - prometheus/prometheus
+              - grafana/grafana
+              - tailscale/tailscale

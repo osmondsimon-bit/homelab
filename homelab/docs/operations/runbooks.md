@@ -274,9 +274,12 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
   Zigbee2MQTT (critical: avoids re-pairing), Mosquitto, Cloudflared, etc. **media excluded**;
   recorder DB kept small via `recorder` `purge_keep_days` (~10–14). ⚠️ **When you add a new
   stateful add-on, add it to the partial-backup selection** — it isn't picked up automatically.
-- **Interim safety net:** the old local `vzdump-qemu-200` image on apophis `local` stays as
-  HA's fallback **until the automatic backup is confirmed landing on the share** — only then
-  delete it.
+- **Status (2026-06-17):** automatic partial backup **confirmed landing** on the share (CT 113,
+  recurring, ~131 MB). The mgmt-vm `vzdump-qemu-100` interim images on apophis `local` were
+  **deleted** (PBS covers mgmt-vm off-box). **`vzdump-qemu-200` (HA) is retained** as the whole-VM
+  fallback until the partial backup is verified *restorable* — retire it at the first restore drill
+  (landing ≠ restorable). Still verify in HAOS that the partial scope includes Zigbee2MQTT and
+  excludes media.
 
 ### Recovery model — what recovers what (avoid doubling up)
 
