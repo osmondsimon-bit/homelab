@@ -99,7 +99,7 @@ Living backlog to pick up next session.
 - **Done 2026-06-17:** **Glance** front-door dashboard (CT 115, ADR-014) — native Go binary, chosen over Homepage to keep oneill Docker-free (Docker deferred to Phase 5/Gluetun); wall tablet reassigned to HA (Phase 6). Now a **single-page operator dashboard rendered from an Ansible Jinja template** (`ansible/templates/glance/glance.yml.j2`): host/VM-LXC metrics live from Prometheus, service status, alert summary, versions, latest releases, admin links — links out to Grafana for deep metrics. Reproducible (staged + `config:print`-validated before promote); real IPs in gitignored `group_vars`.
 - **Done 2026-06-16:** Monitoring **Alertmanager + alert rules** — Prometheus rules → Alertmanager → `am-ntfy.py` stdlib bridge → ntfy (ntfy has no native AM receiver). Starter rules: TargetDown / NodeFilesystemSpaceLow / NodeMemoryHigh / PVEStorageFull. Verified end-to-end. Monitoring Step 2 now complete.
 - **HA backup (2026-06-17):** ✅ automatic partial backup **confirmed landing** on the oneill share (CT 113) — recurring, ~131 MB. mgmt-vm interim `vzdump-qemu-100` images **deleted** (PBS covers them). **HA `vzdump-qemu-200` held** until its partial backup is verified restorable (do it at the first restore drill). Still to do: eyeball in HAOS that the partial scope includes the Zigbee2MQTT add-on and excludes media.
-- **Operator quick wins:** import Grafana dashboards (1860 node, unpoller UniFi, an HA one) at `http://YOUR_MONITORING_IP:3000`; reserve the monitoring + Tailscale CT IPs in UniFi.
+- **Operator quick wins:** reserve the monitoring + Tailscale CT IPs in UniFi. (Grafana dashboard build-out is its own backlog section below.)
 - **Parked:** UniFi read-only MCP eval (verify MCP works in this env first); off-site backup copy (ADR-012); CT 111 reprovision drill.
 - Monitoring is live (Prometheus/Grafana + node/pve/unifi/HA + ntfy dead-man's-switch). `/phase-gate` skill exists for closing phases. A read-only Technitium token is at `~/.technitium-ro-token` for diagnostics.
 
@@ -122,13 +122,19 @@ Living backlog to pick up next session.
 - Note: PBS daily backup confirmed **healthy** — apophis is on **AEST (UTC+10)**, so the `02:30` schedule = `16:30 UTC`; the snapshot `…T16:30:03Z` is today's scheduled run (one restore point so far = the job has run once on its daily cadence).
 - [ ] **Off-site copy (this is how we "back up oneill") — deferred (ADR-012).** oneill's services rebuild from code, but the backup *data* (PBS datastore + HA share) is a single copy until an encrypted off-site sync (cloud) exists. Don't copy it to apophis (circular/same-site). Recovery model in `docs/operations/runbooks.md`.
 
+### Observability — Grafana build-out (backlog)
+Prometheus is scraping (node/pve/UniFi/HA) and alerting works, but **Grafana itself is essentially empty** — the data's there, the dashboards aren't. Glance is the at-a-glance summary; Grafana is meant to be the deep surface (time-series history, network throughput, alert debugging, capacity planning). Backlog:
+- [ ] **Build core dashboards as code:** Node Exporter Full (1860), UniFi (unpoller), Proxmox (pve-exporter), a Home Assistant panel. Provision via **Grafana provisioning files in Ansible** (ADR-013) so a rebuild restores them. `allowUiUpdates: true` is set — any live edits must be **exported back to the repo** or they're lost on the next playbook run.
+- [ ] **Prometheus recording rules** for the repeated 24h-peak expressions (host/guest CPU·RAM) that the Glance dashboard computes inline — cheaper and reusable by both Grafana and Glance (per the Glance review note).
+- [ ] Optionally a true installed-vs-latest **version-drift** signal (recording rule or small summary endpoint) — today Glance's "Installed Versions / Latest Releases" is visual comparison only.
+
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
 - [ ] Confirm/reserve these in UniFi (fixed-IP entries or outside the DHCP pool): `YOUR_TAILSCALE_LAN_IP`, the monitoring CT, and the Glance CT (ADR-013/014) — reserve *before* provisioning to avoid DHCP collisions.
 - [ ] Document the cross-subnet Zigbee path: how HA on `the LAN subnet` reaches the SLZB-06 at `YOUR_ZIGBEE_COORD_IP` today (becomes a firewall/route rule once VLANs land).
 
 ### Decisions to make
-- [ ] **Patching/update approach** — settle the shape (unattended-upgrades on guests + rolling monthly Proxmox window with HA failover) and write the ADR. Fold in a **host-prep step/playbook** (fresh PVE nodes ship enterprise repos that 401 without a sub → switch to `pve-no-subscription`; done manually on oneill 2026-06-16) so new nodes are reproducible.
+- [ ] **Patching/update approach — NO schedule yet; patching is manual/ad-hoc today (a gap, esp. guest security updates).** Settle the shape (unattended-upgrades on guests + rolling monthly Proxmox window with HA failover) and write the ADR. Fold in a **host-prep step/playbook** (fresh PVE nodes ship enterprise repos that 401 without a sub → switch to `pve-no-subscription`; done manually on oneill 2026-06-16) so new nodes are reproducible. **Visibility half exists:** Glance now surfaces per-host *pending updates* + *reboot required* (`apt_upgrades_pending`, `node_reboot_required`); the cadence + automation is what's undecided.
 - [x] **Version the agents** — `.claude/agents/*.md` and `.claude/skills/phase-gate/SKILL.md` are now published with narrow `.gitignore` exceptions. Transcripts, memory, settings, caches, and credentials stay private.
 
 _Resolved this session:_ RAM trim (moot — services now spread across 3 nodes); Proxmox API Ansible modules (superseded by Terraform, ADR-008); drop the `100.x` IP (done — full decouple, ADR-006).
