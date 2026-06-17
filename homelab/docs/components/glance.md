@@ -28,6 +28,10 @@ idempotent), renders `/etc/glance/glance.yml` from the `glance_services` list in
 validates the config (`glance ... config:print`), and starts it. The tiles' real URLs live only
 in gitignored `group_vars`; committed files use `YOUR_*` placeholders (ADR-006).
 
+Dashboard content draft: `docs/components/glance-dashboard-draft.yml`. Treat it as the desired
+Glance page shape (groups, widgets, and links), separate from the current Ansible rendering
+mechanism. When wiring it into IaC, keep real URLs in gitignored variables.
+
 > **Invariant:** add/change a tile in `glance_services` + re-run the playbook, **not** by hand —
 > the config is overwritten on the next run and won't survive a reprovision.
 >

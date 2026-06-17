@@ -1,0 +1,158 @@
+# Draft Glance dashboard content for the homelab admin front-door.
+# This is intentionally dashboard YAML, not provisioning logic. Keep real IPs in
+# gitignored group_vars or local runtime config; committed examples use YOUR_*.
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+branding:
+  app-name: "Homelab"
+  logo-text: "HL"
+  hide-footer: true
+
+theme:
+  background-color: 220 12 10
+  primary-color: 173 58 52
+  positive-color: 142 48 48
+  negative-color: 4 70 58
+  contrast-multiplier: 1.08
+
+pages:
+  - name: Homelab
+    columns:
+      - size: small
+        widgets:
+          - type: bookmarks
+            title: Runbooks
+            groups:
+              - title: Operate
+                color: 173 58 52
+                links:
+                  - title: Plan
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/homelab/PLAN.md
+                    description: Current phase, services, and backlog
+                    icon: di:github-light
+                  - title: Runbooks
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/homelab/docs/operations/runbooks.md
+                    description: Health, restart, backup, recovery
+                    icon: mdi:book-open-page-variant
+                  - title: Decisions
+                    url: https://github.com/osmondsimon-bit/homelab/tree/master/homelab/decisions
+                    description: ADRs and rationale
+                    icon: mdi:file-document-multiple
+              - title: Next Actions
+                color: 45 80 55
+                links:
+                  - title: Phase Gate
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/.claude/skills/phase-gate/SKILL.md
+                    description: Closeout checklist before marking a phase done
+                    icon: mdi:check-decagram
+                  - title: Tech Radar
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/homelab/docs/tech-radar.md
+                    description: Adopted, deferred, and skipped capabilities
+                    icon: mdi:radar
+
+          - type: monitor
+            title: Backup Surface
+            cache: 1m
+            sites:
+              - title: Proxmox Backup Server
+                url: https://YOUR_PBS_IP:8007
+                icon: di:proxmox-backup-server
+                allow-insecure: true
+
+          - type: bookmarks
+            title: Recovery Checks
+            groups:
+              - title: Backups
+                color: 142 48 48
+                links:
+                  - title: HA Backup Share
+                    url: https://github.com/osmondsimon-bit/homelab/blob/master/homelab/docs/operations/runbooks.md#backups-pbs--home-assistant--adr-012
+                    description: Confirm HA partial backups land on the oneill share
+                    icon: mdi:nas
+
+      - size: full
+        widgets:
+          - type: monitor
+            title: Core Services
+            cache: 1m
+            sites:
+              - title: Home Assistant
+                url: http://YOUR_HA_IP:8123
+                icon: di:home-assistant
+              - title: Technitium DNS
+                url: http://YOUR_TECHNITIUM_IP:5380
+                icon: di:technitium
+
+          - type: monitor
+            title: Observability
+            cache: 1m
+            sites:
+              - title: Grafana
+                url: http://YOUR_MONITORING_IP:3000
+                icon: di:grafana
+              - title: Prometheus
+                url: http://YOUR_MONITORING_IP:9090
+                icon: di:prometheus
+              - title: Alertmanager
+                url: http://YOUR_MONITORING_IP:9093
+                icon: di:alertmanager
+
+          - type: bookmarks
+            title: Dashboards
+            groups:
+              - title: Grafana
+                color: 28 86 55
+                links:
+                  - title: Node Exporter
+                    url: http://YOUR_MONITORING_IP:3000
+                    description: Import/dashboard 1860 or local equivalent
+                    icon: di:grafana
+                  - title: UniFi
+                    url: http://YOUR_MONITORING_IP:3000
+                    description: Network metrics dashboard
+                    icon: di:unifi
+                  - title: Home Assistant
+                    url: http://YOUR_MONITORING_IP:3000
+                    description: HA metrics dashboard
+                    icon: di:home-assistant
+
+      - size: small
+        widgets:
+          - type: monitor
+            title: Infrastructure
+            cache: 1m
+            sites:
+              - title: Proxmox apophis
+                url: https://YOUR_PROXMOX_IP:8006
+                icon: di:proxmox
+                allow-insecure: true
+              - title: Proxmox oneill
+                url: https://YOUR_NUC_IP:8006
+                icon: di:proxmox
+                allow-insecure: true
+              - title: UniFi
+                url: https://YOUR_GATEWAY_IP
+                icon: di:unifi
+                allow-insecure: true
+
+          - type: bookmarks
+            title: External Admin
+            groups:
+              - title: Admin Consoles
+                color: 205 65 58
+                links:
+                  - title: Tailscale Admin
+                    url: https://login.tailscale.com/admin/machines
+                    description: Machines, routes, key expiry
+                    icon: di:tailscale
+                  - title: Cloudflare Zero Trust
+                    url: https://one.dash.cloudflare.com/
+                    description: Home Assistant tunnel
+                    icon: di:cloudflare
+                  - title: GitHub Repo
+                    url: https://github.com/osmondsimon-bit/homelab
+                    description: Public IaC and docs
+                    icon: di:github-light
