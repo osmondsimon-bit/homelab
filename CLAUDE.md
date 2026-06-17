@@ -89,11 +89,23 @@ Two goals: **stretch session runway** (minimize token/compute cost without addin
 - **Offload to a subagent when the work is large but the answer needed back is small** — broad searches, multi-file reads, noisy tool runs, research. Ask it for **conclusions, uncertainty, and `file:line` refs — not transcripts or dumps**. **Verify a subagent's claims** (read the cited lines) before relying on them.
 - **Tight guidance + constraints; pass minimal context.** Don't feed history/prior context into a subagent unless essential — it biases results and burns tokens.
 - **Parallelize disjoint work** (multiple subagents at once when their targets don't overlap). **Sequence** anything that might touch the same files — "parallel-safe" means disjoint write targets.
-- **Pick the cheapest model/effort that does the job reliably:** comprehension *difficulty → model tier*; labor *volume → effort*.
-  - **Haiku 4.5** — Low tier/cost: simple, mechanical, well-specified tasks.
-  - **Sonnet 4.6** — Medium: most coding, research, doc work (efforts low→max).
-  - **Opus 4.8** — High: hard reasoning, architecture/security reviews (efforts low→max). The reviewer agents above are this class.
-  - Set the Agent tool's `model` to the right tier. Where a model/skill exposes **effort**, scale it to labor volume (more steps/output → higher effort), not to difficulty.
+- **Pick the cheapest model/effort that does the job reliably:** comprehension *difficulty → model tier*; labor *volume → effort*. When Claude Code is doing the work, prefer Claude models. When Codex/OpenAI is doing the work, prefer the Codex/OpenAI model with the matching tier.
+
+| Model Family | Model | Efforts | Wrapping Skill (if present) | Model Ref | Capability Tier | Cost |
+|--------------|-------|---------|-----------------------------|-----------|-----------------|------|
+| Claude | Haiku 4.5 | n/a | n/a | `claude-haiku-4-5-20251001` | Low | Low |
+| Claude | Sonnet 4.6 | low, medium, high, max | n/a | `claude-sonnet-4-6` | Medium | Medium |
+| Claude | Opus 4.8 | low, medium, high, xhigh, max | n/a | `claude-opus-4-8` | High | High |
+| Claude | Fable 5 | low, medium, high, xhigh, max | n/a | `claude-fable-5` | Epic | Epic |
+| Codex | GPT 5.3 | low, medium, high, xhigh | `codex-gpt53-plan`, `codex-gpt53-do` | `gpt-5.3-codex-spark` | Low | ~Zero |
+| Codex | GPT 5.5 | low, medium, high, xhigh, max | `codex-gpt55-plan`, `codex-gpt55-do` | `gpt-5.5` | High | High |
+| Qwen | Qwen 3.6 27B Coder | n/a | `qwen-qwen36-plan`, `qwen-qwen36-do` | `llama.cpp/Qwen-Qwen3.6-27B-IQ4_XS.gguf` | Medium | Zero |
+
+  - Low tier/cost: simple, mechanical, well-specified tasks.
+  - Medium tier: most coding, research, and doc work.
+  - High tier: hard reasoning, architecture/security reviews, and risky cross-cutting changes. The reviewer agents above are this class.
+  - Epic tier: reserve for work that is both high-risk and unusually ambiguous or complex.
+  - Set the Agent tool's `model` or wrapping skill to the right tier. Where a model/skill exposes **effort**, scale it to labor volume (more steps/output → higher effort), not to difficulty.
 
 ## Roadmap
 
