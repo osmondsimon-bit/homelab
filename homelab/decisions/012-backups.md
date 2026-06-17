@@ -59,7 +59,7 @@ increments tiny); under 100 GB well past Phase 3. Trivial against oneill's ~455 
   `rpool/data/ha-backup-share`, **quota 20 G**, lz4. **NFS, not SMB** (single client, lower
   surface); export **read/write to the HA VM IP only**, not the subnet.
 - Reserve both new IPs in UniFi. (Unrelated tidy-up: PLAN.md still has an open item to
-  *confirm* `.4`/Tailscale has a fixed reservation — that's a verify, not a change; `.4` is
+  *confirm* the Tailscale CT has a fixed reservation — that's a verify, not a change; it's
   active and stays.)
 - **Build in two steps:** PBS first — provision LXC + dataset + quota → add as a storage
   target on apophis → smoke-test by backing up the **Tailscale CT (110)** first, then

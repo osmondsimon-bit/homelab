@@ -94,7 +94,7 @@ console on port `5380`, DNS on `53`.
 
 > **DNS-by-VLAN-role (important):** Technitium serves the **home VLAN only** (same subnet as
 > the resolver). **IoT + guest VLANs use the gateway (Auto) for DNS** — they're isolated and
-> can't reach a main-LAN resolver at `.6`, and cloud appliances (Sensibo, Roborock…) break on
+> can't reach a main-LAN resolver (it lives on the home VLAN), and cloud appliances (Sensibo, Roborock…) break on
 > blocklist NXDOMAINs. Pointing an isolated/appliance VLAN at Technitium silently breaks its
 > devices (queries never arrive — confirmed by zero such clients in Technitium's logs).
 > Camera/management have no internet, so no resolver.
@@ -155,7 +155,7 @@ The switch is **one UniFi DHCP field**, not a service migration. Reversible.
    client (`ipconfig /renew`, or toggle Wi-Fi) and confirm `nslookup` shows the new server.
 4. **Watch** the Technitium dashboard — query volume should climb as clients renew.
 5. **Per-VLAN policy (DNS-by-VLAN-role):** only point a VLAN at Technitium if it can *reach*
-   `.6` and benefits from blocking — i.e. the **home VLAN**. **Leave isolated/appliance VLANs
+   the resolver and benefits from blocking — i.e. the **home VLAN**. **Leave isolated/appliance VLANs
    (IoT, guest) on the gateway (Auto)** — they can't reach a main-LAN resolver and appliances
    break on blocklists. Don't blanket-roll-out to every VLAN.
 

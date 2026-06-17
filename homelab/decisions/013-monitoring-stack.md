@@ -19,7 +19,7 @@ backup prerequisite (ADR-012, PBS) now exists.
 - **Stack:** Prometheus (scrape + TSDB), Grafana (dashboards), Alertmanager (routing). Pull-based,
   the homelab standard, matches the PLAN. **Native packages** from official repos (consistent with
   our LXC + Ansible pattern — no Docker layer).
-- **Placement:** unprivileged LXC, CTID **114**, IP **`YOUR_MONITORING_IP`** (`.9`; reserve in UniFi), on oneill.
+- **Placement:** unprivileged LXC, CTID **114**, IP **`YOUR_MONITORING_IP`** (reserve in UniFi), on oneill.
   ~**3 GB RAM / 2 cores**, rootfs ~8 GB, plus a **quota'd ZFS dataset for the TSDB** bind-mounted
   exactly like PBS (proven — plain `mp0`, no uid-mapping override needed). Core counts across
   oneill's CTs are intentionally oversubscribed (soft caps; these services are bursty, not sustained).

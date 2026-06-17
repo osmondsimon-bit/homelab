@@ -16,7 +16,7 @@
 ## Key decisions / notes
 
 - **oneill** built on **ZFS-on-root** (ADR-009), standalone for now — joins the cluster in Phase 4.
-- Old apophis Technitium CT 111 (was `.5`) destroyed; `.5` freed.
+- Old apophis Technitium CT 111 destroyed; its address freed.
 - Ansible var strategy: service identity/config in `group_vars/all.yml`; per-node hardware quirks in `host_vars/<node>.yml` (oneill = `local-zfs`). Run service playbooks with `--limit <node>`.
 
 ## Carried into Phase 3 (from the gate reviews)

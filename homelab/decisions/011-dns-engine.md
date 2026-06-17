@@ -64,7 +64,7 @@ CT 110) to free apophis for Plex.
 - **DNS-by-VLAN-role (update 2026-06-16, learned the hard way).** Technitium serves the
   **home VLAN only** (the resolver's own subnet). **IoT + guest VLANs use the gateway (Auto)
   for DNS**, not Technitium, because: (1) they're isolated and can't reach a main-LAN resolver
-  at `.6` — queries never arrive (confirmed by zero such clients in Technitium's logs), and
+  (it lives on the home VLAN) — queries never arrive (confirmed by zero such clients in Technitium's logs), and
   (2) cloud appliances (Sensibo, Roborock…) hard-fail on blocklist NXDOMAINs. The original
   "resolver for all VLANs" framing was wrong for isolated/appliance segments; pointing them at
   Technitium silently broke their devices. Camera/management have no internet (no resolver).
