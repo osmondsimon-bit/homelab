@@ -21,7 +21,8 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
 | Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
 | Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
-| Service dashboard | **Glance** (was Homepage) | Phase 3 — front-door on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6) |
+| Service dashboard | **Glance** (was Homepage) | Phase 3 ✓ — front-door live on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6) |
+| VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). **HA native partial backup still to be confirmed** landing on the share (CT 113). Off-site copy deferred. |
 | Media server | Plex | Phase 5 — apophis, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 5 — apophis |
 | Password manager | Vaultwarden (self-hosted) | Phase 6 (ADR-010) — sequenced after HA + backups; Bitwarden cloud bridges now |
@@ -34,7 +35,6 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| VM-level backups | Proxmox Backup Server (on oneill) + HA native partial | Phase 3 entry task | **Approach decided (ADR-012):** oneill as backup hub — PBS for VM/CT images (cross-host) + HA partial backups to an oneill SMB/NFS share. Local-only for now; cloud off-site deferred. Build gated by infra-designer. |
 | Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | Design the ADR (guests auto-patch; nodes patched rolling with HA failover) |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |

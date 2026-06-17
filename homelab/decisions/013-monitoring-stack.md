@@ -53,8 +53,8 @@ backup prerequisite (ADR-012, PBS) now exists.
 
 - First stateful service on oneill: the TSDB sits on its single SSD — metrics history is lost if
   oneill dies, but Grafana dashboards + Prometheus/alert config rebuild from code (recovery model).
-- RAM: ~3 GB on oneill (16 GB, ~11 GB free) — fits alongside Technitium/PBS/share; watch when
-  Homepage lands.
+- RAM: ~3 GB on oneill (16 GB, ~11 GB free) — fits alongside Technitium/PBS/share and Glance
+  (~512 MB, CT 115, now live).
 - New read-only creds to create: a UniFi local read-only user, a PVE API token (`PVEAuditor`), an
   HA long-lived token.
 - New LXC → **infra-designer gate** (this review) + **/security-review** before marking done.

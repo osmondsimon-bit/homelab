@@ -82,7 +82,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 1. VLAN-aware Proxmox + firewall rules — ✓ completed
 2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, serving the home VLAN; IoT/guest use the gateway) — **✓ completed**
-3. **Foundation + observability:** **VM-level backups first** (entry task) → **Monitoring** ✓ (Prometheus + Grafana + Alertmanager) → **Glance** ✓ (front-door dashboard, ADR-014; was Homepage). Built out — run `/phase-gate` to close. (Terraform import deferred to cluster scale — ADR-008; Ansible-pct creates the boxes for now.)
+3. **Foundation + observability:** PBS/mgmt-vm backups ✓ → **Monitoring** ✓ (Prometheus + Grafana + Alertmanager) → **Glance** ✓ (front-door dashboard, ADR-014; was Homepage). **✓ closed via `/phase-gate` 2026-06-17** — see `docs/phases/3-foundation-observability.md`. Carry-forwards (must clear before new stateful services in Phase 4): HA native backup, PBS encryption check, first restore drill. (Terraform import deferred to cluster scale — ADR-008.)
 4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
 5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
 6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
@@ -94,7 +94,7 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### ▶ Pick up next session (immediate)
-- **Build next:** **Phase 3 is built out — run `/phase-gate`** to close it (doc-auditor + continuity-reviewer + `/security-review`, then write the phase completion record).
+- **Phase 3 ✓ CLOSED** (`/phase-gate` 2026-06-17 — doc-auditor + continuity-reviewer + security-review, record in `docs/phases/3-foundation-observability.md`). **Next: Phase 4** (cluster + HA) — **but FIRST clear the Phase 3 backup carry-forwards below** (HA native backup, PBS encryption, restore drill) before any new stateful service lands.
 - **Reserve in UniFi:** the Glance CT's IP (fixed-IP / outside the DHCP pool). **Lesson:** the first IP picked as "free" from group_vars collided with a desktop's DHCP-preferred lease — UniFi even cloned the desktop's name onto the CT. Reserve static-service IPs *before* provisioning, and you may want to "forget" the stale client in UniFi.
 - **Done 2026-06-17:** **Glance** front-door dashboard (CT 115, ADR-014) — native Go binary, 9 service tiles all green, links to Grafana. Chose Glance over Homepage to keep oneill Docker-free (Docker deferred to Phase 5/Gluetun); wall tablet reassigned to HA (Phase 6).
 - **Done 2026-06-16:** Monitoring **Alertmanager + alert rules** — Prometheus rules → Alertmanager → `am-ntfy.py` stdlib bridge → ntfy (ntfy has no native AM receiver). Starter rules: TargetDown / NodeFilesystemSpaceLow / NodeMemoryHigh / PVEStorageFull. Verified end-to-end. Monitoring Step 2 now complete.
@@ -116,6 +116,8 @@ Living backlog to pick up next session.
 - [ ] **[High] HA native backup — NOT set up yet.** Run `provision-ha-backup-share.yml --limit oneill` (Samba CT 113), then in HAOS add the CIFS share + schedule a **PARTIAL** backup (HA + Zigbee2MQTT + add-ons; **exclude media**; tune recorder `purge_keep_days`). This is HA's primary protection (whole-VM HA is intentionally excluded from PBS).
 - [ ] **Then remove the interim safety net** — once an HA native partial backup is verified landing on the share, delete the stale local `vzdump-qemu-200` (HA) image on apophis `local` (and the redundant local `vzdump-qemu-100` images, now covered off-box by PBS). Until then, **keep them** — they're HA's only backup in the gap.
 - [ ] **CT 111 reprovision drill** — destroy + re-run `provision-technitium.yml`, record actual RTO. Converts the "Ansible-rebuild is sufficient" claim into a tested fact before the lab grows.
+- [ ] **[High] PBS encryption — confirm + key durability** (phase-gate carry-forward, continuity-reviewer). ADR-012 says enable client-side encryption on the apophis→PBS job, but `provision-pbs.yml` doesn't configure it. Verify whether it's on; if yes, document where the key lives and add its path to `backup-local-config.sh`; if no, enable it then capture the key **off-oneill** (else an encrypted backup whose key dies with the disk is worthless).
+- [ ] **[High] First restore drill — prove PBS mgmt-vm restore** (phase-gate carry-forward, continuity-reviewer). `qmrestore` the latest VM 100 image to a throwaway VMID (e.g. 199, `--unique 1`), boot, confirm the git repo + `group_vars` are present, then destroy it. Record date + pass/fail. Converts "the backup exists" into "recovery works" — no restore has been tested for any tier yet.
 - [ ] **Off-site copy (this is how we "back up oneill") — deferred (ADR-012).** oneill's services rebuild from code, but the backup *data* (PBS datastore + HA share) is a single copy until an encrypted off-site sync (cloud) exists. Don't copy it to apophis (circular/same-site). Recovery model in `docs/operations/runbooks.md`.
 
 ### Small / quick

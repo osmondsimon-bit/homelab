@@ -54,10 +54,12 @@ increments tiny); under 100 GB well past Phase 3. Trivial against oneill's ~455 
 - **PBS** runs as an **unprivileged LXC** (CTID **112**, `YOUR_PBS_IP`) with its datastore as
   a **bind-mounted ZFS dataset** — not a VM, not privileged, not a loopback image. 2 GB RAM,
   2 cores, 8 GB rootfs. Dataset `rpool/data/pbs-datastore`, **quota 150 G**, `compression=lz4`.
-- **NFS share** for HA backups runs as a **separate** minimal unprivileged LXC (CTID **113**,
-  `YOUR_NFS_IP`, `nfs-kernel-server` only) — 512 MB, 1 core, 4 GB rootfs. Dataset
-  `rpool/data/ha-backup-share`, **quota 20 G**, lz4. **NFS, not SMB** (single client, lower
-  surface); export **read/write to the HA VM IP only**, not the subnet.
+- **Backup share** for HA backups runs as a **separate** minimal unprivileged LXC (CTID **113**,
+  `YOUR_HA_BACKUP_SHARE_IP`) — 512 MB, 1 core, 4 GB rootfs. Dataset `rpool/data/ha-backup-share`,
+  **quota 20 G**, lz4. **Build note (implementation chose Samba/CIFS over the NFS first proposed
+  here):** HAOS mounts **CIFS** natively as network storage but has no built-in NFS client, so the
+  share is **Samba**, scoped to a dedicated `habackup` user, LAN-only / not internet-exposed
+  (`provision-ha-backup-share.yml`). Placeholder is `YOUR_HA_BACKUP_SHARE_IP` (was `YOUR_NFS_IP`).
 - Reserve both new IPs in UniFi. (Unrelated tidy-up: PLAN.md still has an open item to
   *confirm* the Tailscale CT has a fixed reservation — that's a verify, not a change; it's
   active and stays.)

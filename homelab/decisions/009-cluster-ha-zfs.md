@@ -27,7 +27,7 @@ Build a **3-node Proxmox cluster**: apophis + Intel NUC + 2nd ThinkCentre M920Q.
 - **Quorum:** three nodes give clean quorum (tolerates one node down). No QDevice needed.
 - **Service placement:**
   - apophis — compute-heavy: Plex (QuickSync iGPU), media stack.
-  - NUC — simple/always-on services offloaded from apophis: Tailscale, Technitium, Homepage,
+  - NUC — simple/always-on services offloaded from apophis: Tailscale, Technitium, Glance,
     Monitoring.
   - ThinkCentre — failover target + spare capacity.
 - **HA-flagged VMs:** Home Assistant VM first; others as warranted.
