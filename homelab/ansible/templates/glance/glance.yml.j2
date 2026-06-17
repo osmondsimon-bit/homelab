@@ -1,0 +1,406 @@
+#jinja2: variable_start_string:'<<', variable_end_string:'>>', block_start_string:'<%', block_end_string:'%>', trim_blocks:True, lstrip_blocks:True
+# MANAGED BY ANSIBLE — provision-glance.yml renders this from templates/glance/glance.yml.j2 (ADR-014).
+# Edit the template (and glance_* vars in group_vars), then re-run the playbook — NOT the live file.
+#
+# The header above sets custom Jinja delimiters (angle-double for vars, angle-percent for
+# blocks) so Glance's own Go-template braces pass through untouched; only those angle forms are
+# Ansible (angle-double avoids the regex char-class warning that bracket delimiters trigger).
+# Real LAN IPs come from gitignored group_vars
+# (glance_prometheus_url, glance_hosts, monitoring_ip, ha_ip, technitium_ip, pbs_ip, gateway);
+# committed files stay placeholder-only (ADR-006).
+#
+# Scope (deliberate): an operator *summary*, not a capacity-planning tool — Grafana stays the deep
+# time-series / alert-debugging surface. "Installed Versions" vs "Latest Releases" is a visual
+# comparison only (no automatic drift detection).
+<% set prom = glance_prometheus_url ~ '/api/v1/query' %>
+<% set mon = monitoring_ip | regex_replace('/.*$', '') %>
+<% set ha = ha_ip | regex_replace('/.*$', '') %>
+<% set technitium = technitium_ip | regex_replace('/.*$', '') %>
+<% set pbs = pbs_ip | regex_replace('/.*$', '') %>
+<% set unifi = gateway | regex_replace('/.*$', '') %>
+server:
+  host: 0.0.0.0
+  port: << glance_port >>
+
+branding:
+  app-name: "Homelab"
+  logo-text: "HL"
+  hide-footer: true
+
+theme:
+  background-color: 220 12 10
+  primary-color: 173 58 52
+  positive-color: 142 48 48
+  negative-color: 4 70 58
+  contrast-multiplier: 1.08
+
+pages:
+  - name: Homelab
+    width: wide
+    columns:
+      - size: small
+        widgets:
+          - type: custom-api
+            title: Proxmox Hosts
+            cache: 30s
+            url: << prom >>
+            parameters:
+              query: 100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+            subrequests:
+              cpu_peak:
+                url: << prom >>
+                parameters:
+                  query: max_over_time((100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))))[24h:5m])
+              ram_now:
+                url: << prom >>
+                parameters:
+                  query: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+              ram_peak:
+                url: << prom >>
+                parameters:
+                  query: max_over_time((100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))[24h:5m])
+              storage:
+                url: << prom >>
+                parameters:
+                  query: 100 * sum by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*"}, "node", "$1", "id", "storage/([^/]+)/.*")) / sum by(node) (label_replace(pve_disk_size_bytes{id=~"storage/.*"}, "node", "$1", "id", "storage/([^/]+)/.*"))
+              updates:
+                url: << prom >>
+                parameters:
+                  query: sum by (instance) (apt_upgrades_pending)
+              reboot:
+                url: << prom >>
+                parameters:
+                  query: node_reboot_required
+            template: |
+              {{ $cpuPeak := .Subrequest "cpu_peak" }}
+              {{ $ramNow := .Subrequest "ram_now" }}
+              {{ $ramPeak := .Subrequest "ram_peak" }}
+              {{ $storage := .Subrequest "storage" }}
+              {{ $updates := .Subrequest "updates" }}
+              {{ $reboot := .Subrequest "reboot" }}
+              <div class="list list-gap-15">
+              {{ range .JSON.Array "data.result" }}
+                {{ $instance := .String "metric.instance" }}
+                {{ $host := "unknown" }}
+                <% for h in glance_hosts %>
+                {{ if eq $instance "<< h.node_exporter_instance >>" }}{{ $host = "<< h.name >>" }}{{ end }}
+                <% endfor %>
+                <div>
+                  <div class="color-highlight size-h4">{{ $host }}</div>
+                  <div class="list list-gap-5 margin-top-5">
+                    <div class="flex justify-between gap-10">
+                      <div>CPU now / 24h peak</div>
+                      <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $cpuPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                    </div>
+                    <div class="flex justify-between gap-10">
+                      <div>RAM now / 24h peak</div>
+                      <div>{{ range $ramNow.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $ramPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                    </div>
+                    <div class="flex justify-between gap-10">
+                      <div>Storage total</div>
+                      <div>{{ range $storage.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $host }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                    </div>
+                    <div class="flex justify-between gap-10">
+                      <div>Updates</div>
+                      <div{{ range $updates.JSON.Array "data.result" }}{{ if and (eq (.String "metric.instance") $instance) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                    </div>
+                    <div class="flex justify-between gap-10">
+                      <div>Reboot required</div>
+                      <div>{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ if gt (.Float "value.1") 0.0 }}yes{{ else }}no{{ end }}{{ end }}{{ end }}</div>
+                    </div>
+                  </div>
+                </div>
+              {{ end }}
+              </div>
+
+          - type: custom-api
+            title: Storage Pools
+            cache: 30s
+            url: << prom >>
+            parameters:
+              query: sort_desc((pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) * 100)
+            template: |
+              <div class="list list-gap-10">
+              {{ range .JSON.Array "data.result" }}
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight text-truncate">{{ .String "metric.id" }}</div>
+                  <div>{{ printf "%.1f%%" (.Float "value.1") }}</div>
+                </div>
+              {{ end }}
+              </div>
+
+          - type: custom-api
+            title: Package Updates
+            cache: 5m
+            url: << prom >>
+            parameters:
+              query: sum by (instance) (apt_upgrades_pending)
+            subrequests:
+              origins:
+                url: << prom >>
+                parameters:
+                  query: sum by (instance, origin) (apt_upgrades_pending)
+            template: |
+              {{ $origins := .Subrequest "origins" }}
+              <div class="list list-gap-15">
+              {{ range .JSON.Array "data.result" }}
+                {{ $instance := .String "metric.instance" }}
+                {{ $host := $instance }}
+                <% for h in glance_hosts %>
+                {{ if eq $instance "<< h.node_exporter_instance >>" }}{{ $host = "<< h.name >>" }}{{ end }}
+                <% endfor %>
+                <div>
+                  <div class="flex justify-between gap-10">
+                    <div class="color-highlight">{{ $host }}</div>
+                    <div{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}>{{ printf "%.0f pending" (.Float "value.1") }}</div>
+                  </div>
+                  {{ range $origins.JSON.Array "data.result" }}
+                    {{ if eq (.String "metric.instance") $instance }}
+                      <div class="size-h6 color-subdue flex justify-between gap-10">
+                        <span class="text-truncate">{{ .String "metric.origin" }}</span>
+                        <span>{{ printf "%.0f" (.Float "value.1") }}</span>
+                      </div>
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ end }}
+              </div>
+
+      - size: full
+        widgets:
+          - type: monitor
+            title: Service Status
+            cache: 1m
+            sites:
+              - title: Home Assistant
+                url: http://<< ha >>:8123
+                icon: di:home-assistant
+              - title: Technitium DNS
+                url: http://<< technitium >>:5380
+                icon: di:technitium
+                alt-status-codes: [401, 403]
+              - title: Grafana
+                url: http://<< mon >>:3000
+                check-url: http://<< mon >>:3000/api/health
+                icon: di:grafana
+              - title: Prometheus
+                url: http://<< mon >>:9090
+                check-url: http://<< mon >>:9090/-/healthy
+                icon: di:prometheus
+              - title: Alertmanager
+                url: http://<< mon >>:9093
+                check-url: http://<< mon >>:9093/-/healthy
+                icon: di:alertmanager
+              - title: Proxmox Backup Server
+                url: https://<< pbs >>:8007
+                check-url: https://<< pbs >>:8007
+                icon: di:proxmox-backup-server
+                allow-insecure: true
+                alt-status-codes: [401, 403]
+
+          - type: monitor
+            title: Infrastructure
+            cache: 1m
+            sites:
+              <% for h in glance_hosts %>
+              - title: Proxmox << h.name >>
+                url: https://<< h.pve_instance >>:8006
+                check-url: https://<< h.pve_instance >>:8006
+                icon: di:proxmox
+                allow-insecure: true
+                alt-status-codes: [401, 403]
+              <% endfor %>
+              - title: UniFi
+                url: https://<< unifi >>
+                check-url: https://<< unifi >>
+                icon: di:unifi
+                allow-insecure: true
+                alt-status-codes: [401, 403]
+
+          - type: split-column
+            max-columns: 3
+            widgets:
+              - type: custom-api
+                title: VM/LXC CPU
+                cache: 30s
+                url: << prom >>
+                parameters:
+                  query: sort_desc((pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                subrequests:
+                  peak:
+                    url: << prom >>
+                    parameters:
+                      query: max_over_time((pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100)[24h:5m]) * on(id,instance,job) group_left(name,node,type) pve_guest_info
+                template: |
+                  {{ $peak := .Subrequest "peak" }}
+                  <div class="list list-gap-10">
+                  {{ range .JSON.Array "data.result" }}
+                    {{ $id := .String "metric.id" }}
+                    <div>
+                      <div class="flex justify-between gap-10">
+                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
+                        <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $peak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                      </div>
+                      <div class="size-h6 color-subdue">now / 24h peak - {{ .String "metric.node" }} / {{ $id }}</div>
+                    </div>
+                  {{ end }}
+                  </div>
+
+              - type: custom-api
+                title: VM/LXC RAM
+                cache: 30s
+                url: << prom >>
+                parameters:
+                  query: sort_desc(((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                subrequests:
+                  peak:
+                    url: << prom >>
+                    parameters:
+                      query: max_over_time(((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)[24h:5m]) * on(id,instance,job) group_left(name,node,type) pve_guest_info
+                template: |
+                  {{ $peak := .Subrequest "peak" }}
+                  <div class="list list-gap-10">
+                  {{ range .JSON.Array "data.result" }}
+                    {{ $id := .String "metric.id" }}
+                    <div>
+                      <div class="flex justify-between gap-10">
+                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
+                        <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $peak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                      </div>
+                      <div class="size-h6 color-subdue">now / 24h peak - {{ .String "metric.node" }} / {{ $id }}</div>
+                    </div>
+                  {{ end }}
+                  </div>
+
+              - type: custom-api
+                title: VM/LXC Disk
+                cache: 30s
+                url: << prom >>
+                parameters:
+                  query: sort_desc(((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                template: |
+                  <div class="list list-gap-10">
+                  {{ range .JSON.Array "data.result" }}
+                    <div>
+                      <div class="flex justify-between gap-10">
+                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
+                        <div>{{ printf "%.1f%%" (.Float "value.1") }}</div>
+                      </div>
+                      <div class="size-h6 color-subdue">{{ .String "metric.node" }} / {{ .String "metric.id" }}</div>
+                    </div>
+                  {{ end }}
+                  </div>
+
+      - size: small
+        widgets:
+          - type: custom-api
+            title: Alert Summary
+            cache: 1m
+            url: << prom >>
+            parameters:
+              query: sum by (severity) (ALERTS{alertstate="firing"})
+            subrequests:
+              targets:
+                url: << prom >>
+                parameters:
+                  query: sum by(job) (up == 0)
+            template: |
+              {{ $targets := .Subrequest "targets" }}
+              <div class="list list-gap-10">
+                {{ if eq (len (.JSON.Array "data.result")) 0 }}
+                  <div class="color-positive">No firing alerts</div>
+                {{ else }}
+                  {{ range .JSON.Array "data.result" }}
+                    <div class="flex justify-between gap-10">
+                      <div class="color-highlight">{{ .String "metric.severity" }}</div>
+                      <div class="color-negative">{{ printf "%.0f" (.Float "value.1") }}</div>
+                    </div>
+                  {{ end }}
+                {{ end }}
+                {{ if eq (len ($targets.JSON.Array "data.result")) 0 }}
+                  <div class="color-positive">No failed scrape targets</div>
+                {{ else }}
+                  {{ range $targets.JSON.Array "data.result" }}
+                    <div class="flex justify-between gap-10">
+                      <div class="color-highlight">{{ .String "metric.job" }}</div>
+                      <div class="color-negative">{{ printf "%.0f down" (.Float "value.1") }}</div>
+                    </div>
+                  {{ end }}
+                {{ end }}
+              </div>
+
+          - type: custom-api
+            title: Installed Versions
+            cache: 5m
+            url: << prom >>
+            parameters:
+              query: pve_version_info
+            subrequests:
+              prometheus:
+                url: << prom >>
+                parameters:
+                  query: prometheus_build_info
+              os:
+                url: << prom >>
+                parameters:
+                  query: node_os_info
+            template: |
+              <div class="list list-gap-10">
+              {{ range .JSON.Array "data.result" }}
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight">{{ .String "metric.job" }}</div>
+                  <div>{{ .String "metric.version" }}</div>
+                </div>
+              {{ end }}
+              {{ $prom := .Subrequest "prometheus" }}
+              {{ range $prom.JSON.Array "data.result" }}
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight">prometheus</div>
+                  <div>{{ .String "metric.version" }}</div>
+                </div>
+              {{ end }}
+              <div class="flex justify-between gap-10">
+                <div class="color-highlight">glance</div>
+                <div><< glance_version >> pinned</div>
+              </div>
+              <hr class="margin-block-10">
+              {{ $os := .Subrequest "os" }}
+              {{ range $os.JSON.Array "data.result" }}
+                <div>
+                  <div class="color-highlight">{{ .String "metric.instance" }}</div>
+                  <div class="size-h6 color-subdue">{{ .String "metric.pretty_name" }}</div>
+                </div>
+              {{ end }}
+              </div>
+
+          - type: releases
+            title: Latest Releases
+            cache: 12h
+            limit: 8
+            collapse-after: 8
+            show-source-icon: true
+            repositories:
+              - glanceapp/glance
+              - prometheus/prometheus
+              - grafana/grafana
+              - tailscale/tailscale
+              - TechnitiumSoftware/DnsServer
+
+          - type: bookmarks
+            title: Admin Links
+            groups:
+              - title: External
+                color: 205 65 58
+                links:
+                  - title: Tailscale Admin
+                    url: https://login.tailscale.com/admin/machines
+                    description: Machines, routes, key expiry
+                    icon: di:tailscale
+                  - title: Cloudflare Zero Trust
+                    url: https://one.dash.cloudflare.com/
+                    description: Home Assistant tunnel
+                    icon: di:cloudflare
+                  - title: GitHub Repo
+                    url: https://github.com/osmondsimon-bit/homelab
+                    description: Public IaC and docs
+                    icon: di:github-light

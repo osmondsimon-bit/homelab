@@ -222,16 +222,22 @@ backlog item.)
 
 ## Glance dashboard (CT 115 on oneill) — ADR-014
 
-- **What:** the front-door launchpad — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only, **no auth**.
-  Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config `/etc/glance/glance.yml`
-  rendered from `glance_services` in `group_vars`. Stateless — nothing to back up.
-- **Manage:** edit `glance_services` (or `glance_version`) in `group_vars`, then
-  `ansible-playbook playbooks/provision-glance.yml --limit oneill`. Never edit the config by hand —
-  it's overwritten on the next run. The `monitor` widget pings each tile's URL for the status dot.
+- **What:** the front-door operator dashboard — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only,
+  **no auth**. Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config
+  `/etc/glance/glance.yml` **rendered from the committed template `ansible/templates/glance/glance.yml.j2`**.
+  One `Homelab` page: host/VM-LXC metrics (live from Prometheus), service status, alert summary,
+  versions, releases, admin links. Stateless — nothing to back up.
+- **Manage:** edit the **template** (`glance.yml.j2`) and/or `glance_*` vars (`glance_prometheus_url`,
+  `glance_hosts`, `glance_version`, service IP vars) in `group_vars`, then
+  `ansible-playbook playbooks/provision-glance.yml --limit oneill`. Never edit the live config by
+  hand — the playbook stages + `config:print`-validates the render, then promotes it (a bad render
+  can't break the running dashboard) and overwrites the live file each run.
 - **Health/restart:** `pct exec 115 -- systemctl status glance`; `... journalctl -u glance -n 50`;
-  `... curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/` (expect `200`).
-- **A tile shows red:** Glance couldn't reach that service. Check the service itself first; for
-  self-signed HTTPS tiles (Proxmox/PBS/UniFi) confirm `insecure: true` is set on that entry.
+  `... curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/` (expect `200`); content:
+  `curl -fsS http://YOUR_GLANCE_IP:8080/api/pages/homelab/content/` (should have no `ERROR`).
+- **A metric/status pane is empty or red:** a `custom-api` pane needs Prometheus (CT 114) reachable
+  — check it first; a `monitor` tile red means that service is unreachable; for self-signed HTTPS
+  tiles (Proxmox/PBS/UniFi) the template sets `allow-insecure: true` + `alt-status-codes`.
 - **Recovery:** stateless → reprovision (RTO ~10 min). Bumping Glance: change `glance_version`,
   re-run, eyeball the page (pre-1.0 config-key renames — see ADR-014).
 - **Not this:** graphs/history → Grafana; household wall-tablet control → Home Assistant (Phase 6).

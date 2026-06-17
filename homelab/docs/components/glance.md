@@ -1,9 +1,10 @@
 # Glance dashboard (CT 115)
 
-The homelab **front-door**: a single page of service tiles with up/down status and
-click-through links. It is *not* a metrics tool (that's Grafana) and *not* the wall-tablet
-home UI (that's Home Assistant) — it's the admin launchpad across the ~9 service UIs spread
-over apophis + oneill (ADR-014).
+The homelab **front-door**: a single-page operator dashboard — host & VM/LXC metrics (pulled
+live from Prometheus), service up/down status, an alert summary, installed-versions vs latest
+releases, and admin links. It is an at-a-glance **summary**, *not* a metrics/capacity tool
+(that's Grafana — the panels link to it) and *not* the wall-tablet home UI (that's Home
+Assistant). Admin launchpad across apophis + oneill (ADR-014).
 
 | | |
 |---|---|
@@ -11,7 +12,8 @@ over apophis + oneill (ADR-014).
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
-| Tiles | `monitor` widget: Grafana, Prometheus, Alertmanager, Proxmox ×2, PBS, UniFi, Home Assistant, Technitium |
+| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, updates, alerts, versions |
+| Layout | One `Homelab` page, 3 columns — **left:** Proxmox hosts + storage pools + package updates · **center:** service status + infrastructure + VM/LXC metrics · **right:** alert summary + installed versions + latest releases + admin links |
 
 ## How it's managed
 
@@ -23,19 +25,22 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-glance.yml --limit 
 
 The playbook creates the LXC, downloads the **pinned** Glance release (`glance_version`,
 extracted from the `glance-linux-amd64.tar.gz` asset — a `.version` marker makes bumps
-idempotent), renders `/etc/glance/glance.yml` from the `glance_services` list in
-`group_vars/all.yml`, installs a hardened systemd unit (`DynamicUser`, `ProtectSystem=strict`),
-validates the config (`glance ... config:print`), and starts it. The tiles' real URLs live only
-in gitignored `group_vars`; committed files use `YOUR_*` placeholders (ADR-006).
+idempotent), **renders `/etc/glance/glance.yml` from the committed Jinja template
+`ansible/templates/glance/glance.yml.j2`**, installs a hardened systemd unit (`DynamicUser`,
+`ProtectSystem=strict`), and starts it. The render is **staged + validated** (`glance … config:print`
+on a `.new` file) and only **promoted** into place if it parses — a bad render can't break the live
+dashboard. The template uses **custom Jinja delimiters** (`<< >>` / `<% %>`) so Glance's own
+Go-template `{{ }}` pass through untouched; real LAN values come from gitignored `group_vars`
+(`glance_prometheus_url`, `glance_hosts`, `monitoring_ip`, `ha_ip`, `technitium_ip`, `pbs_ip`,
+`gateway`) and committed files use `YOUR_*` placeholders (ADR-006).
 
-Dashboard content draft: `docs/components/glance-dashboard-draft.yml`. Treat it as the desired
-Glance page shape (groups, widgets, links, and health-check URLs), separate from the current
-Ansible rendering mechanism. When wiring it into IaC, keep real URLs in gitignored variables.
-The draft deliberately avoids token-backed widgets for now; add Technitium `dns-stats` later only
-after the read-only token is supplied from private config.
-
-> **Invariant:** add/change a tile in `glance_services` + re-run the playbook, **not** by hand —
-> the config is overwritten on the next run and won't survive a reprovision.
+> **Invariant:** change the **template** (`glance.yml.j2`) and/or the `glance_*` vars, then re-run
+> the playbook — **not** the live `/etc/glance/glance.yml` (it's overwritten on the next run and
+> won't survive a reprovision).
+>
+> **Scope:** keep this an operator *summary*. Deep time-series, network throughput, alert
+> debugging, and capacity planning belong in **Grafana** (the panels link out to it). "Installed
+> Versions" vs "Latest Releases" is a visual comparison only — not automatic drift detection.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.

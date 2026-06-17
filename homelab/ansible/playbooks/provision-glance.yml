@@ -7,8 +7,10 @@
 # Run from the mgmt-vm, inside homelab/ansible/, targeting oneill:
 #   ansible-playbook playbooks/provision-glance.yml --limit oneill
 #
-# Vars: glance_* in group_vars (incl. glance_services — the tiles). LAN/Tailscale
-# only (no auth, same posture as Grafana/Prometheus). Glance on :{{ glance_port }}.
+# Dashboard is a single page rendered from templates/glance/glance.yml.j2 (host/guest metrics
+# via Prometheus custom-api, service status, alerts, versions, releases, admin links). Vars:
+# glance_* + glance_prometheus_url/glance_hosts in group_vars. LAN/Tailscale only (no auth, same
+# posture as Grafana/Prometheus). Glance on :{{ glance_port }}.
 
 - name: Provision Glance dashboard LXC (front-door)
   hosts: oneill
@@ -90,33 +92,20 @@
       when: glance_have.stdout | trim != glance_version
       changed_when: true
 
-    # --- Config (rendered from glance_services) ---
-    - name: Write glance.yml (front-door monitor widget)
-      ansible.builtin.shell: >
-        echo '{{ glance_yml | b64encode }}' | base64 -d |
-        pct exec {{ glance_ctid }} -- bash -c 'mkdir -p /etc/glance && cat > /etc/glance/glance.yml'
-      vars:
-        glance_yml: |
-          server:
-            host: 0.0.0.0
-            port: {{ glance_port }}
-          pages:
-            - name: Homelab
-              columns:
-                - size: full
-                  widgets:
-                    - type: monitor
-                      title: Services
-                      cache: 1m
-                      sites:
-          {% for s in glance_services %}
-                        - title: {{ s.title }}
-                          url: {{ s.url }}
-                          icon: {{ s.icon }}
-          {% if s.insecure | default(false) %}
-                          allow-insecure: true
-          {% endif %}
-          {% endfor %}
+    # --- Config (single-page dashboard rendered from the committed Jinja template) ---
+    # The template uses custom Jinja delimiters ([[ ]] / [% %]) so Glance's own Go-template {{ }}
+    # pass through; only IPs/version/port are substituted from group_vars (ADR-014).
+    - name: Render glance.yml from the template to a temp file on oneill
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/glance/glance.yml.j2"
+        dest: /tmp/glance.yml.rendered
+        mode: "0644"
+
+    - name: Stage the rendered glance.yml inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ glance_ctid }} -- mkdir -p /etc/glance
+        pct push {{ glance_ctid }} /tmp/glance.yml.rendered /etc/glance/glance.yml.new --perms 644
+        rm -f /tmp/glance.yml.rendered
       changed_when: true
 
     - name: Install the Glance systemd unit (hardened, DynamicUser)
@@ -141,10 +130,15 @@
           WantedBy=multi-user.target
       changed_when: true
 
-    - name: Validate the rendered config before (re)starting
+    - name: Validate the staged config (live file untouched until it passes)
       ansible.builtin.command: >
-        pct exec {{ glance_ctid }} -- /opt/glance/glance --config /etc/glance/glance.yml config:print
+        pct exec {{ glance_ctid }} -- /opt/glance/glance --config /etc/glance/glance.yml.new config:print
       changed_when: false
+
+    - name: Promote the validated config into place
+      ansible.builtin.command: >
+        pct exec {{ glance_ctid }} -- mv /etc/glance/glance.yml.new /etc/glance/glance.yml
+      changed_when: true
 
     - name: Enable + (re)start Glance
       ansible.builtin.shell: |
@@ -168,5 +162,5 @@
       ansible.builtin.debug:
         msg:
           - "Glance CT {{ glance_ctid }} up at {{ glance_ip | regex_replace('/.*$', '') }}:{{ glance_port }} (HTTP {{ glance_http.stdout }})."
-          - "Front-door for {{ glance_services | length }} services — LAN/Tailscale only, no auth."
+          - "Single-page dashboard rendered from templates/glance/glance.yml.j2 — LAN/Tailscale only, no auth."
           - "Pinned {{ glance_version }}. Reserve {{ glance_ip | regex_replace('/.*$', '') }} in UniFi."
