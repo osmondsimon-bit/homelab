@@ -326,6 +326,31 @@ until the **CT 111 reprovision drill** (pending) actually runs it.
 The backups are protected by the **off-site copy** (ADR-012 deferred leg — encrypted sync of
 both datasets to cloud). That, not a second local copy, is "backing up oneill."
 
+### Restore drills (a backup you haven't restored is a hypothesis)
+
+Safe pattern for the mgmt-vm PBS restore (mgmt-vm is the box you're on — **never** boot a clone
+with networking, or it fights the live VM for its IP):
+
+```bash
+# on apophis. 199 = throwaway VMID; --unique regenerates the MAC.
+qmrestore pbs-oneill:backup/vm/100/<UTC-timestamp> 199 --unique 1 --storage local-lvm
+qm set 199 --delete net0          # strip NIC so it can't conflict with live mgmt-vm
+qm start 199
+qm agent 199 ping                 # agent up ⇒ the clone booted to a working OS
+qm guest exec 199 -- /bin/ls /home/simon/homelab/ansible/inventory/group_vars/   # real config present?
+qm stop 199 && qm destroy 199 --purge
+```
+
+| Date | Backup tier | Result |
+|------|-------------|--------|
+| 2026-06-17 | PBS mgmt-vm (VM 100) | ✅ PASS — restored 24 s, booted, `group_vars/all.yml` + git repo present |
+| _pending_ | HA native partial → fresh HAOS | untested — **gates retiring the held `vzdump-qemu-200`** |
+| _pending_ | CT 111 Ansible reprovision | untested — records the real RTO |
+
+> **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
+> local; PBS snapshot names are **UTC** (`…T16:30:03Z` = 02:30 AEST). Don't mistake the offset
+> for a missing run.
+
 ---
 
 ## Git / repo
