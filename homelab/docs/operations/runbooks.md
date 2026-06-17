@@ -256,6 +256,12 @@ backlog item.)
   **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs rebuild from their
   playbooks; HA uses the native partial below. (mgmt-vm is the only guest not reproducible from code.)
 - **GC:** datastore `main` runs garbage collection daily.
+- **Encryption (2026-06-17, ADR-012):** client-side encryption is **on** (`pvesm set pbs-oneill
+  --encryption-key autogen`) — backups are encrypted before leaving apophis. The key lives at
+  `/etc/pve/priv/storage/pbs-oneill.enc` (a credential — **never** committed) and a copy + its
+  fingerprint are in **Google Password Manager**. **DR:** to restore on replacement hardware you
+  must first put that key file back at `/etc/pve/priv/storage/pbs-oneill.enc` — no key, no restore.
+  The pre-encryption `…T16:30:03Z` snapshot remains unencrypted as a fallback.
 
 #### Restore a guest from PBS
 ```bash
