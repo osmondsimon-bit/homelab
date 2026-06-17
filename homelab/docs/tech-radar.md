@@ -35,7 +35,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | **ADR-015 drafted** (guests auto-patch security-only; hosts monthly rolling window, zero-downtime once Phase 4 HA exists). Build `provision-patching.yml` after confirming the open choices. |
+| Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | **ADR-015 accepted** (guests: security-only, midday, no auto-reboot; hosts + mgmt-vm: manual monthly window, last day @ midday; zero-downtime once Phase 4 HA exists). Next: build `provision-patching.yml` (gated). |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |
