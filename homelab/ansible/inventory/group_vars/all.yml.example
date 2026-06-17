@@ -93,3 +93,29 @@ ha_ip: YOUR_HA_IP                                          # Home Assistant VM (
 # --- Alerting: ntfy (ADR-013) — topic is PRIVATE, treat as a secret ----------
 ntfy_base_url: https://ntfy.sh
 ntfy_topic: YOUR_NTFY_TOPIC                                 # pick a random topic; subscribe the ntfy app to it
+
+# --- Alertmanager + am-ntfy bridge (ADR-013), both inside the monitoring CT ---
+monitoring_alertmanager_port: 9093                          # Alertmanager web/API (localhost only)
+monitoring_amntfy_port: 9095                                # webhook->ntfy bridge (localhost only; 9094 is AM's cluster port)
+
+# --- Glance dashboard LXC (front-door, oneill — ADR-014) ---------------------
+glance_ctid: 115
+glance_hostname: glance
+glance_ram_mb: 512
+glance_cores: 1
+glance_disk_gb: 4
+glance_ip: YOUR_GLANCE_IP/24                                # verify free; reserve in UniFi
+glance_port: 8080
+glance_version: v0.8.5                                      # PINNED (pre-1.0 renames config keys; bump deliberately)
+# Front-door tiles: the `monitor` widget pings each url (status) and links to it.
+# `insecure: true` for self-signed HTTPS (Proxmox/PBS/UniFi).
+glance_services:
+  - { title: "Grafana",          url: "http://YOUR_MONITORING_IP:3000", icon: "di:grafana" }
+  - { title: "Prometheus",       url: "http://YOUR_MONITORING_IP:9090", icon: "di:prometheus" }
+  - { title: "Alertmanager",     url: "http://YOUR_MONITORING_IP:9093", icon: "di:alertmanager" }
+  - { title: "Proxmox apophis",  url: "https://YOUR_PROXMOX_IP:8006",   icon: "di:proxmox", insecure: true }
+  - { title: "Proxmox oneill",   url: "https://YOUR_NUC_IP:8006",       icon: "di:proxmox", insecure: true }
+  - { title: "Proxmox Backup",   url: "https://YOUR_PBS_IP:8007",       icon: "di:proxmox-backup-server", insecure: true }
+  - { title: "UniFi",            url: "https://YOUR_GATEWAY_IP",        icon: "di:unifi", insecure: true }
+  - { title: "Home Assistant",   url: "http://YOUR_HA_IP:8123",         icon: "di:home-assistant" }
+  - { title: "Technitium DNS",   url: "http://YOUR_TECHNITIUM_IP:5380", icon: "di:technitium" }

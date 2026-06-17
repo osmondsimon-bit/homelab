@@ -1,0 +1,172 @@
+---
+# Provision the Glance front-door dashboard on oneill: a single static Go binary
+# (pinned release) + one rendered glance.yml, unprivileged LXC, hardened systemd
+# unit (ADR-014). Stateless — the config is rendered from group_vars, nothing to
+# back up; a rebuild restores it fully. Idempotent.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, targeting oneill:
+#   ansible-playbook playbooks/provision-glance.yml --limit oneill
+#
+# Vars: glance_* in group_vars (incl. glance_services — the tiles). LAN/Tailscale
+# only (no auth, same posture as Grafana/Prometheus). Glance on :{{ glance_port }}.
+
+- name: Provision Glance dashboard LXC (front-door)
+  hosts: oneill
+  gather_facts: false
+
+  tasks:
+    # --- The LXC ---
+    - name: Check whether CT {{ glance_ctid }} already exists
+      ansible.builtin.command: "pct status {{ glance_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Glance LXC
+      ansible.builtin.command: >
+        pct create {{ glance_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ glance_hostname }}
+        --cores {{ glance_cores }}
+        --memory {{ glance_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ glance_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ glance_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+      when: ct_status.rc != 0
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ glance_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ glance_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    - name: Ensure curl + ca-certificates are present (binary fetch + dashboard icons)
+      ansible.builtin.shell: |
+        pct exec {{ glance_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v curl >/dev/null; then
+            apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+          fi
+        '
+      changed_when: true
+
+    # --- Glance binary (pinned release, extracted from the tarball) ---
+    - name: Read the installed Glance version marker (if any)
+      ansible.builtin.command: "pct exec {{ glance_ctid }} -- cat /opt/glance/.version"
+      register: glance_have
+      changed_when: false
+      failed_when: false
+
+    - name: Download + install the pinned Glance binary
+      ansible.builtin.shell: |
+        pct exec {{ glance_ctid }} -- bash -c '
+          set -e
+          mkdir -p /opt/glance
+          curl -fsSL "https://github.com/glanceapp/glance/releases/download/{{ glance_version }}/glance-linux-amd64.tar.gz" -o /tmp/glance.tar.gz
+          tar -xzf /tmp/glance.tar.gz -C /opt/glance glance
+          chmod +x /opt/glance/glance
+          rm -f /tmp/glance.tar.gz
+          echo "{{ glance_version }}" > /opt/glance/.version
+        '
+      when: glance_have.stdout | trim != glance_version
+      changed_when: true
+
+    # --- Config (rendered from glance_services) ---
+    - name: Write glance.yml (front-door monitor widget)
+      ansible.builtin.shell: >
+        echo '{{ glance_yml | b64encode }}' | base64 -d |
+        pct exec {{ glance_ctid }} -- bash -c 'mkdir -p /etc/glance && cat > /etc/glance/glance.yml'
+      vars:
+        glance_yml: |
+          server:
+            host: 0.0.0.0
+            port: {{ glance_port }}
+          pages:
+            - name: Homelab
+              columns:
+                - size: full
+                  widgets:
+                    - type: monitor
+                      title: Services
+                      cache: 1m
+                      sites:
+          {% for s in glance_services %}
+                        - title: {{ s.title }}
+                          url: {{ s.url }}
+                          icon: {{ s.icon }}
+          {% if s.insecure | default(false) %}
+                          allow-insecure: true
+          {% endif %}
+          {% endfor %}
+      changed_when: true
+
+    - name: Install the Glance systemd unit (hardened, DynamicUser)
+      ansible.builtin.shell: >
+        echo '{{ glance_unit | b64encode }}' | base64 -d |
+        pct exec {{ glance_ctid }} -- bash -c 'cat > /etc/systemd/system/glance.service'
+      vars:
+        glance_unit: |
+          [Unit]
+          Description=Glance dashboard
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          ExecStart=/opt/glance/glance --config /etc/glance/glance.yml
+          Restart=on-failure
+          DynamicUser=yes
+          NoNewPrivileges=yes
+          ProtectSystem=strict
+          ProtectHome=yes
+          PrivateTmp=yes
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    - name: Validate the rendered config before (re)starting
+      ansible.builtin.command: >
+        pct exec {{ glance_ctid }} -- /opt/glance/glance --config /etc/glance/glance.yml config:print
+      changed_when: false
+
+    - name: Enable + (re)start Glance
+      ansible.builtin.shell: |
+        pct exec {{ glance_ctid }} -- bash -c '
+          systemctl daemon-reload
+          systemctl enable --now glance >/dev/null 2>&1
+          systemctl restart glance
+        '
+      changed_when: true
+
+    - name: Confirm Glance is serving
+      ansible.builtin.command: >
+        pct exec {{ glance_ctid }} -- bash -c 'sleep 1; curl -fsS -o /dev/null -w "%{http_code}" http://localhost:{{ glance_port }}/'
+      register: glance_http
+      retries: 5
+      delay: 2
+      until: glance_http.stdout == "200"
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Glance CT {{ glance_ctid }} up at {{ glance_ip | regex_replace('/.*$', '') }}:{{ glance_port }} (HTTP {{ glance_http.stdout }})."
+          - "Front-door for {{ glance_services | length }} services — LAN/Tailscale only, no auth."
+          - "Pinned {{ glance_version }}. Reserve {{ glance_ip | regex_replace('/.*$', '') }} in UniFi."

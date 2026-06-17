@@ -21,6 +21,10 @@
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
 | technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Live on the home VLAN** (same subnet). IoT/guest use the gateway (Auto) for DNS — isolated VLANs can't reach a main-LAN resolver + appliances break on blocklists (DNS-by-VLAN-role); camera/management have no internet. |
+| pbs | 112 | LXC (Debian 12, unpriv) | YOUR_PBS_IP | Running — Proxmox Backup Server, backup hub (ADR-012). Datastore on `rpool/data/pbs-datastore`. |
+| ha-backup-share | 113 | LXC (Debian 12, unpriv) | YOUR_HA_BACKUP_SHARE_IP | Running — Samba/CIFS share for HAOS native backups (ADR-012). |
+| monitoring | 114 | LXC (Debian 12, unpriv) | YOUR_MONITORING_IP | Running — Prometheus + Grafana + Alertmanager → ntfy, node/pve/UniFi/HA exporters, apophis dead-man's-switch (ADR-013). |
+| glance | 115 | LXC (Debian 12, unpriv) | YOUR_GLANCE_IP | Running — front-door dashboard, native Go binary, links to Grafana (ADR-014). On a fixed static-band IP (an earlier pick collided with a desktop's DHCP lease — see backlog). |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
@@ -31,7 +35,7 @@ Moving from a single host to a **3-node Proxmox cluster**, with local storage st
 | Node | Role | Status | Intended to run |
 |------|------|--------|-----------------|
 | apophis | Compute-heavy | Live | Plex (QuickSync) + media stack; HA VM or its failover target |
-| Intel NUC (**oneill**, N150 / 16 GB / ZFS) | Low-power | **Live (standalone)** — running Technitium | Simple services offloaded from apophis: Technitium ✓, then Monitoring, Homepage, Tailscale |
+| Intel NUC (**oneill**, N150 / 16 GB / ZFS) | Low-power | **Live (standalone)** — Technitium, PBS, HA-share, Monitoring, Glance | Simple services offloaded from apophis: Technitium ✓, Monitoring ✓, Glance ✓; Tailscale still to migrate |
 | 2nd ThinkCentre M920Q | Cluster + HA quorum | ~1 month | HA-failover target; extra capacity |
 
 Offloading the simple services to the NUC frees apophis's CPU for Plex transcoding. Three nodes give clean cluster quorum. Mixed CPUs are fine for HA failover (restart-on-another-node); live migration between different CPU generations needs a compatible CPU type.
@@ -46,8 +50,8 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 | Service | Type | Node (intended) | Purpose |
 |---------|------|-----------------|---------|
 | ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP; serves the **home VLAN** (IoT/guest use the gateway — ADR-011 DNS-by-VLAN-role). |
-| ~~Monitoring (Prometheus + Grafana + Alertmanager)~~ | LXC | oneill (CT 114, `.9`) | ✅ Live — scrapes Proxmox/UniFi/HA, Alertmanager → am-ntfy bridge → ntfy with starter rules, apophis dead-man's-switch (ADR-013). Dashboards/alerts as code. |
-| Homepage | LXC | NUC | Service dashboard (gethomepage.dev). After Monitoring. |
+| ~~Monitoring (Prometheus + Grafana + Alertmanager)~~ | LXC | oneill (CT 114) | ✅ Live — scrapes Proxmox/UniFi/HA, Alertmanager → am-ntfy bridge → ntfy with starter rules, apophis dead-man's-switch (ADR-013). Dashboards/alerts as code. |
+| ~~Homepage~~ → **Glance** | LXC | **oneill** (CT 115) | ✅ Live — front-door dashboard. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6). |
 | Plex | VM | apophis | Media server, Intel QuickSync passthrough |
 | qBittorrent + Gluetun | LXC | apophis | Torrent client behind Gluetun killswitch → ProtonVPN Plus |
 | Vaultwarden | LXC | cluster (HA) | Self-hosted password manager — **sequenced after the HA cluster + backups** (ADR-010) |
@@ -72,12 +76,13 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 - Add Node-RED for automation logic
 - ESPHome ready for future DIY sensors
 - Wire HA stats into Grafana
+- **Wall-mounted tablet dashboard** — HA Lovelace (Mushroom/bubble-card via HACS) in kiosk-mode, on a cheap Android tablet running Fully Kiosk Browser (+ its HA integration for screen-wake/presence). This is the *household control surface* — distinct from Glance (admin front-door, ADR-014) and Grafana (graphs). Homepage cannot do it (it can't control HA, only display read-only stats).
 
 ## Phase order
 
 1. VLAN-aware Proxmox + firewall rules — ✓ completed
 2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, serving the home VLAN; IoT/guest use the gateway) — **✓ completed**
-3. **Foundation + observability:** **VM-level backups first** (entry task) → **Monitoring** (Prometheus + Grafana) → **Homepage**. (Terraform import deferred to cluster scale — ADR-008; Ansible-pct creates the boxes for now.)
+3. **Foundation + observability:** **VM-level backups first** (entry task) → **Monitoring** ✓ (Prometheus + Grafana + Alertmanager) → **Glance** ✓ (front-door dashboard, ADR-014; was Homepage). Built out — run `/phase-gate` to close. (Terraform import deferred to cluster scale — ADR-008; Ansible-pct creates the boxes for now.)
 4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
 5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
 6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
@@ -89,18 +94,21 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 Living backlog to pick up next session.
 
 ### ▶ Pick up next session (immediate)
-- **Build next:** **Homepage on oneill** (Phase 3's last service — ADR + infra-designer + `provision-homepage.yml`). Closes Phase 3, then run `/phase-gate`.
+- **Build next:** **Phase 3 is built out — run `/phase-gate`** to close it (doc-auditor + continuity-reviewer + `/security-review`, then write the phase completion record).
+- **Reserve in UniFi:** the Glance CT's IP (fixed-IP / outside the DHCP pool). **Lesson:** the first IP picked as "free" from group_vars collided with a desktop's DHCP-preferred lease — UniFi even cloned the desktop's name onto the CT. Reserve static-service IPs *before* provisioning, and you may want to "forget" the stale client in UniFi.
+- **Done 2026-06-17:** **Glance** front-door dashboard (CT 115, ADR-014) — native Go binary, 9 service tiles all green, links to Grafana. Chose Glance over Homepage to keep oneill Docker-free (Docker deferred to Phase 5/Gluetun); wall tablet reassigned to HA (Phase 6).
 - **Done 2026-06-16:** Monitoring **Alertmanager + alert rules** — Prometheus rules → Alertmanager → `am-ntfy.py` stdlib bridge → ntfy (ntfy has no native AM receiver). Starter rules: TargetDown / NodeFilesystemSpaceLow / NodeMemoryHigh / PVEStorageFull. Verified end-to-end. Monitoring Step 2 now complete.
 - **HA backup:** confirm the automatic HA partial backup landed on the oneill share, then delete the interim local `vzdump-qemu-200` (+ `100`) safety net (runbook → Backups).
-- **Operator quick wins:** import Grafana dashboards (1860 node, unpoller UniFi, an HA one) at `http://YOUR_MONITORING_IP:3000`; reserve `.9`/`.4` in UniFi.
+- **Operator quick wins:** import Grafana dashboards (1860 node, unpoller UniFi, an HA one) at `http://YOUR_MONITORING_IP:3000`; reserve the monitoring + Tailscale CT IPs in UniFi.
 - **Parked:** UniFi read-only MCP eval (verify MCP works in this env first); off-site backup copy (ADR-012); CT 111 reprovision drill.
 - Monitoring is live (Prometheus/Grafana + node/pve/unifi/HA + ntfy dead-man's-switch). `/phase-gate` skill exists for closing phases. A read-only Technitium token is at `~/.technitium-ro-token` for diagnostics.
 
 ### Next build (Phase 3)
-- [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet). Old apophis CT 111 destroyed; `.5` freed.
+- [x] **Technitium DNS** — ✅ done. Deployed on **oneill** (CT 111, `YOUR_TECHNITIUM_IP`): DNS-only, OISD Big blocklist + DoH forwarders, console secured. Config applied declaratively by `provision-technitium.yml` via the Technitium API (from group_vars). DHCP cutover live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet). Old apophis CT 111 destroyed; its address freed.
 - [~] **[High] VM-level backups — Phase 3 ENTRY task** (**ADR-012**, infra-designer reviewed). oneill is the backup hub. **PBS done** (images of mgmt-vm + CTs, scheduled, see Backups below). **Remaining: HA native backup** — Samba share (`provision-ha-backup-share.yml`) + HAOS partial backup, then remove the interim safety net (see Backups). Must be complete before any stateful service lands on oneill.
 - [ ] **Terraform import — DEFERRED to cluster scale** (ADR-008). Ansible (`pct`) creates + configures the LXCs for now and recovers cleanly; scaffold kept in `terraform/`. Revisit when the 3-node cluster lands (then: PVE API token, import live guests, refactor playbooks to config-only).
-- [x] **Monitoring stack** (Prometheus + Grafana + Alertmanager → ntfy, all exporters) — ✅ done (CT 114, ADR-013). **Homepage** is the remaining Phase 3 build.
+- [x] **Monitoring stack** (Prometheus + Grafana + Alertmanager → ntfy, all exporters) — ✅ done (CT 114, ADR-013).
+- [x] **Dashboard** — ✅ done. **Glance** (not Homepage) on oneill (CT 115, ADR-014): native Go binary front-door, 9 tiles, links to Grafana. Phase 3 services all built — run `/phase-gate`.
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
@@ -112,7 +120,7 @@ Living backlog to pick up next session.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
-- [ ] Confirm/reserve these in UniFi (fixed-IP entries or outside the DHCP pool): `YOUR_TAILSCALE_LAN_IP` (.4), and the monitoring CT `.9` (ADR-013, before/with that build).
+- [ ] Confirm/reserve these in UniFi (fixed-IP entries or outside the DHCP pool): `YOUR_TAILSCALE_LAN_IP`, the monitoring CT, and the Glance CT (ADR-013/014) — reserve *before* provisioning to avoid DHCP collisions.
 - [ ] Document the cross-subnet Zigbee path: how HA on `the LAN subnet` reaches the SLZB-06 at `YOUR_ZIGBEE_COORD_IP` today (becomes a firewall/route rule once VLANs land).
 
 ### Decisions to make

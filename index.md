@@ -18,7 +18,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
   README.md  CLAUDE.md  AGENTS.md  index.md  .gitignore
   homelab/                   ← THE project root
     PLAN.md                  single source of truth (phases, VMIDs, status, RAM)
-    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 011-dns-engine)
+    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 014-dashboard)
       template.md
     docs/                    ALL narrative docs:
       components/<svc>.md     one per deployed service (what it is, how configured)

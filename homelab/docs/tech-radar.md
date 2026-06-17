@@ -20,8 +20,8 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | DNS + ad blocking | Technitium DNS | Phase 2 ✓ — live on **oneill** (NUC), CT 111. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big + DoH, config automated via API. Serves the **home VLAN**; IoT/guest use the gateway (DNS-by-VLAN-role). |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
 | Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
-| Monitoring | Prometheus + Grafana | Phase 3 — prioritised first; intended on the NUC |
-| Service dashboard | Homepage | Phase 3 — after Monitoring; intended on the NUC |
+| Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
+| Service dashboard | **Glance** (was Homepage) | Phase 3 — front-door on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6) |
 | Media server | Plex | Phase 5 — apophis, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 5 — apophis |
 | Password manager | Vaultwarden (self-hosted) | Phase 6 (ADR-010) — sequenced after HA + backups; Bitwarden cloud bridges now |
@@ -73,7 +73,7 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 |------------|--------|
 | HashiCorp Vault | Vaultwarden is sufficient at this scale |
 | PM2 process manager | Docker-centric; not applicable to Proxmox VM/LXC model |
-| Docker Compose stacks | Services run as Proxmox VMs/LXCs, not containers |
+| Docker Compose stacks | Services run as native packages/binaries in Proxmox VMs/LXCs, not containers. **Exception coming in Phase 5:** Gluetun is container-only, so Docker arrives then — confined to apophis for the media stack (ADR-014 rationale) |
 | Btrfs snapshots (btrbk) | Proxmox uses ZFS/ext4; use Proxmox Backup Server instead |
 
 ---
@@ -87,5 +87,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-14 | Phase 2 | Tailscale deployed (CT 110) via Ansible — first fully Ansible-provisioned service, validated remotely |
 | 2026-06-14 | Phase 2 | Config decoupled from public repo (ADR-006); local-only config backed up to private repo (ADR-007) |
 | 2026-06-14 | Phase 2/3 planning | Adopted Terraform (ADR-008); 3-node cluster + HA via ZFS replication (ADR-009); Vaultwarden self-hosted, sequenced after HA+backups (ADR-010); Monitoring→Homepage prioritised; patching to design |
+| 2026-06-17 | Phase 3 | Monitoring stack live incl. Alertmanager→ntfy (ADR-013). Dashboard: **Homepage → Glance** (ADR-014) to keep oneill Docker-free; wall-tablet UI reassigned to HA (Phase 6); Docker deferred to Phase 5/Gluetun |
 
 *Add a row each time this radar is reviewed at a phase boundary.*

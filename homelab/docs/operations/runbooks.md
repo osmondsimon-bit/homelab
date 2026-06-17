@@ -220,6 +220,24 @@ backlog item.)
 
 ---
 
+## Glance dashboard (CT 115 on oneill) — ADR-014
+
+- **What:** the front-door launchpad — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only, **no auth**.
+  Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config `/etc/glance/glance.yml`
+  rendered from `glance_services` in `group_vars`. Stateless — nothing to back up.
+- **Manage:** edit `glance_services` (or `glance_version`) in `group_vars`, then
+  `ansible-playbook playbooks/provision-glance.yml --limit oneill`. Never edit the config by hand —
+  it's overwritten on the next run. The `monitor` widget pings each tile's URL for the status dot.
+- **Health/restart:** `pct exec 115 -- systemctl status glance`; `... journalctl -u glance -n 50`;
+  `... curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/` (expect `200`).
+- **A tile shows red:** Glance couldn't reach that service. Check the service itself first; for
+  self-signed HTTPS tiles (Proxmox/PBS/UniFi) confirm `insecure: true` is set on that entry.
+- **Recovery:** stateless → reprovision (RTO ~10 min). Bumping Glance: change `glance_version`,
+  re-run, eyeball the page (pre-1.0 config-key renames — see ADR-014).
+- **Not this:** graphs/history → Grafana; household wall-tablet control → Home Assistant (Phase 6).
+
+---
+
 ## Backups (PBS + Home Assistant) — ADR-012
 
 **oneill is the backup hub.** Two layers, local cross-host (cloud off-site deferred).
