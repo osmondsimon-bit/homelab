@@ -275,11 +275,15 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
   recorder DB kept small via `recorder` `purge_keep_days` (~10–14). ⚠️ **When you add a new
   stateful add-on, add it to the partial-backup selection** — it isn't picked up automatically.
 - **Status (2026-06-17):** automatic partial backup **confirmed landing** on the share (CT 113,
-  recurring, ~131 MB). The mgmt-vm `vzdump-qemu-100` interim images on apophis `local` were
-  **deleted** (PBS covers mgmt-vm off-box). **`vzdump-qemu-200` (HA) is retained** as the whole-VM
-  fallback until the partial backup is verified *restorable* — retire it at the first restore drill
-  (landing ≠ restorable). Still verify in HAOS that the partial scope includes Zigbee2MQTT and
-  excludes media.
+  recurring, ~131 MB). Scope verified from `backup.json`: HA core + Zigbee2MQTT + Mosquitto +
+  Cloudflared, compressed, no media. The mgmt-vm `vzdump-qemu-100` interim images on apophis `local`
+  were **deleted** (PBS covers mgmt-vm off-box). **`vzdump-qemu-200` (HA) is retained** as the
+  whole-VM fallback until the partial backup is verified *restorable* — retire it at the first
+  restore drill (landing ≠ restorable).
+- **⚠️ Encryption key:** HAOS backups are **encrypted** (`"protected": true` in `backup.json`). The
+  key (HAOS → Settings → System → Backups → ⋮ → "Show encryption key") **must be stored off-box** —
+  losing it makes every encrypted backup unrestorable. No credential manager is set up yet, so it's
+  kept in Google Password Manager for now; move it into the password manager when one lands (ADR-010).
 
 ### Recovery model — what recovers what (avoid doubling up)
 
