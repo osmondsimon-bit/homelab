@@ -64,13 +64,13 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or Tailscale (full network; WireGuard is superseded — see ADR-003). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
 
-**Local config backup:** Real config and `.claude/` agents/memory live only on the mgmt-vm (ADR-006). Back them up to the private `homelab-private` repo with `bash homelab/scripts/backup-local-config.sh` after changing local config and at session close (ADR-007). Never back up credentials. VM-level Proxmox backups are still pending (see PLAN.md).
+**Local config backup:** Real config plus local Claude/Codex agent config live only on the mgmt-vm (ADR-006). Back them up to the private `homelab-private` repo with `bash homelab/scripts/backup-local-config.sh` after changing local config and at session close (ADR-007). Never back up credentials. PBS now covers the mgmt-vm; HA native backup and off-site backup remain tracked in PLAN.md.
 
 **Single source of truth (two-tier):** Logical facts — which hosts/VMs/LXCs exist, VMIDs, RAM budget, phase/service status, canonical hostnames — are owned by `homelab/PLAN.md`; other docs link to it. **Real network addresses (IPs, subnets, MACs) are never published** — they live only in the gitignored Ansible config (`ansible/inventory/`, `group_vars/`) and the operator's private notes. Committed files use `YOUR_*` placeholders only (ADR-006).
 
 ## Agents
 
-Reviewers assist with this homelab (four agents + the `/security-review` skill). Invoke them at the right moment — don't skip the gates.
+Reviewers assist with this homelab (four agents + the `/phase-gate` and `/security-review` skills). Invoke them at the right moment — don't skip the gates.
 
 | Reviewer | When to invoke | How |
 |-------|---------------|-----|
@@ -78,6 +78,7 @@ Reviewers assist with this homelab (four agents + the `/security-review` skill).
 | `infra-manager` | Weekly automated (Mondays 08:00) + on-demand for a status snapshot | "Use the infra-manager agent" |
 | `doc-auditor` | On-demand, and before marking a phase complete — checks docs for drift/contradictions vs PLAN.md | "Use the doc-auditor agent" |
 | `continuity-reviewer` | Before marking a phase complete, after changing what's backed up, and periodically to run a restore drill | "Use the continuity-reviewer agent" |
+| `/phase-gate` | Before marking any phase complete; runs doc, continuity, and security gates | `/phase-gate` |
 | `/security-review` | Before marking any phase complete; before committing significant config changes | `/security-review` |
 
 **Security review gates:** run `/security-review` at the end of each phase before marking it done in PLAN.md. Also run it before committing any Ansible playbook, firewall rule, or service configuration.
@@ -109,4 +110,4 @@ Two goals: **stretch session runway** (minimize token/compute cost without addin
 
 ## Roadmap
 
-See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 2 ✓ complete** (Tailscale CT 110 + Technitium CT 111 live on oneill/NUC) — **starting Phase 3**, whose entry task is VM-level backups, then Terraform import → Monitoring → Homepage. Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 backups + Terraform + Monitoring + Homepage → 4 Multi-node cluster + HA (NUC + ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.
+See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 3 is built out and ready for `/phase-gate` closeout**: PBS/mgmt-vm backups, Monitoring, and Glance are live; HA native backup verification remains the key backup gap. Terraform import is deferred to cluster scale (ADR-008). Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 Foundation + observability → 4 Multi-node cluster + HA (oneill joins cluster, 2nd ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.

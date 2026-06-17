@@ -8,6 +8,16 @@
 !/AGENTS.md
 !/index.md
 !/homelab/
+!/.claude/
+.claude/*
+!/.claude/agents/
+.claude/agents/*
+!/.claude/agents/*.md
+!/.claude/skills/
+.claude/skills/*
+!/.claude/skills/phase-gate/
+.claude/skills/phase-gate/*
+!/.claude/skills/phase-gate/SKILL.md
 
 # Re-ignored inside the published folders (never publish these):
 homelab/ansible/inventory/hosts.ini

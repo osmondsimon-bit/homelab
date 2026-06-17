@@ -3,8 +3,8 @@
 # Run from the mgmt-vm:  bash homelab/scripts/backup-local-config.sh
 #
 # Why: the public repo intentionally excludes real IPs/config (ADR-006) and the
-# `.claude/` agents + memory. Those live only on this machine — this script gives
-# them an off-box, off-site backup until proper Proxmox VM backups exist (ADR-007).
+# local Claude/Codex config. Those live only on this machine — this script gives
+# them an off-box, off-site backup alongside the mgmt-vm PBS image (ADR-007).
 #
 # IMPORTANT: credentials are NEVER backed up here — no SSH private keys, no tokens,
 # no ~/.git-credentials. Those are regenerated/rotated on restore, not stored in a repo.
@@ -26,6 +26,8 @@ PATHS=(
   ".claude/agents"
   ".claude/skills"
   ".claude/projects/-home-simon/memory"
+  ".codex/AGENTS.md"
+  ".codex/config.toml"
 )
 
 echo "==> Syncing private backup repo..."

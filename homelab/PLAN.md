@@ -125,6 +125,6 @@ Living backlog to pick up next session.
 
 ### Decisions to make
 - [ ] **Patching/update approach** — settle the shape (unattended-upgrades on guests + rolling monthly Proxmox window with HA failover) and write the ADR. Fold in a **host-prep step/playbook** (fresh PVE nodes ship enterprise repos that 401 without a sub → switch to `pve-no-subscription`; done manually on oneill 2026-06-16) so new nodes are reproducible.
-- [ ] **Version the agents?** `.claude/agents/*.md` (infra-designer, infra-manager, doc-auditor) are gitignored / local-only, but index.md, CLAUDE.md, and the cloud routine reference them. Add a narrow `.gitignore` exception for `.claude/agents/*.md` only (transcripts/memory/settings stay private) to publish them to the repo? No secrets in them. Outward-facing — your call.
+- [x] **Version the agents** — `.claude/agents/*.md` and `.claude/skills/phase-gate/SKILL.md` are now published with narrow `.gitignore` exceptions. Transcripts, memory, settings, caches, and credentials stay private.
 
 _Resolved this session:_ RAM trim (moot — services now spread across 3 nodes); Proxmox API Ansible modules (superseded by Terraform, ADR-008); drop the `100.x` IP (done — full decouple, ADR-006).
