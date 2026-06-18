@@ -345,32 +345,32 @@ pages:
                 parameters:
                   query: node_os_info
             template: |
+              {{ $os := .Subrequest "os" }}
+              {{ $prom := .Subrequest "prometheus" }}
               <div class="list list-gap-10">
-              {{ range .JSON.Array "data.result" }}
+              <% for h in glance_hosts %>
+                {{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.job") "pve-<< h.name >>" }}
                 <div class="flex justify-between gap-10">
-                  <div class="color-highlight">{{ .String "metric.job" }}</div>
+                  <div class="color-highlight"><< h.name >>-pve</div>
                   <div>{{ .String "metric.version" }}</div>
                 </div>
-              {{ end }}
-              {{ $prom := .Subrequest "prometheus" }}
-              {{ range $prom.JSON.Array "data.result" }}
+                {{ end }}{{ end }}
+                {{ range $os.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight"><< h.name >>-{{ .String "metric.id" }}</div>
+                  <div>{{ .String "metric.version_id" }}</div>
+                </div>
+                {{ end }}{{ end }}
+              <% endfor %>
+              <hr class="margin-block-10">
                 <div class="flex justify-between gap-10">
                   <div class="color-highlight">prometheus</div>
-                  <div>{{ .String "metric.version" }}</div>
+                  <div>{{ range $prom.JSON.Array "data.result" }}{{ .String "metric.version" }}{{ end }}</div>
                 </div>
-              {{ end }}
-              <div class="flex justify-between gap-10">
-                <div class="color-highlight">glance</div>
-                <div><< glance_version >> pinned</div>
-              </div>
-              <hr class="margin-block-10">
-              {{ $os := .Subrequest "os" }}
-              {{ range $os.JSON.Array "data.result" }}
-                <div>
-                  <div class="color-highlight">{{ .String "metric.instance" }}</div>
-                  <div class="size-h6 color-subdue">{{ .String "metric.pretty_name" }}</div>
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight">glance</div>
+                  <div><< glance_version >> pinned</div>
                 </div>
-              {{ end }}
               </div>
 
           - type: releases
