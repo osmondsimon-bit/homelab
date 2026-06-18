@@ -41,6 +41,14 @@ Zigbee2MQTT connects to SLZB-06 at `YOUR_ZIGBEE_COORD_IP`. If Zigbee devices sto
 2. Ping coordinator: `ping -c 3 YOUR_ZIGBEE_COORD_IP`
 3. Restart Zigbee2MQTT add-on from HA UI
 
+**Cross-subnet path (HA on Home VLAN → SLZB-06 on IoT VLAN).** HA (Home Network, **Secure** zone)
+reaches the coordinator (IoT Network, **Unsecure** zone) via two UniFi zone rules: **Allow
+Secure→Unsecure** (Home→IoT, subnet-wide) for HA→coordinator, and the **Allow** return
+(IoT-subnet→Home-subnet) for replies. Z2M talks to the SLZB-06 over **TCP** (serial-over-IP). The
+Home→IoT allow is **subnet-wide, not scoped to the HA IP** — a *hardening backlog item* is to tighten
+it to `HA-IP → coordinator-IP` only. (This breadth is also why the restore-drill test HA must sit on a
+fully-isolated VLAN, not the Home VLAN — see Restore drills.)
+
 ---
 
 ## mgmt-vm
@@ -314,9 +322,9 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
 - **Status (2026-06-17):** automatic partial backup **confirmed landing** on the share (CT 113,
   recurring, ~131 MB). Scope verified from `backup.json`: HA core + Zigbee2MQTT + Mosquitto +
   Cloudflared, compressed, no media. The mgmt-vm `vzdump-qemu-100` interim images on apophis `local`
-  were **deleted** (PBS covers mgmt-vm off-box). **`vzdump-qemu-200` (HA) is retained** as the
-  whole-VM fallback until the partial backup is verified *restorable* — retire it at the first
-  restore drill (landing ≠ restorable).
+  were **deleted** (PBS covers mgmt-vm off-box). **`vzdump-qemu-200` (HA) retired 2026-06-18** — the
+  partial backup was proven restorable end-to-end (see Restore drills below), so the whole-VM
+  fallback is no longer needed. No `vzdump-qemu` images remain on apophis `local`.
 - **⚠️ Encryption key:** HAOS backups are **encrypted** (`"protected": true` in `backup.json`). The
   key (HAOS → Settings → System → Backups → ⋮ → "Show encryption key") **must be stored off-box** —
   losing it makes every encrypted backup unrestorable. No credential manager is set up yet, so it's
@@ -378,10 +386,50 @@ qm guest exec 199 -- /bin/ls /home/simon/homelab/ansible/inventory/group_vars/  
 qm stop 199 && qm destroy 199 --purge
 ```
 
+**HA native partial restore (operator-guided).** HAOS restore is UI-driven, and the restored
+Zigbee2MQTT **must not touch the live SLZB-06 coordinator** (two Z2M instances on one coordinator
+disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18):
+
+1. **Isolated test VLAN.** A dedicated VLAN (its own `/24`, its own UniFi zone): **Test→External =
+   Allow, Test→all internal = Block** — critically including the **Unsecure zone** (where the IoT/
+   coordinator lives; the zone matrix must show `Test → Unsecure = Block All`). Add a one-way
+   **Secure→Test, TCP 8123, Allow + "Auto Allow Return Traffic"** (ordered above the blocks) so your
+   browser reaches the test HA UI without opening Test→internal. (The return path matters: Test→Secure
+   is blocked, so without "Auto Allow Return" the SYN-ACK is dropped and `:8123` times out.)
+2. **Throwaway HAOS VM** on apophis, mirroring prod (OVMF/q35 + EFI disk, 2 cores/3 GB), NIC on the
+   test VLAN tag, from the latest HAOS `ova` image:
+   ```bash
+   curl -fsSL -o /var/lib/vz/haos.qcow2.xz <haos_ova-*.qcow2.xz>; unxz /var/lib/vz/haos.qcow2.xz
+   qm create 299 --name ha-restore-test --bios ovmf --machine q35 --cores 2 --memory 3072 \
+     --net0 virtio,bridge=vmbr0,tag=<TEST_VLAN> --scsihw virtio-scsi-pci --serial0 socket \
+     --ostype l26 --efidisk0 local-lvm:0,efitype=4m,pre-enrolled-keys=0 --agent 1 --onboot 0
+   qm importdisk 299 /var/lib/vz/haos.qcow2 local-lvm
+   qm set 299 --sata0 local-lvm:vm-299-disk-1 --boot order=sata0 && qm start 299
+   qm agent 299 network-get-interfaces   # read the test HA's DHCP IP on the test VLAN from this
+   ```
+   Check `ha core info` / `ha network info` on the Proxmox console: Core version should match prod,
+   `host_internet/supervisor_internet: true` (so it can pull Core + add-on images).
+3. **Get the backup to your browser** — the isolated test HA can't reach the share, so serve the
+   latest `.tar` over HTTP from a **Home-subnet** host and download it in your browser:
+   ```bash
+   # on oneill (backup-hub host); the file lives in CT 113
+   mkdir -p /tmp/harestore && pct pull 113 /srv/ha-backups/<latest>.tar /tmp/harestore/ha-backup.tar
+   systemd-run --unit=harestore-http --collect --working-directory=/tmp/harestore \
+     /usr/bin/python3 -m http.server 8000 --bind 0.0.0.0
+   # browser → http://<oneill-ip>:8000/ha-backup.tar  (encrypted; key entered at restore time)
+   # after download: systemctl stop harestore-http; rm -rf /tmp/harestore
+   ```
+4. **Restore** at `http://<test-ip>:8123` → onboarding **"Restore from backup"** → upload the `.tar`
+   → enter the **encryption key** (Google Password Manager) → full restore (~5–10 min, re-pulls add-ons).
+5. **Verify**: log in with prod credentials; dashboards/entities present; **Zigbee devices listed**
+   (Settings → Devices, count ≈ prod ⇒ the **Z2M pairing database restored**). Z2M logging
+   "can't connect to coordinator" is **expected** (isolated) — we prove the *database*, not live radio.
+6. **Teardown**: `qm stop 299 && qm destroy 299 --purge`; `rm` the HAOS image; stop the temp server.
+
 | Date | Backup tier | Result |
 |------|-------------|--------|
 | 2026-06-17 | PBS mgmt-vm (VM 100) | ✅ PASS — restored 24 s, booted, `group_vars/all.yml` + git repo present |
-| _pending_ | HA native partial → fresh HAOS | untested — **gates retiring the held `vzdump-qemu-200`** |
+| 2026-06-18 | HA native partial → fresh HAOS (isolated VLAN 5) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
 | _pending_ | CT 111 Ansible reprovision | untested — records the real RTO |
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
