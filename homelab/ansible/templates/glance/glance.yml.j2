@@ -212,6 +212,9 @@ pages:
                 icon: di:proxmox-backup-server
                 allow-insecure: true
                 alt-status-codes: [401, 403]
+              - title: Tailscale
+                url: https://login.tailscale.com/admin/machines
+                icon: di:tailscale
 
           - type: monitor
             title: Infrastructure
@@ -231,22 +234,6 @@ pages:
                 icon: di:unifi
                 allow-insecure: true
                 alt-status-codes: [401, 403]
-
-          - type: custom-api
-            title: Guests
-            cache: 1m
-            url: << prom >>
-            parameters:
-              query: sort(pve_up{id=~"lxc/.*|qemu/.*"} * on(id,instance,job) group_left(name,node) pve_guest_info)
-            template: |
-              <div class="list list-gap-10">
-              {{ range .JSON.Array "data.result" }}
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight text-truncate">{{ .String "metric.name" }} <span class="size-h6 color-subdue">{{ .String "metric.node" }}</span></div>
-                  <div class="{{ if eq (.Float "value.1") 1.0 }}color-positive{{ else }}color-negative{{ end }}">{{ if eq (.Float "value.1") 1.0 }}up{{ else }}down{{ end }}</div>
-                </div>
-              {{ end }}
-              </div>
 
           - type: split-column
             max-columns: 3
