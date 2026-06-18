@@ -52,3 +52,19 @@ groups:
         annotations:
           summary: "PVE storage >90% full: {{ $labels.id }}"
           description: "{{ $labels.id }} (scraped via {{ $labels.instance }}) is over 90% used."
+
+      # A guest (LXC/VM) is stopped/crashed while its Proxmox host is still up + scraped.
+      # `up`/TargetDown only covers explicitly-scraped targets (the hosts, the HA VM, UniFi) —
+      # the service LXCs aren't scraped, so this catches e.g. Tailscale or Technitium dying on
+      # their own. A whole-HOST outage instead makes these pve_up series go ABSENT (not 0) and is
+      # caught by TargetDown on the node/pve job, so there's no double-alert.
+      # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
+      #         · 115 glance · qemu/100 mgmt-vm · 200 home-assistant.
+      - alert: GuestDown
+        expr: pve_up{id=~"lxc/.*|qemu/.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox guest down: {{ $labels.id }}"
+          description: "Guest {{ $labels.id }} (on {{ $labels.instance }}) has pve_up=0 — stopped/crashed for 5m while its host is up."

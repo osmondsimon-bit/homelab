@@ -3,7 +3,7 @@
 ## Current infrastructure
 
 ### apophis (Proxmox host)
-- Intel i7-8700T, 16 GB RAM, ~500 GB SSD (LVM-thin today; migrating to ZFS — see Cluster & HA)
+- Intel i7-8700T, **32 GB RAM** (upgraded from 16 GB, 2026-06-18), ~500 GB SSD (LVM-thin today; migrating to ZFS — see Cluster & HA)
 - IP: YOUR_PROXMOX_IP
 - vmbr0 is VLAN-aware — completed
 

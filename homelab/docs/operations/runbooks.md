@@ -215,11 +215,19 @@ backlog item.)
   `127.0.0.1:9095`, since ntfy isn't a native AM receiver) → **ntfy** (private topic; subscribe the
   app). The topic is a secret — gitignored `group_vars/all.yml` (`ntfy_topic`), never committed; the
   bridge reads it from `/etc/am-ntfy/env` (0600). AM's cluster port (`:9094`) is disabled (single
-  instance). Starter rules: `TargetDown`, `NodeFilesystemSpaceLow`, `NodeMemoryHigh`, `PVEStorageFull`.
+  instance). Rules: `TargetDown`, `NodeFilesystemSpaceLow`, `NodeMemoryHigh`, `PVEStorageFull`,
+  **`GuestDown`** (`pve_up{id=~"lxc/.*|qemu/.*"} == 0` — a guest stopped/crashed while its host is up;
+  `up`/TargetDown only covers *scraped* targets, so this is what catches a service LXC like Tailscale
+  or Technitium dying on its own. A whole-host outage makes these go *absent*, caught by TargetDown).
   - **Test the pipeline:** `pct exec 114 -- amtool --alertmanager.url=http://localhost:9093 alert add
     alertname=PipelineTest severity=critical --annotation=summary="test"` → ntfy push after the 30s
     group_wait (auto-resolves ~5 min later). Confirm delivery without a phone:
     `curl -s "https://ntfy.sh/<topic>/json?poll=1&since=3m"`.
+  - **Validated on a real outage (2026-06-18):** apophis powered off for a RAM upgrade → oneill's
+    Prometheus fired `TargetDown` (critical) for `node`/`pve-apophis`/`home-assistant` ~5 min in
+    (respecting `for: 5m`), then `RESOLVED` when it came back — full path Prometheus → Alertmanager →
+    am-ntfy → ntfy → phone confirmed. Gap found + closed in the same test: the service LXCs weren't
+    individually watched (added `GuestDown`).
 - **Dead-man's-switch:** `provision-deadmans-switch.yml` installs a 5-min cron on **apophis**
   (`/usr/local/bin/oneill-watch.sh`) that checks oneill's Prometheus + Technitium DNS and ntfy-alerts
   on failure — so "oneill/Technitium down" is caught even though Alertmanager lives on oneill (it
