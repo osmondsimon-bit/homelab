@@ -303,6 +303,19 @@
                 credentials_file: /etc/prometheus/ha_token
               static_configs:
                 - targets: ["{{ ha_ip }}:8123"]
+              # Measurements-only keep-list (ADR-016). HA's metrics TSDB stores ONLY
+              # numeric physical quantities + climate temps; state/event metrics
+              # (hass_state_change_*, hass_entity_available, switches/lights/binary/
+              # presence/automations) stay in HA's recorder + Long-Term Statistics.
+              # This bounds cardinality as the home grows (50 dimmers = light/switch
+              # entities, never matched here). Add new measurement metric names below
+              # when a new device_class appears. (up/scrape_* bypass relabeling.)
+              metric_relabel_configs:
+                - source_labels: [__name__]
+                  # Prefix-agnostic: matches HA's default `homeassistant_` and a
+                  # custom `namespace: hass_` so the keep-list survives either config.
+                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius)'
+                  action: keep
           {% endif %}
       changed_when: true
 
@@ -312,6 +325,11 @@
         'echo "ARGS=\"--storage.tsdb.retention.time={{ monitoring_retention_days }}d\"" > /etc/default/prometheus'
       changed_when: true
 
+    # uid is pinned so vendored dashboards can reference it deterministically.
+    # NOTE: fresh CTs create it with this uid cleanly. If you ever CHANGE the uid
+    # on an existing CT, Grafana errors ("data source not found") because it can't
+    # rewrite an existing datasource's uid — clear the stale row first:
+    #   pct exec <ctid> -- sqlite3 /var/lib/grafana/grafana.db "DELETE FROM data_source WHERE name='Prometheus';"
     - name: Provision the Grafana Prometheus datasource
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/grafana/provisioning/datasources && cat > /etc/grafana/provisioning/datasources/prometheus.yml <<EOF
@@ -319,11 +337,74 @@
         datasources:
           - name: Prometheus
             type: prometheus
+            uid: prometheus
             access: proxy
             url: http://localhost:9090
             isDefault: true
         EOF'
       changed_when: true
+
+    # --- Grafana dashboards as code (ADR-013) -------------------------------
+    # Vendored JSON in files/monitoring/dashboards/<Folder>/*.json, datasource
+    # pinned to uid "prometheus". foldersFromFilesStructure maps each subdir to a
+    # Grafana folder. allowUiUpdates lets you tweak live — but live edits must be
+    # exported back to the repo (Dashboard > Export > Save to file) or they're
+    # lost on the next playbook run.
+    - name: Provision the Grafana dashboard provider
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/grafana/provisioning/dashboards/homelab.yml <<EOF
+        apiVersion: 1
+        providers:
+          - name: homelab
+            orgId: 1
+            type: file
+            disableDeletion: false
+            allowUiUpdates: true
+            updateIntervalSeconds: 30
+            options:
+              path: /var/lib/grafana/dashboards
+              foldersFromFilesStructure: true
+        EOF'
+      changed_when: true
+
+    - name: Stage dashboard JSON onto the Proxmox host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/dashboards/"
+        dest: "/tmp/grafana-dashboards/"
+        mode: "0644"
+
+    - name: Find staged dashboard files
+      ansible.builtin.find:
+        paths: /tmp/grafana-dashboards
+        patterns: "*.json"
+        recurse: true
+      register: dash_files
+
+    - name: Ensure dashboard folders exist in the CT
+      ansible.builtin.command: >
+        pct exec {{ monitoring_ctid }} --
+        mkdir -p /var/lib/grafana/dashboards/Infrastructure /var/lib/grafana/dashboards/UniFi
+      changed_when: false
+
+    - name: Push dashboards into the CT (preserving folder structure)
+      ansible.builtin.command: >
+        pct push {{ monitoring_ctid }} {{ item.path }}
+        /var/lib/grafana/dashboards/{{ item.path | regex_replace('^/tmp/grafana-dashboards/', '') }}
+      loop: "{{ dash_files.files }}"
+      loop_control:
+        label: "{{ item.path | regex_replace('^/tmp/grafana-dashboards/', '') }}"
+      changed_when: true
+
+    - name: Own the dashboards dir for Grafana
+      ansible.builtin.command: >
+        pct exec {{ monitoring_ctid }} --
+        chown -R grafana:grafana /var/lib/grafana/dashboards
+      changed_when: false
+
+    - name: Remove the staging dir from the Proxmox host
+      ansible.builtin.file:
+        path: /tmp/grafana-dashboards
+        state: absent
 
     # --- Alertmanager + am-ntfy bridge + alert rules (ADR-013) ---------------
     - name: Check whether Alertmanager is installed
@@ -443,6 +524,7 @@
         msg:
           - "Monitoring CT {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
           - "Grafana :3000 (admin) / Prometheus :9090/targets — LAN/Tailscale only."
+          - "Dashboards as code: Infrastructure (Node Exporter, Proxmox) + UniFi (unpoller set). allowUiUpdates=on — export live edits back to the repo."
           - "Targets: prometheus + node (x{{ monitoring_node_targets | length }}) + pve (x{{ monitoring_pve_nodes | length }})."
           - "Alerting: Prometheus rules -> Alertmanager :{{ monitoring_alertmanager_port }} -> am-ntfy :{{ monitoring_amntfy_port }} -> ntfy."
           - "Alerts at :9090/alerts, AM at :{{ monitoring_alertmanager_port }}. Test: amtool alert add (see runbook)."

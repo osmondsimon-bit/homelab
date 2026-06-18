@@ -111,7 +111,6 @@
         pct exec {{ tailscale_ctid }} -- tailscale up
         --authkey={{ ts_authkey }}
         --advertise-routes={{ tailscale_advertise_routes }}
-        --accept-routes
         --hostname={{ tailscale_hostname }}
       no_log: true
       changed_when: true
