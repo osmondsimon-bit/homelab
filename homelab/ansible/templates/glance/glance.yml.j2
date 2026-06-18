@@ -119,12 +119,27 @@ pages:
             url: << prom >>
             parameters:
               query: sort_desc((pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) * 100)
+            subrequests:
+              used:
+                url: << prom >>
+                parameters:
+                  query: pve_disk_usage_bytes{id=~"storage/.*"} / 1e9
+              size:
+                url: << prom >>
+                parameters:
+                  query: pve_disk_size_bytes{id=~"storage/.*"} / 1e9
             template: |
+              {{ $used := .Subrequest "used" }}
+              {{ $size := .Subrequest "size" }}
               <div class="list list-gap-10">
               {{ range .JSON.Array "data.result" }}
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight text-truncate">{{ .String "metric.id" }}</div>
-                  <div>{{ printf "%.1f%%" (.Float "value.1") }}</div>
+                {{ $id := .String "metric.id" }}
+                <div>
+                  <div class="flex justify-between gap-10">
+                    <div class="color-highlight text-truncate">{{ $id }}</div>
+                    <div>{{ printf "%.0f%%" (.Float "value.1") }}</div>
+                  </div>
+                  <div class="size-h6 color-subdue">{{ range $used.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $size.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }} GB used</div>
                 </div>
               {{ end }}
               </div>
@@ -216,6 +231,22 @@ pages:
                 icon: di:unifi
                 allow-insecure: true
                 alt-status-codes: [401, 403]
+
+          - type: custom-api
+            title: Guests
+            cache: 1m
+            url: << prom >>
+            parameters:
+              query: sort(pve_up{id=~"lxc/.*|qemu/.*"} * on(id,instance,job) group_left(name,node) pve_guest_info)
+            template: |
+              <div class="list list-gap-10">
+              {{ range .JSON.Array "data.result" }}
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight text-truncate">{{ .String "metric.name" }} <span class="size-h6 color-subdue">{{ .String "metric.node" }}</span></div>
+                  <div class="{{ if eq (.Float "value.1") 1.0 }}color-positive{{ else }}color-negative{{ end }}">{{ if eq (.Float "value.1") 1.0 }}up{{ else }}down{{ end }}</div>
+                </div>
+              {{ end }}
+              </div>
 
           - type: split-column
             max-columns: 3
