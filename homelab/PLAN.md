@@ -128,6 +128,7 @@ Prometheus is scraping (node/pve/UniFi/HA) and alerting works, but **Grafana its
 - [ ] **Build core dashboards as code:** Node Exporter Full (1860), UniFi (unpoller), Proxmox (pve-exporter), a Home Assistant panel. Provision via **Grafana provisioning files in Ansible** (ADR-013) so a rebuild restores them. `allowUiUpdates: true` is set — any live edits must be **exported back to the repo** or they're lost on the next playbook run.
 - [ ] **Prometheus recording rules** for the repeated 24h-peak expressions (host/guest CPU·RAM) that the Glance dashboard computes inline — cheaper and reusable by both Grafana and Glance (per the Glance review note).
 - [ ] Optionally a true installed-vs-latest **version-drift** signal (recording rule or small summary endpoint) — today Glance's "Installed Versions / Latest Releases" is visual comparison only.
+- [ ] **Backup state + recoverability panel (Glance and/or Grafana).** Per host/service, surface: is it backed up? when did the last backup succeed / how stale? is it off-box? and the recovery path (PBS image / Ansible-rebuild / HA partial). Needs backup-freshness metrics — e.g. PBS exposes last-successful-backup via its API/exporter; HA backup age from the share's file mtime via a node_exporter textfile collector. Turns the recovery model (runbook) into an at-a-glance health signal so a silently-failing backup is visible, not discovered at restore time.
 
 ### Small / quick
 - [ ] Drop `--accept-routes` from `provision-tailscale.yml` and re-run (unnecessary on a subnet router).
