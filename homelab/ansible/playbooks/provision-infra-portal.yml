@@ -21,7 +21,7 @@
 - name: Generate SSH deploy key (mgmt-vm)
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
 
   tasks:
     - name: Ensure ~/.ssh exists
