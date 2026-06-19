@@ -95,6 +95,37 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 Living backlog to pick up next session.
 
+### 🔎 End-of-session critic review — open questions (2026-06-19)
+
+These are prioritised gaps identified by harsh self-review. Framed as questions to drive the next session agenda rather than tasks to rubber-stamp.
+
+**Do immediately (unblocked, low effort):**
+- [ ] **mgmt-vm 6GB RAM reboot** — still PENDING since 2026-06-18. Do this at the *start* of the next session (reconnect after reboot), not the end. Stop deferring.
+- [ ] **HA source filter (HAOS-side)** — the Prometheus keep-list is live on the server side but the HAOS-side `prometheus: filter: include_domains: [sensor, climate]` in `configuration.yaml` is still pending. This is in a "done" observability section. Either fix it (File Editor add-on + HA restart) or explicitly mark it deferred and explain why.
+- [ ] **UniFi stale object cleanup** — WireGuard Client network (ADR-003 superseded) + vestigial untagged Default 192.168.1.x net (0 clients) are known dead objects. Delete them via UniFi UI before they confuse Phase 4 network design.
+
+**Security (confirmed gaps, not hypothetical):**
+- [ ] **Tighten Home→IoT and Home→Camera firewall policies** — two over-broad `Secure→Unsecure (ANY)` ALLOW rules confirmed via v2 firewall review 2026-06-19. Both should be scoped to `HA-IP → coordinator-IP:port` and `HA-IP → camera-IPs`. Can the UniFi API push policy changes, or is this UI-only? Answer that question first, then action.
+- [ ] **SSH access audit** — enumerate `authorized_keys` on apophis and oneill PVE hosts. Confirm key-only root login, no stale keys, no password auth. Was listed under Vaultwarden track but doesn't depend on Vaultwarden. Do it independently.
+
+**Continuity gaps (real single points of failure right now):**
+- [ ] **Off-site backup is unresolved** — oneill holds the only copy of mgmt-vm PBS backups and the HA Samba share. oneill hardware failure = total backup loss. "Defer to new-house NAS" is the current answer — but when is the NAS? Can an encrypted cloud sync (S3/Cloudflare R2 via rclone) be set up now as an interim, even just for the PBS datastore? Define minimum acceptable: either a concrete plan with ETA, or explicitly accept the risk with reasoning.
+- [ ] **DNS SPOF during oneill maintenance** — Technitium is the sole home-VLAN resolver. When oneill is rebooted for the new kernel (staged by update-pve-host.yml 2026-06-19), home-VLAN DNS breaks. Does UDM fall back to its own resolver? Does UniFi even have a DNS fallback mechanism? Answer this before scheduling the oneill reboot.
+- [ ] **CT 111 reprovision drill** — Technitium is a live critical service but its rebuild has never been tested. What's the actual outage window for a forced rebuild? Schedule a 30-min window (e.g. late evening), destroy CT 111, re-run provision-technitium.yml, record RTO. Until this is done, DNS recovery is an assumption not a fact.
+
+**Phase 4 readiness (node arrives ~2026-06-26):**
+- [ ] **Phase 4 has no first task** — the new ThinkCentre arrives in ~1 week. What happens on day 1? (Proxmox install from ISO? Automated? What IP? Does it join the cluster immediately or run standalone first?) Write the first 3 concrete steps now while there's time to think, not the day the box arrives.
+- [ ] **DNS redundancy before or after clustering?** — A second Technitium instance eliminates the DNS SPOF and is independent of cluster formation. Could this be done on the new node *before* it joins the cluster (i.e. as Phase 4 step 1, removing the SPOF immediately)?
+- [ ] **Phase 4 scope split** — "Multi-node + HA" covers: cluster formation, ZFS replication, HA failover for the HA VM, DNS redundancy, Terraform import. These are independent. Should Phase 4 be: 4a = cluster + DNS redundancy + ZFS replication; 4b = HA failover + Terraform import? Unbounded phases are where projects stall.
+
+**Design data quality:**
+- [ ] **Verify remaining physical_infra/ specs against datasheets** — switch port specs were wrong until 2026-06-19 (revealed by checking techspecs.ui.com). What else hasn't been verified? Candidates: UPS rating vs actual peak draw (switch PoE + servers + UDM), AP actual PoE draw (nominal 30W but U7 Pro XGS spec may differ), patch cable lengths for PP-B → SW 41-45 run.
+- [ ] **Patching cadence enforcement** — update-pve-host.yml exists but there's no mechanism to remember to run it monthly. Is this a calendar reminder? A Glance widget? An infra-manager cron prompt? Without enforcement the hosts will drift.
+
+**Lower priority but don't forget:**
+- [ ] **CT 116 infra-portal ADR-017 compliance** — the onboarding checklist (monitoring ✓, alerting ✓) was partially followed. CT 116 is fully reproducible from the playbook so a formal restore drill is low-value, but a quick note in the runbook confirming this is the intended recovery path would close the loop.
+- [ ] **Reserve 192.168.2.55 in UniFi** for CT 116 infra-portal (deferred from provisioning — do when CT is confirmed stable).
+
 ### ▶ Pick up next session (immediate)
 - **[~] Re-balance RAM now apophis has 32 GB** (upgraded 2026-06-18; host had ~24 GB free). Done 2026-06-18:
   - **home-assistant (VM 200)** was 4 GB, 24h peak 92% → set **8 GB** and **rebooted — live** ✅.
@@ -155,3 +186,10 @@ Prometheus is scraping (node/pve/UniFi/HA) and alerting works, but **Grafana its
 - [x] **Version the agents** — `.claude/agents/*.md` and `.claude/skills/phase-gate/SKILL.md` are now published with narrow `.gitignore` exceptions. Transcripts, memory, settings, caches, and credentials stay private.
 
 _Resolved this session:_ RAM trim (moot — services now spread across 3 nodes); Proxmox API Ansible modules (superseded by Terraform, ADR-008); drop the `100.x` IP (done — full decouple, ADR-006).
+
+### Physical infrastructure design surface (2026-06-19)
+- [x] **Infra portal (CT 116) — live (ADR-020, 2026-06-19).** Python+D2 generator on mgmt-vm → rsync to nginx LXC; daily systemd timer. Tabs: Overview, Port Schedule, Network, Rack, Lighting, **Switch** (new), TBD tracker.
+- [x] **Switch tab with 4-band zigzag layout (2026-06-19).** USW Pro Max 48 PoE correctly codified from official datasheet: 4 bands (1G PoE+ 1-24 / 1G PoE++ 25-32 / 2.5G PoE+ 33-40 / 2.5G PoE++ 41-48), 720W total PoE, 32W/64W per port. Zigzag physical layout (odd top, even bottom). APs correctly assigned to SW 41-45 (2.5G PoE++ zone) — previous assignment to SW 25-29 was wrong (those are 1G PoE++, not 2.5G). Servers at SW 46-48.
+- [x] **PP-B corrected to target SW 41-45** (2.5G PoE++ right section of switch face). PP-T → SW 1-24 unchanged. SW 25-40 (16 ports, 2 spare bands) documented as valuable headroom.
+- [ ] **Verify remaining physical_infra/ specs** — see critic review above.
+- [ ] **new-house design surface** — physical_infra/ schema and portal are the template. Once new-house project is ingested, the same generator produces a new-house portal. First step: Simon shares existing project inventory.
