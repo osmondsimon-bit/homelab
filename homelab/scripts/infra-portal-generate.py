@@ -263,28 +263,38 @@ td.nd{color:#cbd5e1;font-style:italic}
             color:#92400e;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600}
 .null{color:#cbd5e1}
 code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
-.sw-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:4px}
-.sw-port{border-radius:5px;padding:5px 3px;text-align:center;font-size:10px;
-         min-height:58px;border:1px solid rgba(0,0,0,.08);cursor:default;
-         display:flex;flex-direction:column;justify-content:space-between}
-.sw-port:hover{opacity:.85}
-.sw-port .pnum{font-weight:700;font-size:11px}
-.sw-port .pdev{color:#fff;opacity:.85;margin-top:1px;line-height:1.2;
-               overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.sw-port .pbadge{font-size:9px;opacity:.7;margin-top:2px}
-.sw-spare{background:#f1f5f9!important;border-color:#e2e8f0!important}
-.sw-spare .pnum{color:#94a3b8}
-.sw-spare .pdev{color:#cbd5e1;opacity:1}
-.sw-band-label{font-size:11px;font-weight:600;color:var(--muted);
-               margin:12px 0 4px;padding:4px 8px;background:#f8fafc;
-               border-left:3px solid var(--border);border-radius:0 4px 4px 0}
-.sw-sfp{display:flex;gap:6px;margin-top:8px}
-.sw-sfp-port{flex:1;border-radius:5px;padding:8px;text-align:center;
-             background:#1e293b;color:#f8fafc;font-size:11px;border:1px solid #334155}
-.sw-sfp-port .pnum{font-size:12px;font-weight:700}
-.sw-legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center}
-.sw-legend span{display:flex;align-items:center;gap:4px}
-.sw-legend .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.sw-panel{background:#0f172a;border-radius:8px;padding:12px 14px;margin-bottom:12px}
+.sw-row-label{font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.5px;
+              text-transform:uppercase;margin:8px 0 4px}
+.sw-row-label:first-of-type{margin-top:0}
+.sw-grid{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;margin-bottom:3px}
+.sw-port{border-radius:4px;padding:4px 2px;text-align:center;
+         min-height:72px;border:1px solid rgba(255,255,255,.08);cursor:default;
+         display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.sw-port:hover{filter:brightness(1.12)}
+.sw-port .pnum{font-weight:700;font-size:10px;line-height:1;color:#fff}
+.sw-port .pdev{font-size:8px;line-height:1.25;color:rgba(255,255,255,.88);
+               width:100%;overflow:hidden;display:-webkit-box;
+               -webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.sw-port .pmeta{font-size:8px;font-weight:600;color:rgba(255,255,255,.75);white-space:nowrap}
+.sw-spare{background:#1e293b!important;border-color:#334155!important}
+.sw-spare .pnum{color:#475569!important}
+.sw-spare .pdev{color:#334155!important}
+.sw-spare .pmeta{color:#475569!important}
+.sw-band-sep{height:10px}
+.sw-sfp-row{display:flex;gap:6px;margin-top:10px}
+.sw-sfp-port{flex:1;border-radius:5px;padding:8px 4px;text-align:center;
+             background:#1e293b;color:#f8fafc;font-size:10px;border:1px solid #334155}
+.sw-sfp-port .pnum{font-size:11px;font-weight:700;display:block;margin-bottom:3px}
+.sw-sfp-uplink{background:#0f4c81!important;border-color:#1d6ebc!important}
+.sw-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center}
+.sw-legend span{display:flex;align-items:center;gap:5px}
+.sw-legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.sw-strategy{font-size:13px;line-height:1.7;color:var(--text)}
+.sw-strategy h3{font-size:13px;font-weight:600;margin:14px 0 4px;color:var(--muted)}
+.sw-strategy h3:first-child{margin-top:0}
+.sw-strategy ul{padding-left:18px}
+.sw-strategy li{margin-bottom:3px}
 """
 
 JS = """
@@ -428,88 +438,121 @@ def _sw_port_map(data: dict) -> dict:
 
 
 def switch_section_html(data: dict) -> str:
-    sp      = data.get("switch_ports", {})
-    port_map = _sw_port_map(data)
-    bands   = sp.get("port_bands", [])
+    sp        = data.get("switch_ports", {})
+    port_map  = _sw_port_map(data)
+    bands     = sp.get("port_bands", [])
     sfp_conns = (sp.get("sfp_plus") or {}).get("ports", [])
-    budget  = sp.get("poe_budget", {})
-    model   = sp.get("model", "Core Switch")
-    total_w = budget.get("total_w", 600)
-    alloc_w = budget.get("total_allocated_w", 0)
-    util    = budget.get("utilisation_pct", 0)
+    budget    = sp.get("poe_budget", {})
+    model     = sp.get("model", "Core Switch")
+    total_w   = budget.get("total_w", 600)
+    alloc_w   = budget.get("total_allocated_w", 0)
+    util      = budget.get("utilisation_pct", 0)
 
     band_info = {b["range"]: b for b in bands} if bands else {}
+    # Per-band speed and PoE max for display
+    b1  = band_info.get("1–24", {})
+    b25 = band_info.get("25–48", {})
+    spd1, poe_max1  = b1.get("speed_gbps", 1),   b1.get("poe_max_w_per_port", 30)
+    spd25, poe_max25 = b25.get("speed_gbps", 2.5), b25.get("poe_max_w_per_port", 60)
 
     def port_html(num: int) -> str:
-        p    = port_map.get(num)
-        sec  = (p or {}).get("_section", "")
+        is_1g  = num <= 24
+        speed  = f"{spd1}G"    if is_1g else f"{spd25}G"
+        pmax   = poe_max1      if is_1g else poe_max25
+        p      = port_map.get(num)
+
         if p is None:
-            return (f'<div class="sw-port sw-spare">'
+            # Spare port
+            tip = f"SW-{num}: spare · {speed} · ≤{pmax}W PoE available"
+            return (f'<div class="sw-port sw-spare" title="{tip}">'
                     f'<span class="pnum">{num}</span>'
-                    f'<span class="pdev" style="color:#cbd5e1">spare</span>'
-                    f'<span class="pbadge"></span></div>')
+                    f'<span class="pdev">spare</span>'
+                    f'<span class="pmeta">{speed} · ≤{pmax}W</span></div>')
+
         vlan   = p.get("vlan")
         bg     = VLAN_BG.get(vlan, "#94a3b8")
-        device = (p.get("device") or p.get("notes") or "")[:28]
-        eth    = p.get("eth") or ""
-        poe    = p.get("poe_w")
-        badge  = f'{eth} {"⚡"+str(poe)+"W" if poe else ""}'.strip()
+        device = (p.get("device") or "")
         room   = p.get("room") or ""
         label  = device if device else room
-        return (f'<div class="sw-port" style="background:{bg}" title="SW-{num}: {room} — {device} ({vlan})">'
-                f'<span class="pnum" style="color:#fff">{num}</span>'
+        poe_w  = p.get("poe_w")
+        poe_str = f"⚡{poe_w}W" if poe_w else "—"
+        tip = f"SW-{num}: {room} · {device} · {vlan} · {speed} · {poe_str}"
+        return (f'<div class="sw-port" style="background:{bg}" title="{tip}">'
+                f'<span class="pnum">{num}</span>'
                 f'<span class="pdev">{label}</span>'
-                f'<span class="pbadge" style="color:#fff">{badge}</span></div>')
-
-    def band_label(rng: str) -> str:
-        b    = band_info.get(rng, {})
-        spd  = b.get("speed_gbps", "?")
-        poe  = b.get("poe_type", "")
-        pp   = b.get("patch_panel", "")
-        return (f'<div class="sw-band-label">SW {rng} &mdash; {spd}G {poe}'
-                f'{"&nbsp;&nbsp;→&nbsp;" + pp if pp else ""}</div>')
-
-    rows_1g  = "".join(port_html(n) for n in range(1,  13))
-    rows_1gb = "".join(port_html(n) for n in range(13, 25))
-    rows_25g = "".join(port_html(n) for n in range(25, 37))
-    rows_25gb= "".join(port_html(n) for n in range(37, 49))
+                f'<span class="pmeta">{speed} · {poe_str}</span></div>')
 
     def sfp_html(sfp: dict) -> str:
         port = sfp.get("port", "SFP+?")
-        conn = sfp.get("connection") or sfp.get("description") or "spare"
-        role = sfp.get("role", "")
-        style = 'style="background:#0f172a"' if role == "uplink" else ""
-        return (f'<div class="sw-sfp-port" {style}>'
-                f'<div class="pnum">{port}</div>'
-                f'<div style="font-size:10px;opacity:.8;margin-top:3px">{conn[:30]}</div>'
-                f'</div>')
+        conn = sfp.get("connection") or "spare"
+        is_uplink = "UDM" in conn or "uplink" in conn.lower()
+        cls  = "sw-sfp-port sw-sfp-uplink" if is_uplink else "sw-sfp-port"
+        return (f'<div class="{cls}">'
+                f'<span class="pnum">{port}</span>'
+                f'<span style="font-size:9px;opacity:.8">{conn[:28]}</span></div>')
 
+    row1  = "".join(port_html(n) for n in range(1,  25))
+    row2  = "".join(port_html(n) for n in range(25, 49))
     sfp_row = "".join(sfp_html(s) for s in sfp_conns)
 
     legend_items = "".join(
         f'<span><span class="dot" style="background:{c}"></span>{v}</span>'
         for v, c in VLAN_BG.items()
-    ) + '<span><span class="dot" style="background:#f1f5f9;border:1px solid #e2e8f0"></span>spare</span>'
+    ) + '<span><span class="dot" style="background:#1e293b;border:1px solid #475569"></span>spare</span>'
+
+    n_active = len([n for n in port_map if n <= 48])
+    poe_pct  = round(alloc_w / total_w * 100)
+
+    # Spare strategy analysis
+    spare_1g  = [n for n in range(1,  25) if n not in port_map]
+    spare_25g = [n for n in range(25, 49) if n not in port_map]
+    next_1g   = min(spare_1g)  if spare_1g  else None
+    next_25g  = min(spare_25g) if spare_25g else None
 
     return f"""
 <div class="card">
   <h2>{model}</h2>
-  <div class="stats" style="margin-bottom:12px">
-    <div class="stat"><div class="v">{len([p for p in port_map if p <= 48])}</div><div class="l">Active ports</div></div>
-    <div class="stat"><div class="v">{48 - len([p for p in port_map if p <= 48])}</div><div class="l">Spare RJ45</div></div>
+  <div class="stats" style="margin-bottom:14px">
+    <div class="stat"><div class="v">{n_active}</div><div class="l">Active RJ45</div></div>
+    <div class="stat"><div class="v">{48 - n_active}</div><div class="l">Spare RJ45</div></div>
     <div class="stat"><div class="v">{alloc_w}W</div><div class="l">PoE allocated</div></div>
     <div class="stat"><div class="v">{total_w - alloc_w}W</div><div class="l">PoE headroom</div></div>
-    <div class="stat"><div class="v">{util}%</div><div class="l">PoE utilisation</div></div>
+    <div class="stat"><div class="v">{poe_pct}%</div><div class="l">PoE utilisation</div></div>
+  </div>
+  <div class="bar-wrap" style="margin-bottom:14px">
+    <div class="bar-fill" style="width:{poe_pct}%;background:#f59e0b"></div>
   </div>
   <div class="sw-legend">{legend_items}</div>
-  {band_label("1–24")}
-  <div class="sw-grid">{rows_1g}</div>
-  <div class="sw-grid">{rows_1gb}</div>
-  {band_label("25–48")}
-  <div class="sw-grid">{rows_25g}</div>
-  <div class="sw-grid">{rows_25gb}</div>
-  <div class="sw-band-label">SFP+ Uplinks &mdash; 10G (no PoE)</div>
-  <div class="sw-sfp">{sfp_row}</div>
+  <div class="sw-panel">
+    <div class="sw-row-label">Ports 1–24 &nbsp;·&nbsp; {spd1}G PoE+ (802.3at, {poe_max1}W max) &nbsp;→&nbsp; PP-T</div>
+    <div class="sw-grid">{row1}</div>
+    <div class="sw-band-sep"></div>
+    <div class="sw-row-label">Ports 25–48 &nbsp;·&nbsp; {spd25}G PoE++ (802.3bt, {poe_max25}W max) &nbsp;→&nbsp; PP-B / direct</div>
+    <div class="sw-grid">{row2}</div>
+    <div class="sw-sfp-row">{sfp_row}</div>
+  </div>
+</div>
+<div class="card">
+  <h2>Spare Port Strategy</h2>
+  <div class="sw-strategy">
+    <h3>Design principle — fill sequentially, never restack</h3>
+    <p>The port assignment is grouped by purpose and speed, so EtherLighting produces natural colour clusters on the physical panel. Adding a device extends the cluster without disrupting existing cables.</p>
+    <h3>1G band (ports 1–24 → PP-T): cameras, PCs, TVs, IoT</h3>
+    <ul>
+      <li>Ports 1–16 active; <strong>{len(spare_1g)} spare</strong> (ports {min(spare_1g) if spare_1g else "—"}–24)</li>
+      <li>Next device: use PP-T{(next_1g or 0):02d} → SW-{next_1g or "?"} — patch cable straight down to switch</li>
+      <li>All spares are 802.3at PoE+ up to {poe_max1}W — suitable for cameras, dimmers, small IoT</li>
+    </ul>
+    <h3>2.5G band (ports 25–48 → PP-B / direct): APs and servers</h3>
+    <ul>
+      <li>APs: ports 25–29 (PP-B01–05); Servers: ports 45–47 (direct); Port 48 spare</li>
+      <li>Next AP or high-bandwidth device: SW-{next_25g or "?"} (growing right from AP cluster)</li>
+      <li>All spares are 802.3bt PoE++ up to {poe_max25}W — ready for future U7 Pro XGS or similar</li>
+      <li>Servers grow left from port 48 if you add a 4th node</li>
+    </ul>
+    <h3>When to restack</h3>
+    <p>Essentially never. You would need &gt;24 distinct 1G drops <em>and</em> &gt;24 2.5G devices before any band runs out. With EtherLighting, leaving spares dark in each cluster is intentional — it signals "room to grow here" on the physical panel.</p>
+  </div>
 </div>"""
 
 
