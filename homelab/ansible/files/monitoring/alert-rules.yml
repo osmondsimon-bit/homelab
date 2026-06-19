@@ -68,3 +68,29 @@ groups:
         annotations:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} (on {{ $labels.instance }}) has pve_up=0 — stopped/crashed for 5m while its host is up."
+
+      # A backup group hasn't had a fresh backup within its own staleness budget
+      # (homelab_backup_max_age_seconds, default 36h). Metrics come from the backup-hub
+      # textfile collector (backup-freshness.sh / provision-backup-monitoring.yml, ADR-017):
+      # PBS snapshot age per vm/ct group + HA native-backup age. A silently-failing backup
+      # becomes visible here instead of at restore time.
+      - alert: BackupStale
+        expr: (time() - homelab_backup_last_success_timestamp_seconds) > homelab_backup_max_age_seconds
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup stale: {{ $labels.type }} {{ $labels.group }}"
+          description: "No fresh {{ $labels.type }} backup for {{ $labels.group }} within its staleness budget — last success is older than expected."
+
+      # The freshness collector itself stopped reporting (script/timer broken, or the
+      # backup hub is down) — no homelab_backup_* series at all. Without this, a dead
+      # collector would silently mask BackupStale.
+      - alert: BackupAbsent
+        expr: absent(homelab_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup freshness metrics missing"
+          description: "No homelab_backup_last_success_timestamp_seconds series — backup-freshness.sh/timer on the backup hub may have failed."
