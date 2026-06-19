@@ -337,7 +337,9 @@ pages:
             # Age + budget come pre-divided to hours in PromQL so the template needs no arithmetic.
             url: << prom >>
             parameters:
-              query: (time() - homelab_backup_last_success_timestamp_seconds) / 3600
+              # Derive a pveid (qemu/<id> | lxc/<id>) from the PBS group so the template can
+              # resolve the guest alias from live pve_guest_info — no hardcoded VMID->name map.
+              query: label_replace(label_replace((time() - homelab_backup_last_success_timestamp_seconds) / 3600, "pveid", "qemu/$1", "group", "vm/(.+)"), "pveid", "lxc/$1", "group", "ct/(.+)")
             subrequests:
               budget:
                 url: << prom >>
@@ -347,9 +349,14 @@ pages:
                 url: << prom >>
                 parameters:
                   query: homelab_backup_count
+              guests:
+                url: << prom >>
+                parameters:
+                  query: pve_guest_info
             template: |
               {{ $budget := .Subrequest "budget" }}
               {{ $count := .Subrequest "count" }}
+              {{ $guests := .Subrequest "guests" }}
               <div class="list list-gap-10">
               {{ if eq (len (.JSON.Array "data.result")) 0 }}
                 <div class="color-negative">No backup metrics — collector down?</div>
@@ -357,12 +364,15 @@ pages:
               {{ range .JSON.Array "data.result" }}
                 {{ $type := .String "metric.type" }}
                 {{ $group := .String "metric.group" }}
+                {{ $pveid := .String "metric.pveid" }}
                 {{ $age := .Float "value.1" }}
                 {{ $budgetH := 0.0 }}
                 {{ range $budget.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ $budgetH = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $label := $group }}
+                {{ if ne $pveid "" }}{{ range $guests.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $pveid }}{{ $label = .String "metric.name" }}{{ end }}{{ end }}{{ end }}
                 <div>
                   <div class="flex justify-between gap-10">
-                    <div class="color-highlight text-truncate">{{ $group }}</div>
+                    <div class="color-highlight text-truncate">{{ $label }}</div>
                     <div{{ if gt $age $budgetH }} class="color-negative"{{ else }} class="color-positive"{{ end }}>{{ printf "%.1fh ago" $age }}</div>
                   </div>
                   <div class="size-h6 color-subdue">{{ if eq $type "pbs" }}PBS image restore{{ else if eq $type "ha" }}HA partial restore{{ else }}{{ $type }}{{ end }} · {{ range $count.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ printf "%.0f kept" (.Float "value.1") }}{{ end }}{{ end }}</div>
