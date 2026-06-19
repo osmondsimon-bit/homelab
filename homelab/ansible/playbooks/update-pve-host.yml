@@ -1,0 +1,86 @@
+---
+# Update a Proxmox VE host — apt update + dist-upgrade (ADR-015 host track).
+# Hosts patch MANUALLY in a deliberate window, ONE NODE AT A TIME (no auto-reboot; once
+# clustered, HA failover will cover the reboot). This playbook does the upgrade and REPORTS
+# whether a reboot is required; it does NOT reboot unless you pass -e do_reboot=true.
+#
+# Run from the mgmt-vm, inside homelab/ansible/, ALWAYS with --limit to a single host:
+#   ansible-playbook playbooks/update-pve-host.yml --limit oneill
+#   ansible-playbook playbooks/update-pve-host.yml --limit oneill -e do_reboot=true   # in a window
+#
+# Reboot impact (plan a window): rebooting oneill drops Technitium (home-VLAN DNS),
+# Monitoring, PBS, HA-share and Glance for ~2-3 min, and trips the apophis dead-man's-switch
+# (expected). See runbook "Planned maintenance on oneill". apophis additionally hosts the HA
+# VM, mgmt-vm and Tailscale.
+#
+# Assumes no-subscription repos are already in place (pve-enterprise disabled). The play
+# fails fast if more than one host is targeted, to enforce one-node-at-a-time.
+
+- name: Update a Proxmox VE host
+  hosts: proxmox
+  gather_facts: true
+
+  tasks:
+    - name: Refuse to run on more than one host at a time (use --limit)
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: "Target exactly ONE host with --limit (roll nodes one at a time). Got: {{ ansible_play_hosts_all | join(', ') }}"
+        quiet: true
+      run_once: true
+
+    - name: Guard — the enterprise repo must be disabled (no subscription)
+      ansible.builtin.shell: >
+        grep -Risq 'Enabled:\s*false' /etc/apt/sources.list.d/pve-enterprise.sources
+      register: ent_disabled
+      changed_when: false
+      failed_when: ent_disabled.rc != 0
+
+    - name: apt update + dist-upgrade (Proxmox-recommended)
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+      register: upgrade_result
+
+    - name: Autoremove now-unused packages
+      ansible.builtin.apt:
+        autoremove: true
+      register: autoremove_result
+
+    # PVE does NOT ship update-notifier's apt hook, so /var/run/reboot-required is often
+    # absent even after a kernel upgrade. The reliable signal is: newest installed -pve
+    # kernel != running kernel. (Also honour the flag if some package did set it.)
+    - name: Determine whether a reboot is required (running vs newest installed kernel)
+      ansible.builtin.shell: |
+        running="$(uname -r)"
+        newest="$(ls -1 /boot/vmlinuz-*-pve 2>/dev/null | sed 's@.*/vmlinuz-@@' | sort -V | tail -1)"
+        if [ -f /var/run/reboot-required ] || { [ -n "$newest" ] && [ "$running" != "$newest" ]; }; then
+          echo "REBOOT running=$running newest=$newest"
+        else
+          echo "OK running=$running newest=$newest"
+        fi
+      register: reboot_check
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "{{ inventory_hostname }}: upgrade {{ 'made changes' if upgrade_result.changed else 'no changes' }}; pveversion below."
+          - "Reboot required: {{ 'YES — ' ~ reboot_check.stdout ~ ' — reboot in a window (drops oneill services) or rerun with -e do_reboot=true' if reboot_check.stdout.startswith('REBOOT') else 'no (' ~ reboot_check.stdout ~ ')' }}"
+
+    - name: Show pveversion after upgrade
+      ansible.builtin.command: pveversion
+      register: pve_after
+      changed_when: false
+
+    - name: pveversion
+      ansible.builtin.debug:
+        var: pve_after.stdout
+
+    # --- Optional, deliberate reboot (only with -e do_reboot=true) ---
+    - name: Reboot the host (only when explicitly requested)
+      ansible.builtin.reboot:
+        msg: "Reboot for Proxmox/kernel update (ADR-015 host window)"
+        reboot_timeout: 600
+      when:
+        - do_reboot | default(false) | bool
+        - reboot_check.stdout.startswith('REBOOT')

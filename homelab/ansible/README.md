@@ -64,6 +64,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-patching.yml` | Unattended **security** upgrades on all guest LXCs (discovered via `pct list`) — no auto-reboot, midday-local timer, ntfy on failure (ADR-015). Run on both hosts (no `--limit`) |
 | `provision-backup-monitoring.yml` | Backup-freshness textfile collector on the hub (oneill) — hourly timer writes `homelab_backup_*` from the PBS datastore + HA share; powers BackupStale/BackupAbsent + the Glance/Grafana backup panels (ADR-017). Targets oneill |
 | `provision-deadmans-switch.yml` | apophis cron that ntfy-alerts if oneill monitoring/Technitium is unreachable (ADR-013). Run with `--limit apophis` |
+| `update-pve-host.yml` | Update a Proxmox VE host — `apt update` + `dist-upgrade` + autoremove, reports reboot-required (running vs newest kernel) — **no reboot** unless `-e do_reboot=true` (ADR-015 host track). **One node at a time**, `--limit <host>` (refuses multiple). Reboot drops oneill services — plan a window |
 
 Dry-run first against production with `--check` where the modules support it, or
 test on a Proxmox snapshot.
