@@ -1,0 +1,86 @@
+---
+# Backup-freshness monitoring on the backup hub (oneill) — ADR-017.
+# Installs backup-freshness.sh + an hourly systemd timer that writes a node_exporter
+# textfile (.prom). The host node_exporter (already scraped by Prometheus) then exposes
+# homelab_backup_* metrics, powering the BackupStale/BackupAbsent alerts, the Glance
+# "Backup State" widget, and the Grafana backups dashboard. Pure filesystem reads of the
+# PBS datastore + HA share — no PBS auth. Idempotent.
+#
+# Run from the mgmt-vm, inside homelab/ansible/:
+#   ansible-playbook playbooks/provision-backup-monitoring.yml
+#
+# Vars (group_vars): pbs_datastore_dataset, habackup_dataset, backup_stale_max_age_seconds.
+
+- name: Install backup-freshness textfile collector on the backup hub
+  hosts: oneill
+  gather_facts: false
+
+  tasks:
+    - name: Install the backup-freshness script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/backup-freshness.sh"
+        dest: /usr/local/bin/backup-freshness.sh
+        mode: "0755"
+
+    - name: Write the backup-freshness environment file
+      ansible.builtin.copy:
+        dest: /etc/default/backup-freshness
+        mode: "0644"
+        content: |
+          PBS_DATASTORE=/{{ pbs_datastore_dataset }}
+          HA_SHARE=/{{ habackup_dataset }}
+          TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+          BACKUP_STALE_MAX_AGE={{ backup_stale_max_age_seconds }}
+
+    - name: Install the backup-freshness systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/backup-freshness.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Write homelab backup-freshness node_exporter textfile
+          After=local-fs.target
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/backup-freshness
+          ExecStart=/usr/local/bin/backup-freshness.sh
+          Nice=10
+
+    - name: Install the backup-freshness systemd timer (hourly + at boot)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/backup-freshness.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Run backup-freshness hourly
+          [Timer]
+          OnBootSec=2min
+          OnUnitActiveSec=1h
+          Persistent=true
+          [Install]
+          WantedBy=timers.target
+
+    - name: Ensure the textfile dir exists
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter
+        state: directory
+        mode: "0755"
+
+    - name: Enable the timer and run the collector once now
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        daemon_reload: true
+        enabled: true
+        state: started
+      loop:
+        - backup-freshness.timer
+        - backup-freshness.service
+
+    - name: Confirm the textfile was written
+      ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_backups.prom
+      register: prom_out
+      changed_when: false
+
+    - name: Show the emitted metrics
+      ansible.builtin.debug:
+        var: prom_out.stdout_lines

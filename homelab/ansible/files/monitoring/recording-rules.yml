@@ -1,0 +1,32 @@
+# Prometheus recording rules for the homelab (ADR-013).
+# Loaded via rule_files: /etc/prometheus/rules/*.yml (same dir as alert-rules). STATIC file,
+# copied into the CT verbatim — {{ }} here would be literal, so there are none.
+#
+# These pre-compute the host/guest CPU+RAM utilization series that Glance (and Grafana)
+# would otherwise recompute inline on every refresh. Consumers read the cheap recorded
+# series instead, and derive the 24h peak with max_over_time(<recorded>[24h:5m]) — far
+# lighter than re-evaluating the full join/rate expression. The guest rules carry the
+# joined name/node/type/id labels (via pve_guest_info), so dashboards don't repeat the join.
+#
+# Naming: <level>:<metric>:<unit>  (percent = 0..100).
+groups:
+  - name: homelab-recording
+    interval: 1m
+    rules:
+      # --- Hosts (node_exporter) ---
+      - record: instance:node_cpu_util:percent
+        expr: 100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+
+      - record: instance:node_mem_util:percent
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+
+      # --- Guests (pve-exporter, joined to names) ---
+      - record: guest:pve_cpu_util:percent
+        expr: >
+          (pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100)
+          * on(id,instance,job) group_left(name,node,type) pve_guest_info
+
+      - record: guest:pve_mem_util:percent
+        expr: >
+          ((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)
+          * on(id,instance,job) group_left(name,node,type) pve_guest_info

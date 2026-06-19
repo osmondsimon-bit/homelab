@@ -75,6 +75,7 @@ monitoring_tsdb_quota: 20G
 monitoring_tsdb_mount: /var/lib/prometheus                  # bind-mount path (Prometheus data dir)
 monitoring_retention_days: 30
 monitoring_scrape_interval: 30s
+backup_stale_max_age_seconds: 129600                        # 36h — BackupStale/freshness budget (ADR-017)
 monitoring_node_targets:                                    # node_exporter on the PVE hosts (:9100)
   - "YOUR_PROXMOX_IP:9100"                                  # apophis
   - "YOUR_NUC_IP:9100"                                      # oneill
@@ -113,6 +114,26 @@ glance_prometheus_url: "http://YOUR_MONITORING_IP:9090"     # monitoring CT — 
 glance_hosts:                                               # Proxmox nodes — host CPU/RAM/updates panes + node links
   - { name: apophis, node_exporter_instance: "YOUR_PROXMOX_IP:9100", pve_instance: "YOUR_PROXMOX_IP" }
   - { name: oneill,  node_exporter_instance: "YOUR_NUC_IP:9100",     pve_instance: "YOUR_NUC_IP" }
+
+# Glance "Service Status" tiles — ONE place to add a new service (ADR-017 onboarding).
+# URLs reference the existing *_ip vars (IPs stay DRY); optional: check_url, allow_insecure,
+# alt_status_codes (for endpoints that answer 401/403 when healthy).
+glance_services:
+  - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
+  - { title: "Technitium DNS", url: "http://{{ technitium_ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  - { title: "Grafana", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
+  - { title: "Prometheus", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
+  - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
+  - { title: "Proxmox Backup Server", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
+  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", icon: "di:tailscale" }
+
+# Glance "Latest Releases" — bump when a new service has a GitHub release to track.
+glance_release_repos:
+  - glanceapp/glance
+  - prometheus/prometheus
+  - grafana/grafana
+  - tailscale/tailscale
+  - TechnitiumSoftware/DnsServer
 
 # --- Patching (ADR-015) — set to YOUR local tz so guest security upgrades fire at LOCAL noon ---
 patching_timezone: "Etc/UTC"                                # set your IANA Region/City tz; blank/UTC = 12:00 UTC

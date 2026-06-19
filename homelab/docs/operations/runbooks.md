@@ -446,6 +446,54 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 
 ---
 
+## Onboarding a new guest / node / storage (ADR-017)
+
+Observability + a continuity plan are part of provisioning, not a later add-on. Work
+top-to-bottom; most monitoring is automatic, so the list is short.
+
+**1. Provision**
+- [ ] Reserve the static IP in UniFi *before* provisioning (DHCP collisions bite — see Glance `.12`).
+- [ ] Add the `<svc>_*` block to `group_vars/all.yml` (+ placeholder in `all.yml.example`).
+- [ ] Write/run `provision-<svc>.yml` (Terraform creates / Ansible configures per ADR-008).
+
+**2. Monitoring — mostly automatic, confirm + register**
+- Automatic (no action): `GuestDown` (`pve_up`), Glance VM/LXC CPU/RAM/Disk (`pve_guest_info` +
+  `guest:*` recording rules), `PVEStorageFull` + Storage Pools for any new `storage/.*`.
+- [ ] Add a tile to **`glance_services`** (group_vars) — one entry; re-run `provision-glance.yml`.
+- [ ] If it has GitHub releases, add to **`glance_release_repos`**.
+- [ ] If it exposes its own metrics, add a `scrape_config` to `provision-monitoring.yml`
+      (+ a Grafana dashboard under `files/monitoring/dashboards/`).
+- [ ] Update the `GuestDown` id-map comment in `alert-rules.yml`.
+
+**3. Alerting**
+- [ ] Confirm `GuestDown`/`TargetDown` cover it. Add a service-specific rule only for a
+      real failure mode beyond "process down".
+
+**4. Backup — a deliberate decision (ADR-012), then make it visible**
+- [ ] Pick one and record it in PLAN.md / `components/<svc>.md`:
+  - **Reproducible-from-playbook** (most LXCs) — the playbook is the backup; no image.
+  - **App-native** (e.g. HA partial) — configure + land off-box.
+  - **PBS image** (stateful, not reproducible from code) — add to the Proxmox backup job.
+- [ ] Register freshness: PBS groups + the HA share are auto-discovered by
+      `backup-freshness.sh` → `BackupStale`/`BackupAbsent` + Glance "Backup State" +
+      the Grafana "Backups & Recoverability" dashboard cover it for free. A new *kind*
+      of target (new datastore/share) → teach the script that path, then re-run
+      `provision-backup-monitoring.yml`.
+
+**5. Continuity — prove it**
+- [ ] Run a restore/reprovision drill; record the RTO in the Restore drills table above.
+
+**6. Docs**
+- [ ] Update `PLAN.md` (infra table + single source of truth) and add `docs/components/<svc>.md`.
+
+**Node-specific:** also add to `monitoring_node_targets`, `monitoring_pve_nodes`, and
+`glance_hosts`; run `install-node-exporter.yml`; mint the PVEAuditor token (play 1 of
+`provision-monitoring.yml`, no `--limit`). **Storage-specific:** `PVEStorageFull` +
+Storage Pools cover it automatically; if it's a new backup datastore, extend
+`backup-freshness.sh`.
+
+---
+
 ## Git / repo
 
 ### Push latest changes

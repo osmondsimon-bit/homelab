@@ -62,6 +62,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana + Alertmanager + exporters (mints read-only PVE tokens; prompts Grafana pw, blank=keep; ADR-013). Run **without** `--limit` (play 1 hits both hosts) |
 | `provision-glance.yml` | Glance dashboard LXC on oneill — front-door launchpad, pinned Go binary (ADR-014). Run with `--limit oneill` |
 | `provision-patching.yml` | Unattended **security** upgrades on all guest LXCs (discovered via `pct list`) — no auto-reboot, midday-local timer, ntfy on failure (ADR-015). Run on both hosts (no `--limit`) |
+| `provision-backup-monitoring.yml` | Backup-freshness textfile collector on the hub (oneill) — hourly timer writes `homelab_backup_*` from the PBS datastore + HA share; powers BackupStale/BackupAbsent + the Glance/Grafana backup panels (ADR-017). Targets oneill |
 | `provision-deadmans-switch.yml` | apophis cron that ntfy-alerts if oneill monitoring/Technitium is unreachable (ADR-013). Run with `--limit apophis` |
 
 Dry-run first against production with `--check` where the modules support it, or

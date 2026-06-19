@@ -13,10 +13,6 @@
 # time-series / alert-debugging surface. "Installed Versions" vs "Latest Releases" is a visual
 # comparison only (no automatic drift detection).
 <% set prom = glance_prometheus_url ~ '/api/v1/query' %>
-<% set mon = monitoring_ip | regex_replace('/.*$', '') %>
-<% set ha = ha_ip | regex_replace('/.*$', '') %>
-<% set technitium = technitium_ip | regex_replace('/.*$', '') %>
-<% set pbs = pbs_ip | regex_replace('/.*$', '') %>
 <% set unifi = gateway | regex_replace('/.*$', '') %>
 server:
   host: 0.0.0.0
@@ -45,20 +41,20 @@ pages:
             cache: 30s
             url: << prom >>
             parameters:
-              query: 100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+              query: instance:node_cpu_util:percent
             subrequests:
               cpu_peak:
                 url: << prom >>
                 parameters:
-                  query: max_over_time((100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))))[24h:5m])
+                  query: max_over_time(instance:node_cpu_util:percent[24h:5m])
               ram_now:
                 url: << prom >>
                 parameters:
-                  query: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+                  query: instance:node_mem_util:percent
               ram_peak:
                 url: << prom >>
                 parameters:
-                  query: max_over_time((100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))[24h:5m])
+                  query: max_over_time(instance:node_mem_util:percent[24h:5m])
               storage:
                 url: << prom >>
                 parameters:
@@ -186,35 +182,22 @@ pages:
           - type: monitor
             title: Service Status
             cache: 1m
+            # Data-driven from glance_services (group_vars) — add a service THERE, not here (ADR-017).
             sites:
-              - title: Home Assistant
-                url: http://<< ha >>:8123
-                icon: di:home-assistant
-              - title: Technitium DNS
-                url: http://<< technitium >>:5380
-                icon: di:technitium
-                alt-status-codes: [401, 403]
-              - title: Grafana
-                url: http://<< mon >>:3000
-                check-url: http://<< mon >>:3000/api/health
-                icon: di:grafana
-              - title: Prometheus
-                url: http://<< mon >>:9090
-                check-url: http://<< mon >>:9090/-/healthy
-                icon: di:prometheus
-              - title: Alertmanager
-                url: http://<< mon >>:9093
-                check-url: http://<< mon >>:9093/-/healthy
-                icon: di:alertmanager
-              - title: Proxmox Backup Server
-                url: https://<< pbs >>:8007
-                check-url: https://<< pbs >>:8007
-                icon: di:proxmox-backup-server
+              <% for s in glance_services %>
+              - title: << s.title >>
+                url: << s.url >>
+              <% if s.check_url is defined %>
+                check-url: << s.check_url >>
+              <% endif %>
+                icon: << s.icon >>
+              <% if s.allow_insecure | default(false) %>
                 allow-insecure: true
-                alt-status-codes: [401, 403]
-              - title: Tailscale
-                url: https://login.tailscale.com/admin/machines
-                icon: di:tailscale
+              <% endif %>
+              <% if s.alt_status_codes is defined %>
+                alt-status-codes: << s.alt_status_codes >>
+              <% endif %>
+              <% endfor %>
 
           - type: monitor
             title: Infrastructure
@@ -243,12 +226,12 @@ pages:
                 cache: 30s
                 url: << prom >>
                 parameters:
-                  query: sort_desc((pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                  query: sort_desc(guest:pve_cpu_util:percent)
                 subrequests:
                   peak:
                     url: << prom >>
                     parameters:
-                      query: max_over_time((pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100)[24h:5m]) * on(id,instance,job) group_left(name,node,type) pve_guest_info
+                      query: max_over_time(guest:pve_cpu_util:percent[24h:5m])
                 template: |
                   {{ $peak := .Subrequest "peak" }}
                   <div class="list list-gap-10">
@@ -269,12 +252,12 @@ pages:
                 cache: 30s
                 url: << prom >>
                 parameters:
-                  query: sort_desc(((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                  query: sort_desc(guest:pve_mem_util:percent)
                 subrequests:
                   peak:
                     url: << prom >>
                     parameters:
-                      query: max_over_time(((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)[24h:5m]) * on(id,instance,job) group_left(name,node,type) pve_guest_info
+                      query: max_over_time(guest:pve_mem_util:percent[24h:5m])
                 template: |
                   {{ $peak := .Subrequest "peak" }}
                   <div class="list list-gap-10">
@@ -348,6 +331,46 @@ pages:
               </div>
 
           - type: custom-api
+            title: Backup State
+            cache: 1m
+            # Backup freshness from the hub textfile collector (backup-freshness.sh, ADR-017).
+            # Age + budget come pre-divided to hours in PromQL so the template needs no arithmetic.
+            url: << prom >>
+            parameters:
+              query: (time() - homelab_backup_last_success_timestamp_seconds) / 3600
+            subrequests:
+              budget:
+                url: << prom >>
+                parameters:
+                  query: homelab_backup_max_age_seconds / 3600
+              count:
+                url: << prom >>
+                parameters:
+                  query: homelab_backup_count
+            template: |
+              {{ $budget := .Subrequest "budget" }}
+              {{ $count := .Subrequest "count" }}
+              <div class="list list-gap-10">
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}
+                <div class="color-negative">No backup metrics — collector down?</div>
+              {{ end }}
+              {{ range .JSON.Array "data.result" }}
+                {{ $type := .String "metric.type" }}
+                {{ $group := .String "metric.group" }}
+                {{ $age := .Float "value.1" }}
+                {{ $budgetH := 0.0 }}
+                {{ range $budget.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ $budgetH = .Float "value.1" }}{{ end }}{{ end }}
+                <div>
+                  <div class="flex justify-between gap-10">
+                    <div class="color-highlight text-truncate">{{ $group }}</div>
+                    <div{{ if gt $age $budgetH }} class="color-negative"{{ else }} class="color-positive"{{ end }}>{{ printf "%.1fh ago" $age }}</div>
+                  </div>
+                  <div class="size-h6 color-subdue">{{ if eq $type "pbs" }}PBS image restore{{ else if eq $type "ha" }}HA partial restore{{ else }}{{ $type }}{{ end }} · {{ range $count.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ printf "%.0f kept" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                </div>
+              {{ end }}
+              </div>
+
+          - type: custom-api
             title: Installed Versions
             cache: 5m
             url: << prom >>
@@ -397,12 +420,11 @@ pages:
             limit: 8
             collapse-after: 8
             show-source-icon: true
+            # Data-driven from glance_release_repos (group_vars) — ADR-017.
             repositories:
-              - glanceapp/glance
-              - prometheus/prometheus
-              - grafana/grafana
-              - tailscale/tailscale
-              - TechnitiumSoftware/DnsServer
+              <% for r in glance_release_repos %>
+              - << r >>
+              <% endfor %>
 
           - type: bookmarks
             title: Admin Links

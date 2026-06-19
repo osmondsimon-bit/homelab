@@ -493,11 +493,17 @@
         pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/prometheus/rules && cat > /etc/prometheus/rules/homelab.yml'
       changed_when: true
 
-    - name: Validate alert rules + Alertmanager config before (re)starting
+    - name: Drop the recording rules into the CT
+      ansible.builtin.shell: >
+        echo '{{ lookup('file', playbook_dir + '/../files/monitoring/recording-rules.yml') | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/prometheus/rules && cat > /etc/prometheus/rules/recording.yml'
+      changed_when: true
+
+    - name: Validate alert + recording rules + Alertmanager config before (re)starting
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           set -e
-          promtool check rules /etc/prometheus/rules/homelab.yml
+          promtool check rules /etc/prometheus/rules/homelab.yml /etc/prometheus/rules/recording.yml
           amtool check-config /etc/prometheus/alertmanager.yml
         '
       changed_when: false

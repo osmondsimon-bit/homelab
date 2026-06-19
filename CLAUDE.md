@@ -62,6 +62,8 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **ADRs:** Use `homelab/decisions/template.md`. Filename: `NNN-short-title.md`. Status is `Draft → Accepted → Superseded`. Capture context, decision, and consequences — not implementation detail.
 
+**New infrastructure (observability & continuity by default — ADR-017):** every new guest/node/storage gets monitoring, alerting, a recorded backup *decision* (+ backup-freshness registration), and a restore drill **as part of provisioning** — follow the "Onboarding a new guest / node / storage" checklist in `homelab/docs/operations/runbooks.md`. Adding a service to the dashboards is a one-line edit to `glance_services` / `glance_release_repos` in group_vars.
+
 **Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or Tailscale (full network; WireGuard is superseded — see ADR-003). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
 
 **Local config backup:** Real config plus local Claude/Codex agent config live only on the mgmt-vm (ADR-006). Back them up to the private `homelab-private` repo with `bash homelab/scripts/backup-local-config.sh` after changing local config and at session close (ADR-007). Never back up credentials. PBS now covers the mgmt-vm; HA native backup and off-site backup remain tracked in PLAN.md.
