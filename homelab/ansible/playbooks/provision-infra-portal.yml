@@ -150,30 +150,40 @@
         "chown portal-deploy:www-data /var/www/portal && chmod 775 /var/www/portal"
       changed_when: false
 
-    - name: Push hardened nginx site config
+    - name: Write nginx portal config to temp file on oneill
+      ansible.builtin.copy:
+        dest: /tmp/portal-nginx-{{ portal_ctid }}.conf
+        content: |
+          server {
+              listen {{ portal_ip }}:80 default_server;
+              server_name _;
+              root /var/www/portal;
+              index index.html;
+              access_log /var/log/nginx/portal-access.log;
+              error_log  /var/log/nginx/portal-error.log;
+
+              gzip on;
+              gzip_types text/html text/css application/javascript image/svg+xml;
+
+              location / {
+                  try_files $uri $uri/ =404;
+                  autoindex off;
+              }
+
+              location ~ /\. { deny all; }
+          }
+
+    - name: Push nginx config into CT {{ portal_ctid }}
       ansible.builtin.command: >
-        pct exec {{ portal_ctid }} -- bash -c
-        "cat > /etc/nginx/sites-available/portal << 'NGINX'
-server {
-    listen {{ portal_ip }}:80 default_server;
-    server_name _;
-    root /var/www/portal;
-    index index.html;
-    access_log /var/log/nginx/portal-access.log;
-    error_log  /var/log/nginx/portal-error.log;
+        pct push {{ portal_ctid }}
+        /tmp/portal-nginx-{{ portal_ctid }}.conf
+        /etc/nginx/sites-available/portal
+      changed_when: true
 
-    gzip on;
-    gzip_types text/html text/css application/javascript image/svg+xml;
-
-    location / {
-        try_files \$uri \$uri/ =404;
-        autoindex off;
-    }
-
-    location ~ /\. { deny all; }
-}
-NGINX"
-      changed_when: false
+    - name: Remove temp nginx config from oneill
+      ansible.builtin.file:
+        path: /tmp/portal-nginx-{{ portal_ctid }}.conf
+        state: absent
 
     - name: Enable nginx site, disable default
       ansible.builtin.command: >
