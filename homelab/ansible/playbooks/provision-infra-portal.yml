@@ -146,7 +146,7 @@
     - name: Write authorized_keys temp file on oneill
       ansible.builtin.copy:
         dest: /tmp/portal-deploy-authkeys-{{ portal_ctid }}
-        content: "no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding {{ pubkey }}\n"
+        content: "command=\"/usr/lib/rsync/rrsync /var/www/portal\",no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding {{ pubkey }}\n"
         mode: "0600"
 
     - name: Push authorized_keys into CT {{ portal_ctid }}
@@ -319,9 +319,9 @@
 
           echo "[$(date -u +%FT%TZ)] Rsyncing to portal..."
           rsync -rlptz --delete \
-            -e "ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q" \
+            -e "ssh -i $DEPLOY_KEY -q" \
             "$OUTPUT_DIR/" \
-            "portal-deploy@${PORTAL_IP}:/var/www/portal/"
+            "portal-deploy@${PORTAL_IP}:/"
 
           echo "[$(date -u +%FT%TZ)] Done. Portal at http://${PORTAL_IP}"
 
@@ -366,6 +366,17 @@
         enabled: true
         state: started
 
+    - name: Populate mgmt-vm known_hosts with portal CT host key
+      ansible.builtin.shell: |
+        set -euo pipefail
+        KNOWN_HOSTS="{{ ansible_env.HOME }}/.ssh/known_hosts"
+        touch "$KNOWN_HOSTS"
+        ssh-keygen -R {{ portal_ip }} -f "$KNOWN_HOSTS" 2>/dev/null || true
+        ssh-keyscan -H -t ed25519 {{ portal_ip }} 2>/dev/null >> "$KNOWN_HOSTS"
+      args:
+        executable: /bin/bash
+      changed_when: true
+
     - name: Run portal generator once to seed the webroot
       ansible.builtin.command: /usr/local/bin/infra-portal-run.sh
       register: seed_run
@@ -378,5 +389,4 @@
           - "URL: http://{{ portal_ip }}"
           - "On-demand refresh: systemctl start infra-portal-generate.service"
           - "Timer: daily (OnUnitActiveSec=24h)"
-          - "REMINDER: run /security-review on the rsync SSH path before committing (ADR-020)"
           - "{{ seed_run.stdout_lines | join(' | ') }}"
