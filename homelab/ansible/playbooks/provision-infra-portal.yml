@@ -281,7 +281,9 @@
         curl -fsSL "https://github.com/terrastruct/d2/releases/download/{{ d2_version }}/d2-{{ d2_version }}-linux-amd64.tar.gz" \
           -o "$TMPDIR/d2.tar.gz"
         tar -xzf "$TMPDIR/d2.tar.gz" -C "$TMPDIR"
-        install -m 0755 "$TMPDIR/d2-{{ d2_version }}-linux-amd64/bin/d2" /usr/local/bin/d2
+        D2_BIN=$(find "$TMPDIR" -type f -name d2 | head -1)
+        if [[ -z "$D2_BIN" ]]; then echo "d2 binary not found in tarball"; exit 1; fi
+        install -m 0755 "$D2_BIN" /usr/local/bin/d2
         rm -rf "$TMPDIR"
       args:
         executable: /bin/bash
