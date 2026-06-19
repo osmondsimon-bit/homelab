@@ -146,7 +146,7 @@
     - name: Write authorized_keys temp file on oneill
       ansible.builtin.copy:
         dest: /tmp/portal-deploy-authkeys-{{ portal_ctid }}
-        content: "command=\"/usr/lib/rsync/rrsync /var/www/portal\",no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding {{ pubkey }}\n"
+        content: "command=\"/usr/bin/rrsync /var/www/portal\",no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding {{ pubkey }}\n"
         mode: "0600"
 
     - name: Push authorized_keys into CT {{ portal_ctid }}
