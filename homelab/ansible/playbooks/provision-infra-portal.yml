@@ -120,29 +120,58 @@
       changed_when: false
 
     - name: Create portal-deploy user (restricted rsync target)
-      ansible.builtin.command: >
-        pct exec {{ portal_ctid }} -- bash -c
-        "id portal-deploy 2>/dev/null ||
-         useradd --system --no-create-home --shell /bin/bash
-         --groups www-data portal-deploy"
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ portal_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - "id portal-deploy 2>/dev/null || useradd --system --no-create-home --shell /bin/bash --groups www-data portal-deploy"
       changed_when: false
 
     - name: Create portal-deploy home + .ssh directory
-      ansible.builtin.command: >
-        pct exec {{ portal_ctid }} -- bash -c
-        "mkdir -p /home/portal-deploy/.ssh &&
-         chown -R portal-deploy:portal-deploy /home/portal-deploy &&
-         chmod 700 /home/portal-deploy/.ssh"
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ portal_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - "mkdir -p /home/portal-deploy/.ssh && chown -R portal-deploy:portal-deploy /home/portal-deploy && chmod 700 /home/portal-deploy/.ssh"
       changed_when: false
 
-    - name: Install restricted authorized_keys for portal-deploy
+    - name: Write authorized_keys temp file on oneill
+      ansible.builtin.copy:
+        dest: /tmp/portal-deploy-authkeys-{{ portal_ctid }}
+        content: "no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding {{ pubkey }}\n"
+        mode: "0600"
+
+    - name: Push authorized_keys into CT {{ portal_ctid }}
       ansible.builtin.command: >
-        pct exec {{ portal_ctid }} -- bash -c
-        "echo 'no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding
-        {{ pubkey }}' > /home/portal-deploy/.ssh/authorized_keys &&
-         chmod 600 /home/portal-deploy/.ssh/authorized_keys &&
-         chown portal-deploy:portal-deploy /home/portal-deploy/.ssh/authorized_keys"
+        pct push {{ portal_ctid }}
+        /tmp/portal-deploy-authkeys-{{ portal_ctid }}
+        /home/portal-deploy/.ssh/authorized_keys
+      changed_when: true
+
+    - name: Fix authorized_keys ownership inside CT
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ portal_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - "chown portal-deploy:portal-deploy /home/portal-deploy/.ssh/authorized_keys && chmod 600 /home/portal-deploy/.ssh/authorized_keys"
       changed_when: false
+
+    - name: Remove temp authorized_keys from oneill
+      ansible.builtin.file:
+        path: /tmp/portal-deploy-authkeys-{{ portal_ctid }}
+        state: absent
 
     - name: Ensure portal-deploy can write to webroot
       ansible.builtin.command: >
@@ -186,10 +215,15 @@
         state: absent
 
     - name: Enable nginx site, disable default
-      ansible.builtin.command: >
-        pct exec {{ portal_ctid }} -- bash -c
-        "ln -sf /etc/nginx/sites-available/portal /etc/nginx/sites-enabled/portal &&
-         rm -f /etc/nginx/sites-enabled/default"
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ portal_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - "ln -sf /etc/nginx/sites-available/portal /etc/nginx/sites-enabled/portal && rm -f /etc/nginx/sites-enabled/default"
       changed_when: false
 
     - name: Validate nginx config
