@@ -47,10 +47,11 @@ def load_data(data_dir: str) -> dict:
             data[key] = {}
 
     for key, path in [
-        ("vlans",    d / "network/vlans.yaml"),
-        ("topology", d / "network/topology.yaml"),
-        ("compute",  d / "compute/hosts.yaml"),
-        ("rack",     d / "rack/layout.yaml"),
+        ("vlans",        d / "network/vlans.yaml"),
+        ("topology",     d / "network/topology.yaml"),
+        ("switch_ports", d / "network/switch_ports.yaml"),
+        ("compute",      d / "compute/hosts.yaml"),
+        ("rack",         d / "rack/layout.yaml"),
     ]:
         if path.exists():
             data[key] = yaml.safe_load(path.read_text()) or {}
@@ -262,6 +263,28 @@ td.nd{color:#cbd5e1;font-style:italic}
             color:#92400e;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600}
 .null{color:#cbd5e1}
 code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
+.sw-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:4px}
+.sw-port{border-radius:5px;padding:5px 3px;text-align:center;font-size:10px;
+         min-height:58px;border:1px solid rgba(0,0,0,.08);cursor:default;
+         display:flex;flex-direction:column;justify-content:space-between}
+.sw-port:hover{opacity:.85}
+.sw-port .pnum{font-weight:700;font-size:11px}
+.sw-port .pdev{color:#fff;opacity:.85;margin-top:1px;line-height:1.2;
+               overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sw-port .pbadge{font-size:9px;opacity:.7;margin-top:2px}
+.sw-spare{background:#f1f5f9!important;border-color:#e2e8f0!important}
+.sw-spare .pnum{color:#94a3b8}
+.sw-spare .pdev{color:#cbd5e1;opacity:1}
+.sw-band-label{font-size:11px;font-weight:600;color:var(--muted);
+               margin:12px 0 4px;padding:4px 8px;background:#f8fafc;
+               border-left:3px solid var(--border);border-radius:0 4px 4px 0}
+.sw-sfp{display:flex;gap:6px;margin-top:8px}
+.sw-sfp-port{flex:1;border-radius:5px;padding:8px;text-align:center;
+             background:#1e293b;color:#f8fafc;font-size:11px;border:1px solid #334155}
+.sw-sfp-port .pnum{font-size:12px;font-weight:700}
+.sw-legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center}
+.sw-legend span{display:flex;align-items:center;gap:4px}
+.sw-legend .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
 """
 
 JS = """
@@ -380,6 +403,116 @@ def vlan_pills(ports: list) -> str:
     )
 
 
+VLAN_BG = {
+    "Home":       "#3b82f6",
+    "Camera":     "#ef4444",
+    "IoT":        "#22c55e",
+    "Guest":      "#a855f7",
+    "Management": "#475569",
+}
+
+def _sw_port_map(data: dict) -> dict:
+    """Build a dict of switch port number → port info from switch_ports.yaml."""
+    sp = data.get("switch_ports", {})
+    m: dict = {}
+    for section in ("pp_top", "pp_bottom"):
+        for p in (sp.get(section) or {}).get("active_ports", []):
+            sw = p.get("sw")
+            if sw is not None:
+                m[int(sw)] = {**p, "_section": section}
+    for p in (sp.get("direct_connections") or []):
+        sw = p.get("sw")
+        if sw is not None:
+            m[int(sw)] = {**p, "_section": "direct", "device": p.get("device", ""), "vlan": p.get("vlan")}
+    return m
+
+
+def switch_section_html(data: dict) -> str:
+    sp      = data.get("switch_ports", {})
+    port_map = _sw_port_map(data)
+    bands   = sp.get("port_bands", [])
+    sfp_conns = (sp.get("sfp_plus") or {}).get("ports", [])
+    budget  = sp.get("poe_budget", {})
+    model   = sp.get("model", "Core Switch")
+    total_w = budget.get("total_w", 600)
+    alloc_w = budget.get("total_allocated_w", 0)
+    util    = budget.get("utilisation_pct", 0)
+
+    band_info = {b["range"]: b for b in bands} if bands else {}
+
+    def port_html(num: int) -> str:
+        p    = port_map.get(num)
+        sec  = (p or {}).get("_section", "")
+        if p is None:
+            return (f'<div class="sw-port sw-spare">'
+                    f'<span class="pnum">{num}</span>'
+                    f'<span class="pdev" style="color:#cbd5e1">spare</span>'
+                    f'<span class="pbadge"></span></div>')
+        vlan   = p.get("vlan")
+        bg     = VLAN_BG.get(vlan, "#94a3b8")
+        device = (p.get("device") or p.get("notes") or "")[:28]
+        eth    = p.get("eth") or ""
+        poe    = p.get("poe_w")
+        badge  = f'{eth} {"⚡"+str(poe)+"W" if poe else ""}'.strip()
+        room   = p.get("room") or ""
+        label  = device if device else room
+        return (f'<div class="sw-port" style="background:{bg}" title="SW-{num}: {room} — {device} ({vlan})">'
+                f'<span class="pnum" style="color:#fff">{num}</span>'
+                f'<span class="pdev">{label}</span>'
+                f'<span class="pbadge" style="color:#fff">{badge}</span></div>')
+
+    def band_label(rng: str) -> str:
+        b    = band_info.get(rng, {})
+        spd  = b.get("speed_gbps", "?")
+        poe  = b.get("poe_type", "")
+        pp   = b.get("patch_panel", "")
+        return (f'<div class="sw-band-label">SW {rng} &mdash; {spd}G {poe}'
+                f'{"&nbsp;&nbsp;→&nbsp;" + pp if pp else ""}</div>')
+
+    rows_1g  = "".join(port_html(n) for n in range(1,  13))
+    rows_1gb = "".join(port_html(n) for n in range(13, 25))
+    rows_25g = "".join(port_html(n) for n in range(25, 37))
+    rows_25gb= "".join(port_html(n) for n in range(37, 49))
+
+    def sfp_html(sfp: dict) -> str:
+        port = sfp.get("port", "SFP+?")
+        conn = sfp.get("connection") or sfp.get("description") or "spare"
+        role = sfp.get("role", "")
+        style = 'style="background:#0f172a"' if role == "uplink" else ""
+        return (f'<div class="sw-sfp-port" {style}>'
+                f'<div class="pnum">{port}</div>'
+                f'<div style="font-size:10px;opacity:.8;margin-top:3px">{conn[:30]}</div>'
+                f'</div>')
+
+    sfp_row = "".join(sfp_html(s) for s in sfp_conns)
+
+    legend_items = "".join(
+        f'<span><span class="dot" style="background:{c}"></span>{v}</span>'
+        for v, c in VLAN_BG.items()
+    ) + '<span><span class="dot" style="background:#f1f5f9;border:1px solid #e2e8f0"></span>spare</span>'
+
+    return f"""
+<div class="card">
+  <h2>{model}</h2>
+  <div class="stats" style="margin-bottom:12px">
+    <div class="stat"><div class="v">{len([p for p in port_map if p <= 48])}</div><div class="l">Active ports</div></div>
+    <div class="stat"><div class="v">{48 - len([p for p in port_map if p <= 48])}</div><div class="l">Spare RJ45</div></div>
+    <div class="stat"><div class="v">{alloc_w}W</div><div class="l">PoE allocated</div></div>
+    <div class="stat"><div class="v">{total_w - alloc_w}W</div><div class="l">PoE headroom</div></div>
+    <div class="stat"><div class="v">{util}%</div><div class="l">PoE utilisation</div></div>
+  </div>
+  <div class="sw-legend">{legend_items}</div>
+  {band_label("1–24")}
+  <div class="sw-grid">{rows_1g}</div>
+  <div class="sw-grid">{rows_1gb}</div>
+  {band_label("25–48")}
+  <div class="sw-grid">{rows_25g}</div>
+  <div class="sw-grid">{rows_25gb}</div>
+  <div class="sw-band-label">SFP+ Uplinks &mdash; 10G (no PoE)</div>
+  <div class="sw-sfp">{sfp_row}</div>
+</div>"""
+
+
 def generate_html(data: dict, net_svg: str, rack_svg: str, ts: str) -> str:
     ports     = get_ports(data)
     tbds      = find_tbds(data)
@@ -413,6 +546,7 @@ def generate_html(data: dict, net_svg: str, rack_svg: str, ts: str) -> str:
   <a data-id="network"   onclick="show('network');return false"   href="#network">Network</a>
   <a data-id="rack"      onclick="show('rack');return false"      href="#rack">Rack</a>
   <a data-id="lighting"  onclick="show('lighting');return false"  href="#lighting">Lighting</a>
+  <a data-id="switch"    onclick="show('switch');return false"    href="#switch">Switch</a>
   <a data-id="tbd"       onclick="show('tbd');return false"       href="#tbd">TBD{tbd_badge}</a>
 </nav>
 <main>
@@ -486,6 +620,10 @@ def generate_html(data: dict, net_svg: str, rack_svg: str, ts: str) -> str:
       <tbody>{lighting_rows(data)}</tbody>
     </table>
   </div>
+</section>
+
+<section id="switch">
+  {switch_section_html(data)}
 </section>
 
 <section id="tbd">
