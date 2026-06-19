@@ -69,6 +69,21 @@ groups:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} (on {{ $labels.instance }}) has pve_up=0 — stopped/crashed for 5m while its host is up."
 
+      # Home Assistant is the automation hub — alert FASTER than the generic 5m TargetDown.
+      # up{job="home-assistant"}==0 means HA's /api/prometheus is unreachable: VM down, HA
+      # crashed, or the scrape token broke. This is the reliable HA-down signal even on a
+      # whole-apophis outage (where GuestDown's pve_up goes ABSENT, not 0). A planned apophis
+      # reboot WILL trip this (HA lives there) — silence it during host maintenance:
+      #   pct exec 114 -- amtool silence add alertname=HomeAssistantDown --duration=30m --comment="apophis maintenance"
+      - alert: HomeAssistantDown
+        expr: up{job="home-assistant"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Home Assistant unreachable (2m)"
+          description: "Prometheus can't scrape Home Assistant (up=0) for 2m — HA VM down, HA crashed, or the metrics token broke. Automations may be offline."
+
       # A backup group hasn't had a fresh backup within its own staleness budget
       # (homelab_backup_max_age_seconds, default 36h). Metrics come from the backup-hub
       # textfile collector (backup-freshness.sh / provision-backup-monitoring.yml, ADR-017):
