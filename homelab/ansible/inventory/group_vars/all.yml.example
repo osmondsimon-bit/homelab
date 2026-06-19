@@ -126,6 +126,7 @@ glance_services:
   - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
   - { title: "Proxmox Backup Server", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
   - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", icon: "di:tailscale" }
+  - { title: "Infra Portal", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.
 glance_release_repos:
@@ -134,6 +135,16 @@ glance_release_repos:
   - grafana/grafana
   - tailscale/tailscale
   - TechnitiumSoftware/DnsServer
+  - terrastruct/d2
+
+# --- Infra Portal (CT 116, oneill — ADR-020) ---------------------
+portal_ctid: 116
+portal_hostname: infra-portal
+portal_ram_mb: 256
+portal_cores: 1
+portal_disk_gb: 3
+portal_ip: YOUR_PORTAL_IP                                   # reserve in UniFi before running provision-infra-portal.yml
+d2_version: v0.6.9                                         # PINNED — bump deliberately (breaking changes in d2)
 
 # --- Patching (ADR-015) — set to YOUR local tz so guest security upgrades fire at LOCAL noon ---
 patching_timezone: "Etc/UTC"                                # set your IANA Region/City tz; blank/UTC = 12:00 UTC

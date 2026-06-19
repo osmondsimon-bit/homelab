@@ -1,0 +1,334 @@
+---
+# Homelab Infra Portal — CT 116 on oneill + generation pipeline on mgmt-vm (ADR-020).
+#
+# Two-part deployment:
+#   Play 1: mgmt-vm — generate SSH deploy key (idempotent)
+#   Play 2: oneill  — provision nginx LXC (CT 116), portal-deploy user, authorized_keys
+#   Play 3: mgmt-vm — install D2 + Python generator + systemd timer, run once to seed
+#
+# Run from the mgmt-vm:
+#   ansible-playbook playbooks/provision-infra-portal.yml
+#
+# After provisioning: run /security-review on the rsync/SSH deploy path (ADR-020).
+# Add the portal IP to UniFi DHCP reservations BEFORE running this playbook.
+#
+# On-demand regeneration (after editing physical_infra/):
+#   systemctl start infra-portal-generate.service
+
+# ---------------------------------------------------------------------------
+# Play 1: Generate deploy SSH key on mgmt-vm
+# ---------------------------------------------------------------------------
+- name: Generate SSH deploy key (mgmt-vm)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Ensure ~/.ssh exists
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.ssh"
+        state: directory
+        mode: "0700"
+
+    - name: Generate portal-deploy ed25519 key (idempotent — skips if exists)
+      ansible.builtin.command:
+        cmd: >
+          ssh-keygen -t ed25519 -C "portal-deploy@mgmt-vm"
+          -f {{ ansible_env.HOME }}/.ssh/portal_deploy_ed25519
+          -N ""
+        creates: "{{ ansible_env.HOME }}/.ssh/portal_deploy_ed25519"
+
+    - name: Read deploy public key
+      ansible.builtin.slurp:
+        src: "{{ ansible_env.HOME }}/.ssh/portal_deploy_ed25519.pub"
+      register: portal_pubkey
+
+    - name: Set pubkey fact for Play 2
+      ansible.builtin.set_fact:
+        portal_deploy_pubkey: "{{ portal_pubkey.content | b64decode | trim }}"
+
+# ---------------------------------------------------------------------------
+# Play 2: Provision CT 116 on oneill
+# ---------------------------------------------------------------------------
+- name: Provision Infra Portal LXC (CT 116, oneill)
+  hosts: oneill
+  gather_facts: false
+
+  vars:
+    pubkey: "{{ hostvars['localhost']['portal_deploy_pubkey'] }}"
+
+  tasks:
+    - name: Check if CT {{ portal_ctid }} already exists
+      ansible.builtin.command: pct status {{ portal_ctid }}
+      register: pct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Download LXC template if absent
+      ansible.builtin.command: >
+        pveam download {{ template_store }} {{ lxc_template }}
+      when: pct_status.rc != 0
+      register: dl
+      changed_when: dl.rc == 0
+
+    - name: Create CT {{ portal_ctid }}
+      ansible.builtin.command: >
+        pct create {{ portal_ctid }}
+        {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ portal_hostname }}
+        --cores 1
+        --memory {{ portal_ram_mb }}
+        --rootfs {{ rootfs_storage }}:{{ portal_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ portal_ip }}/24,gw={{ gateway }},firewall=1
+        --nameserver {{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+      when: pct_status.rc != 0
+
+    - name: Start CT {{ portal_ctid }}
+      ansible.builtin.command: pct start {{ portal_ctid }}
+      register: start_result
+      changed_when: start_result.rc == 0
+      failed_when: false
+
+    - name: Wait for CT to be responsive
+      ansible.builtin.command: pct exec {{ portal_ctid }} -- true
+      register: ready
+      until: ready.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Update apt cache
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "apt-get update -qq"
+      changed_when: false
+
+    - name: Install nginx and openssh-server
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx openssh-server rsync"
+      register: pkg_result
+      changed_when: "'newly installed' in pkg_result.stdout"
+
+    - name: Create /var/www/portal webroot
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "mkdir -p /var/www/portal && chown -R www-data:www-data /var/www/portal"
+      changed_when: false
+
+    - name: Create portal-deploy user (restricted rsync target)
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "id portal-deploy 2>/dev/null ||
+         useradd --system --no-create-home --shell /bin/bash
+         --groups www-data portal-deploy"
+      changed_when: false
+
+    - name: Create portal-deploy home + .ssh directory
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "mkdir -p /home/portal-deploy/.ssh &&
+         chown -R portal-deploy:portal-deploy /home/portal-deploy &&
+         chmod 700 /home/portal-deploy/.ssh"
+      changed_when: false
+
+    - name: Install restricted authorized_keys for portal-deploy
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "echo 'no-pty,no-agent-forwarding,no-X11-forwarding,no-port-forwarding
+        {{ pubkey }}' > /home/portal-deploy/.ssh/authorized_keys &&
+         chmod 600 /home/portal-deploy/.ssh/authorized_keys &&
+         chown portal-deploy:portal-deploy /home/portal-deploy/.ssh/authorized_keys"
+      changed_when: false
+
+    - name: Ensure portal-deploy can write to webroot
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "chown portal-deploy:www-data /var/www/portal && chmod 775 /var/www/portal"
+      changed_when: false
+
+    - name: Push hardened nginx site config
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "cat > /etc/nginx/sites-available/portal << 'NGINX'
+server {
+    listen {{ portal_ip }}:80 default_server;
+    server_name _;
+    root /var/www/portal;
+    index index.html;
+    access_log /var/log/nginx/portal-access.log;
+    error_log  /var/log/nginx/portal-error.log;
+
+    gzip on;
+    gzip_types text/html text/css application/javascript image/svg+xml;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+        autoindex off;
+    }
+
+    location ~ /\. { deny all; }
+}
+NGINX"
+      changed_when: false
+
+    - name: Enable nginx site, disable default
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "ln -sf /etc/nginx/sites-available/portal /etc/nginx/sites-enabled/portal &&
+         rm -f /etc/nginx/sites-enabled/default"
+      changed_when: false
+
+    - name: Validate nginx config
+      ansible.builtin.command: pct exec {{ portal_ctid }} -- nginx -t
+      changed_when: false
+
+    - name: Enable and restart nginx
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "systemctl enable nginx && systemctl restart nginx"
+      changed_when: false
+
+    - name: Verify nginx is serving (200 from localhost)
+      ansible.builtin.command: >
+        pct exec {{ portal_ctid }} -- bash -c
+        "curl -fsS http://{{ portal_ip }}/ -o /dev/null -w '%{http_code}' || echo '404'"
+      register: http_check
+      changed_when: false
+      failed_when: false
+
+    - name: Report CT status
+      ansible.builtin.debug:
+        msg:
+          - "CT {{ portal_ctid }} ({{ portal_hostname }}) provisioned on oneill"
+          - "nginx HTTP check: {{ http_check.stdout }} (404 = no index.html yet, normal before first generate)"
+          - "Deploy key installed for portal-deploy; generator will rsync to {{ portal_ip }}:/var/www/portal"
+
+# ---------------------------------------------------------------------------
+# Play 3: Install D2 + generator pipeline on mgmt-vm
+# ---------------------------------------------------------------------------
+- name: Install generator pipeline (mgmt-vm)
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  tasks:
+    - name: Install python3-yaml
+      become: true
+      ansible.builtin.apt:
+        name: python3-yaml
+        state: present
+        update_cache: false
+
+    - name: Check if d2 {{ d2_version }} is already installed
+      ansible.builtin.command: d2 --version
+      register: d2_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Download and install D2 {{ d2_version }} (pinned)
+      become: true
+      ansible.builtin.shell: |
+        set -euo pipefail
+        TMPDIR=$(mktemp -d)
+        curl -fsSL "https://github.com/terrastruct/d2/releases/download/{{ d2_version }}/d2-{{ d2_version }}-linux-amd64.tar.gz" \
+          -o "$TMPDIR/d2.tar.gz"
+        tar -xzf "$TMPDIR/d2.tar.gz" -C "$TMPDIR"
+        install -m 0755 "$TMPDIR/d2-{{ d2_version }}-linux-amd64/bin/d2" /usr/local/bin/d2
+        rm -rf "$TMPDIR"
+      when: d2_installed.rc != 0 or d2_version not in (d2_installed.stdout | default(''))
+      register: d2_install
+      changed_when: d2_install.rc == 0
+
+    - name: Deploy generator script to /usr/local/bin
+      become: true
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/infra-portal-generate.py"
+        dest: /usr/local/bin/infra-portal-generate.py
+        mode: "0755"
+
+    - name: Deploy generation wrapper script
+      become: true
+      ansible.builtin.copy:
+        dest: /usr/local/bin/infra-portal-run.sh
+        mode: "0755"
+        content: |
+          #!/usr/bin/env bash
+          # Homelab Infra Portal — generate + push to CT 116 (ADR-020)
+          set -euo pipefail
+          DATA_DIR="{{ ansible_env.HOME }}/homelab/physical_infra"
+          OUTPUT_DIR="/tmp/infra-portal-out"
+          PORTAL_IP="{{ portal_ip }}"
+          DEPLOY_KEY="{{ ansible_env.HOME }}/.ssh/portal_deploy_ed25519"
+
+          echo "[$(date -u +%FT%TZ)] Generating portal..."
+          python3 /usr/local/bin/infra-portal-generate.py \
+            --data-dir "$DATA_DIR" \
+            --output-dir "$OUTPUT_DIR"
+
+          echo "[$(date -u +%FT%TZ)] Rsyncing to portal..."
+          rsync -rlptz --delete \
+            -e "ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q" \
+            "$OUTPUT_DIR/" \
+            "portal-deploy@${PORTAL_IP}:/var/www/portal/"
+
+          echo "[$(date -u +%FT%TZ)] Done. Portal at http://${PORTAL_IP}"
+
+    - name: Deploy systemd service unit
+      become: true
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/infra-portal-generate.service
+        content: |
+          [Unit]
+          Description=Homelab Infra Portal — generate + push static site
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          User={{ ansible_env.USER }}
+          ExecStart=/usr/local/bin/infra-portal-run.sh
+          StandardOutput=journal
+          StandardError=journal
+
+    - name: Deploy systemd timer unit
+      become: true
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/infra-portal-generate.timer
+        content: |
+          [Unit]
+          Description=Homelab Infra Portal — daily regeneration
+          After=network.target
+
+          [Timer]
+          OnBootSec=5min
+          OnUnitActiveSec=24h
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Reload systemd and enable timer
+      become: true
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: infra-portal-generate.timer
+        enabled: true
+        state: started
+
+    - name: Run portal generator once to seed the webroot
+      ansible.builtin.command: /usr/local/bin/infra-portal-run.sh
+      register: seed_run
+      changed_when: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Infra Portal seeded and live."
+          - "URL: http://{{ portal_ip }}"
+          - "On-demand refresh: systemctl start infra-portal-generate.service"
+          - "Timer: daily (OnUnitActiveSec=24h)"
+          - "REMINDER: run /security-review on the rsync SSH path before committing (ADR-020)"
+          - "{{ seed_run.stdout_lines | join(' | ') }}"
