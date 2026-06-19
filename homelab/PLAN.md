@@ -52,13 +52,14 @@ Offloading the simple services to the NUC frees apophis's CPU for Plex transcodi
 | ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP; serves the **home VLAN** (IoT/guest use the gateway — ADR-011 DNS-by-VLAN-role). |
 | ~~Monitoring (Prometheus + Grafana + Alertmanager)~~ | LXC | oneill (CT 114) | ✅ Live — scrapes Proxmox/UniFi/HA, Alertmanager → am-ntfy bridge → ntfy with starter rules, apophis dead-man's-switch (ADR-013). Dashboards/alerts as code. |
 | ~~Homepage~~ → **Glance** | LXC | **oneill** (CT 115) | ✅ Live — front-door dashboard. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6). |
-| Plex | VM | apophis | Media server, Intel QuickSync passthrough |
+| ~~Plex~~ → **Jellyfin** | VM | apophis | Media server, Intel QuickSync passthrough — **Jellyfin preferred** (open source, no licence); low priority (media importance TBD) |
 | qBittorrent + Gluetun | LXC | apophis | Torrent client behind Gluetun killswitch → ProtonVPN Plus |
-| Vaultwarden | LXC | cluster (HA) | Self-hosted password manager — **sequenced after the HA cluster + backups** (ADR-010) |
+| Vaultwarden | LXC | cluster (HA) — **host TBD** | Self-hosted password manager — placement open pending new node + cluster design (ADR-010, ADR-018) |
+| Minecraft server | VM/LXC | TBD | Game server for future use — low priority, size/placement TBD |
 
-Per-service RAM/disk sizing is set when each is built; with services spread across three nodes the old single-16 GB-host budget no longer binds. Plex stays on apophis for the iGPU.
+Per-service RAM/disk sizing is set when each is built; with services spread across three nodes the old single-16 GB-host budget no longer binds. Jellyfin stays on apophis for the iGPU.
 
-**Media stack:** qBittorrent + Gluetun in one LXC — Gluetun runs the ProtonVPN Plus tunnel + killswitch (all torrent traffic exits via ProtonVPN, drops if the tunnel dies). Plex serves media; shared download path via bind mount (NAS deferred to new house).
+**Media stack:** qBittorrent + Gluetun in one LXC — Gluetun runs the ProtonVPN Plus tunnel + killswitch (all torrent traffic exits via ProtonVPN, drops if the tunnel dies). Jellyfin serves media (preferred over Plex: fully open source, no account or licence required); shared download path via bind mount (NAS deferred to new house). Low priority — revisit once media importance is clearer.
 
 **Password manager (ADR-010):** self-host **Vaultwarden** (local Bitwarden-compatible). It's zero-knowledge — the server stores only ciphertext, so theft of a node never exposes passwords and encrypted backups are safe to store anywhere. Sequenced *after* the HA cluster (solves availability) and the backup story (solves durability). **Bridge with Bitwarden's cloud now**; migration to Vaultwarden is a trivial export/import. Infra/machine secrets stay in `ansible-vault`, not Vaultwarden.
 
@@ -84,8 +85,8 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, serving the home VLAN; IoT/guest use the gateway) — **✓ completed**
 3. **Foundation + observability:** PBS/mgmt-vm backups ✓ → **Monitoring** ✓ (Prometheus + Grafana + Alertmanager) → **Glance** ✓ (front-door dashboard, ADR-014; was Homepage). **✓ closed via `/phase-gate` 2026-06-17** — see `docs/phases/3-foundation-observability.md`. Carry-forwards: ~~HA native backup~~ ✅ landing, ~~mgmt-vm restore drill~~ ✅ PASS, ~~PBS encryption~~ ✅ enabled (2026-06-17), ~~HA-native-restore drill~~ ✅ **PASS 2026-06-18** (`vzdump-qemu-200` retired). **Phase 3 backup carry-forwards all clear.** (Terraform import deferred to cluster scale — ADR-008.)
 4. **Multi-node + HA:** Intel NUC (oneill) joins the cluster → migrate remaining simple services (Tailscale) onto it (Technitium already there); 2nd ThinkCentre → 3-node cluster on ZFS, replication + **HA for the Home Assistant VM**; a 2nd Technitium instance removes the DNS SPOF
-5. **Media:** Plex (QuickSync) + qBittorrent/Gluetun on the freed-up apophis
-6. **Secrets + HA expansion:** self-host Vaultwarden (now HA + backups exist); HACS, Node-RED, ESPHome, HA → Grafana
+5. **Media:** Jellyfin (preferred over Plex — open source, no licence; QuickSync) + qBittorrent/Gluetun on apophis — low priority, revisit once media importance clearer; Minecraft server TBD
+6. **Secrets + HA expansion:** self-host Vaultwarden (host TBD pending cluster design — ADR-010, ADR-018); HACS, Node-RED, ESPHome, HA → Grafana
 - Cross-cutting (designed early, not deferred to the end): VM-level backups, a patching approach
 - Deferred to the new house: NAS / shared storage, cameras, Frigate
 
@@ -111,6 +112,7 @@ Living backlog to pick up next session.
 
 ### New initiatives (proposed 2026-06-19)
 - [x] **UniFi read access for the agent — done 2026-06-19.** `scripts/unifi-query.sh` (GET-only, cookie auth, cached session) reuses the read-only `prometheus_user` (unpoller) account; creds in gitignored `~/.unifi-ro.env` (chmod 600). Verified: networkconf/wlanconf/firewallgroup/user/device/sta/health all `rc=ok`. First review captured the topology (VLANs Home 2 / Camera 3 / IoT 4 / Guest 99 / Mgmt 254 — matches docs). **v2 firewall review added 2026-06-19:** `unifi-query.sh --v2 firewall-policies firewall/zone trafficrules` reads the zone-based firewall (9 zones; 143 policies = 136 predefined + **7 custom**). Posture is sound (Default net blocked from internet/gateway; IoT/Camera blocked from gateway; Test VLAN isolated from Secure) **except** two **over-broad `Secure → Unsecure (ANY)` ALLOW** rules — Home→IoT and Home→Camera — which **confirm the existing Zigbee-path hardening backlog item** (tighten to `HA-IP → coordinator-IP`+port; see Small/quick). **Cleanup candidates:** leftover **WireGuard Client** network (ADR-003 superseded WG w/ Tailscale; vpn health `unknown`) + vestigial untagged **Default** 192.168.1.x net (0 clients, already firewalled off). MCP path still parked. Now enables reading current topology to design the new-house network.
+- [ ] **Vaultwarden — deferred pending new node + cluster design (2026-06-19).** Host placement open (ADR-010 + ADR-018). Tiered secrets model decided and documented in ADR-018; no implementation until Phase 4 node arrives. SSH access audit (enumerate authorized_keys, confirm key-only root on both PVE hosts) to be done as part of the Vaultwarden credentials-cleanup track.
 - [ ] **New-house build inventory → design surface.** Digitise the separate new-house project (network devices, rooms, switches, drops, rack) as **structured YAML** under `homelab/new-house/` (NOT prose) so the agent can reason over it and generate configs. **Scope, once ingested:** validate the port plan, design VLANs + firewall rules, plan rack U-space/port map, AP placement; later scaffold HA areas/devices/automations from the same source of truth. **First step:** Simon shares the existing project → agree a schema → ingest. Needs an ADR (where/how the new-house design lives). This is the umbrella for the currently "deferred to new house" items (NAS/shared storage, cameras, Frigate, switch → USW dashboard).
 
 ### Next build (Phase 3)
