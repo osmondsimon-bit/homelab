@@ -294,7 +294,7 @@
     - name: Deploy generator script to /usr/local/bin
       become: true
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../scripts/infra-portal-generate.py"
+        src: "{{ playbook_dir }}/../../scripts/infra-portal-generate.py"
         dest: /usr/local/bin/infra-portal-generate.py
         mode: "0755"
 
