@@ -283,6 +283,8 @@
         tar -xzf "$TMPDIR/d2.tar.gz" -C "$TMPDIR"
         install -m 0755 "$TMPDIR/d2-{{ d2_version }}-linux-amd64/bin/d2" /usr/local/bin/d2
         rm -rf "$TMPDIR"
+      args:
+        executable: /bin/bash
       when: d2_installed.rc != 0 or d2_version not in (d2_installed.stdout | default(''))
       register: d2_install
       changed_when: d2_install.rc == 0
