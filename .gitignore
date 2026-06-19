@@ -20,6 +20,7 @@
 !/.claude/skills/phase-gate/SKILL.md
 
 # Re-ignored inside the published folders (never publish these):
+homelab/physical_infra/
 homelab/ansible/inventory/hosts.ini
 homelab/ansible/inventory/group_vars/all.yml
 homelab/ansible/inventory/host_vars/*.yml
