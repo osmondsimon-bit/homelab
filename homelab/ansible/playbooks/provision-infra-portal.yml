@@ -291,13 +291,6 @@
       register: d2_install
       changed_when: d2_install.rc == 0
 
-    - name: Deploy generator script to /usr/local/bin
-      become: true
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../scripts/infra-portal-generate.py"
-        dest: /usr/local/bin/infra-portal-generate.py
-        mode: "0755"
-
     - name: Deploy generation wrapper script
       become: true
       ansible.builtin.copy:
@@ -313,7 +306,7 @@
           DEPLOY_KEY="{{ ansible_env.HOME }}/.ssh/portal_deploy_ed25519"
 
           echo "[$(date -u +%FT%TZ)] Generating portal..."
-          python3 /usr/local/bin/infra-portal-generate.py \
+          python3 "{{ ansible_env.HOME }}/homelab/scripts/infra-portal-generate.py" \
             --data-dir "$DATA_DIR" \
             --output-dir "$OUTPUT_DIR"
 
