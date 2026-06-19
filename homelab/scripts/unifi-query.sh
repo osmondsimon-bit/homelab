@@ -15,11 +15,13 @@
 # endpoints to fetch them all under one login.
 #
 # Usage:
-#   bash unifi-query.sh <endpoint> [<endpoint> ...]   # GET /proxy/network/api/s/<site>/<ep>
-#   bash unifi-query.sh --list                        # show common read-only endpoints
+#   bash unifi-query.sh <endpoint> [<endpoint> ...]        # v1: GET /proxy/network/api/s/<site>/<ep>
+#   bash unifi-query.sh --v2 <endpoint> [<endpoint> ...]   # v2: GET /proxy/network/v2/api/site/<site>/<ep>
+#   bash unifi-query.sh --list                             # show common read-only endpoints
 # Examples:
-#   unifi-query.sh rest/networkconf rest/firewallrule stat/device   # one login, three fetches
-#   unifi-query.sh stat/sta                                          # connected clients
+#   unifi-query.sh rest/networkconf rest/wlanconf stat/device    # v1: one login, three fetches
+#   unifi-query.sh --v2 firewall-policies firewall/zone         # v2: zone-based firewall rules + zones
+# The zone-based firewall (UDM) lives on v2 (firewall-policies); classic rest/firewallrule is empty there.
 # Output is JSON (piped through jq if available). GET-only + a view-only account = read-only.
 set -euo pipefail
 
@@ -28,14 +30,20 @@ COOKIE="${TMPDIR:-/tmp}/unifi-ro-cookie-$(id -u)"
 BODY="$(mktemp)"; trap 'rm -f "$BODY"' EXIT
 
 COMMON_ENDPOINTS="rest/firewallrule rest/firewallgroup rest/networkconf rest/portconf rest/wlanconf rest/routing rest/user stat/device stat/sta stat/health self"
+V2_ENDPOINTS="firewall-policies firewall/zone trafficrules"
+
+# --v2 switches the API base (zone-based firewall + newer features live here).
+API="v1"
+if [[ "${1:-}" == "--v2" ]]; then API="v2"; shift; fi
 
 if [[ "${1:-}" == "--list" ]]; then
-  echo "Common read-only endpoints:"; printf '  %s\n' $COMMON_ENDPOINTS
-  echo "Note: UDMs on the zone-based firewall expose 0 rest/firewallrule — use the UI/v2 API for policies."
+  echo "v1 endpoints:"; printf '  %s\n' $COMMON_ENDPOINTS
+  echo "v2 endpoints (use --v2):"; printf '  %s\n' $V2_ENDPOINTS
+  echo "Note: on the zone-based firewall, classic v1 rest/firewallrule is empty — use --v2 firewall-policies."
   exit 0
 fi
 if [[ $# -lt 1 ]]; then
-  echo "Usage: bash unifi-query.sh <endpoint> [<endpoint> ...] | --list   (see header)" >&2
+  echo "Usage: bash unifi-query.sh [--v2] <endpoint> [<endpoint> ...] | --list   (see header)" >&2
   exit 2
 fi
 
@@ -47,6 +55,7 @@ source "$ENV_FILE"
 : "${UNIFI_PASS:?set UNIFI_PASS in $ENV_FILE}"
 SITE="${UNIFI_SITE:-default}"
 UNIFI_URL="${UNIFI_URL%/}"
+if [[ "$API" == "v2" ]]; then BASE="$UNIFI_URL/proxy/network/v2/api/site/$SITE"; else BASE="$UNIFI_URL/proxy/network/api/s/$SITE"; fi
 
 login() {
   local code
@@ -61,10 +70,10 @@ login() {
 fetch() {
   local ep="$1" code
   [[ -s "$COOKIE" ]] || login
-  code="$(curl -sk -b "$COOKIE" -o "$BODY" -w '%{http_code}' "$UNIFI_URL/proxy/network/api/s/$SITE/$ep")"
+  code="$(curl -sk -b "$COOKIE" -o "$BODY" -w '%{http_code}' "$BASE/$ep")"
   if [[ "$code" == "401" || ! -s "$BODY" ]]; then
     login
-    code="$(curl -sk -b "$COOKIE" -o "$BODY" -w '%{http_code}' "$UNIFI_URL/proxy/network/api/s/$SITE/$ep")"
+    code="$(curl -sk -b "$COOKIE" -o "$BODY" -w '%{http_code}' "$BASE/$ep")"
   fi
   [[ "$code" == "200" ]] || echo "  (HTTP $code for $ep)" >&2
 }
