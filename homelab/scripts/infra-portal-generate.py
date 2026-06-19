@@ -264,28 +264,29 @@ td.nd{color:#cbd5e1;font-style:italic}
 .null{color:#cbd5e1}
 code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
 .sw-panel{background:#0f172a;border-radius:8px;padding:12px 14px;margin-bottom:12px}
-.sw-row-label{font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.5px;
-              text-transform:uppercase;margin:8px 0 4px}
-.sw-row-label:first-of-type{margin-top:0}
-.sw-grid{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;margin-bottom:3px}
+.sw-zones{display:flex;gap:5px;align-items:stretch}
+.sw-zone{display:flex;flex-direction:column;min-width:0}
+.sw-zone-sep{width:3px;background:rgba(255,255,255,.15);border-radius:2px;flex-shrink:0}
+.sw-zone-label{font-size:8px;font-weight:700;color:#64748b;text-align:center;
+               margin-top:4px;letter-spacing:.3px;white-space:nowrap;overflow:hidden}
+.sw-grid{display:grid;gap:3px;margin-bottom:3px}
 .sw-port{border-radius:4px;padding:4px 2px;text-align:center;
          min-height:72px;border:1px solid rgba(255,255,255,.08);cursor:default;
          display:flex;flex-direction:column;align-items:center;justify-content:space-between}
 .sw-port:hover{filter:brightness(1.12)}
 .sw-port .pnum{font-weight:700;font-size:10px;line-height:1;color:#fff}
-.sw-port .pdev{font-size:8px;line-height:1.25;color:rgba(255,255,255,.88);
+.sw-port .pdev{font-size:8px;line-height:1.2;color:rgba(255,255,255,.88);
                width:100%;overflow:hidden;display:-webkit-box;
                -webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
-.sw-port .pmeta{font-size:8px;font-weight:600;color:rgba(255,255,255,.75);white-space:nowrap}
+.sw-port .pmeta{font-size:7px;font-weight:600;color:rgba(255,255,255,.7);white-space:nowrap}
 .sw-spare{background:#1e293b!important;border-color:#334155!important}
 .sw-spare .pnum{color:#475569!important}
 .sw-spare .pdev{color:#334155!important}
 .sw-spare .pmeta{color:#475569!important}
-.sw-band-sep{height:10px}
-.sw-sfp-row{display:flex;gap:6px;margin-top:10px}
+.sw-sfp-row{display:flex;gap:4px;margin-top:10px}
 .sw-sfp-port{flex:1;border-radius:5px;padding:8px 4px;text-align:center;
-             background:#1e293b;color:#f8fafc;font-size:10px;border:1px solid #334155}
-.sw-sfp-port .pnum{font-size:11px;font-weight:700;display:block;margin-bottom:3px}
+             background:#1e293b;color:#f8fafc;font-size:9px;border:1px solid #334155}
+.sw-sfp-port .pnum{font-size:10px;font-weight:700;display:block;margin-bottom:3px}
 .sw-sfp-uplink{background:#0f4c81!important;border-color:#1d6ebc!important}
 .sw-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center}
 .sw-legend span{display:flex;align-items:center;gap:5px}
@@ -444,43 +445,72 @@ def switch_section_html(data: dict) -> str:
     sfp_conns = (sp.get("sfp_plus") or {}).get("ports", [])
     budget    = sp.get("poe_budget", {})
     model     = sp.get("model", "Core Switch")
-    total_w   = budget.get("total_w", 600)
+    total_w   = budget.get("total_w", 720)
     alloc_w   = budget.get("total_allocated_w", 0)
-    util      = budget.get("utilisation_pct", 0)
 
-    band_info = {b["range"]: b for b in bands} if bands else {}
-    # Per-band speed and PoE max for display
-    b1  = band_info.get("1–24", {})
-    b25 = band_info.get("25–48", {})
-    spd1, poe_max1  = b1.get("speed_gbps", 1),   b1.get("poe_max_w_per_port", 30)
-    spd25, poe_max25 = b25.get("speed_gbps", 2.5), b25.get("poe_max_w_per_port", 60)
+    # Build band lookup: port number → band info
+    # Bands: 1-24, 25-32, 33-40, 41-48
+    band_by_port: dict = {}
+    for b in bands:
+        rng = b.get("range", "")
+        try:
+            lo, hi = (int(x) for x in rng.replace("–", "-").split("-"))
+            for n in range(lo, hi + 1):
+                band_by_port[n] = b
+        except ValueError:
+            pass
+
+    def get_band(num: int) -> dict:
+        return band_by_port.get(num, {})
 
     def port_html(num: int) -> str:
-        is_1g  = num <= 24
-        speed  = f"{spd1}G"    if is_1g else f"{spd25}G"
-        pmax   = poe_max1      if is_1g else poe_max25
-        p      = port_map.get(num)
+        b     = get_band(num)
+        speed = f'{b.get("speed_gbps", "?")}G'
+        pmax  = b.get("poe_max_w_per_port", "?")
+        p     = port_map.get(num)
 
         if p is None:
-            # Spare port
-            tip = f"SW-{num}: spare · {speed} · ≤{pmax}W PoE available"
+            tip = f"SW-{num}: spare · {speed} · ≤{pmax}W available"
             return (f'<div class="sw-port sw-spare" title="{tip}">'
                     f'<span class="pnum">{num}</span>'
                     f'<span class="pdev">spare</span>'
-                    f'<span class="pmeta">{speed} · ≤{pmax}W</span></div>')
+                    f'<span class="pmeta">{speed} ≤{pmax}W</span></div>')
 
-        vlan   = p.get("vlan")
-        bg     = VLAN_BG.get(vlan, "#94a3b8")
-        device = (p.get("device") or "")
-        room   = p.get("room") or ""
-        label  = device if device else room
-        poe_w  = p.get("poe_w")
+        vlan    = p.get("vlan")
+        bg      = VLAN_BG.get(vlan, "#94a3b8")
+        device  = p.get("device") or ""
+        room    = p.get("room") or ""
+        label   = device if device else room
+        poe_w   = p.get("poe_w")
         poe_str = f"⚡{poe_w}W" if poe_w else "—"
         tip = f"SW-{num}: {room} · {device} · {vlan} · {speed} · {poe_str}"
         return (f'<div class="sw-port" style="background:{bg}" title="{tip}">'
                 f'<span class="pnum">{num}</span>'
                 f'<span class="pdev">{label}</span>'
-                f'<span class="pmeta">{speed} · {poe_str}</span></div>')
+                f'<span class="pmeta">{speed} {poe_str}</span></div>')
+
+    def zone_html(lo: int, hi: int) -> str:
+        """Render one port band as a zone: top row=odd, bottom row=even (zigzag)."""
+        cols = (hi - lo + 1) // 2  # each column = 2 ports
+        top_ports    = list(range(lo,     hi + 1, 2))  # odd: lo, lo+2, lo+4...
+        bottom_ports = list(range(lo + 1, hi + 1, 2))  # even: lo+1, lo+3...
+        b     = get_band(lo)
+        speed = f'{b.get("speed_gbps", "?")}G'
+        ptype = b.get("poe_type", "")
+        # Shorten label
+        ptype_short = ptype.replace("802.3at", "at").replace("802.3bt", "bt")\
+                           .replace("(", "").replace(")", "").strip()
+        label = f"{speed} {ptype_short}"
+        top_html    = "".join(port_html(n) for n in top_ports)
+        bottom_html = "".join(port_html(n) for n in bottom_ports)
+        grid_style  = f'grid-template-columns:repeat({cols},1fr)'
+        return (f'<div class="sw-zone" style="flex:{cols}">'
+                f'<div class="sw-grid" style="{grid_style}">{top_html}</div>'
+                f'<div class="sw-grid" style="{grid_style}">{bottom_html}</div>'
+                f'<div class="sw-zone-label">{lo}–{hi} · {label}</div>'
+                f'</div>')
+
+    sep = '<div class="sw-zone-sep"></div>'
 
     def sfp_html(sfp: dict) -> str:
         port = sfp.get("port", "SFP+?")
@@ -489,10 +519,8 @@ def switch_section_html(data: dict) -> str:
         cls  = "sw-sfp-port sw-sfp-uplink" if is_uplink else "sw-sfp-port"
         return (f'<div class="{cls}">'
                 f'<span class="pnum">{port}</span>'
-                f'<span style="font-size:9px;opacity:.8">{conn[:28]}</span></div>')
+                f'<span style="font-size:8px;opacity:.8">{conn[:26]}</span></div>')
 
-    row1  = "".join(port_html(n) for n in range(1,  25))
-    row2  = "".join(port_html(n) for n in range(25, 49))
     sfp_row = "".join(sfp_html(s) for s in sfp_conns)
 
     legend_items = "".join(
@@ -503,11 +531,13 @@ def switch_section_html(data: dict) -> str:
     n_active = len([n for n in port_map if n <= 48])
     poe_pct  = round(alloc_w / total_w * 100)
 
-    # Spare strategy analysis
-    spare_1g  = [n for n in range(1,  25) if n not in port_map]
-    spare_25g = [n for n in range(25, 49) if n not in port_map]
-    next_1g   = min(spare_1g)  if spare_1g  else None
-    next_25g  = min(spare_25g) if spare_25g else None
+    # Spare strategy
+    spare_1g_poe_plus  = [n for n in range(1,  25) if n not in port_map]
+    spare_1g_poe_pp    = [n for n in range(25, 33) if n not in port_map]
+    spare_25g_poe_plus = [n for n in range(33, 41) if n not in port_map]
+    spare_25g_poe_pp   = [n for n in range(41, 49) if n not in port_map]
+    next_1g   = min(spare_1g_poe_plus) if spare_1g_poe_plus else None
+    next_25g  = min(spare_25g_poe_pp)  if spare_25g_poe_pp  else None
 
     return f"""
 <div class="card">
@@ -524,34 +554,43 @@ def switch_section_html(data: dict) -> str:
   </div>
   <div class="sw-legend">{legend_items}</div>
   <div class="sw-panel">
-    <div class="sw-row-label">Ports 1–24 &nbsp;·&nbsp; {spd1}G PoE+ (802.3at, {poe_max1}W max) &nbsp;→&nbsp; PP-T</div>
-    <div class="sw-grid">{row1}</div>
-    <div class="sw-band-sep"></div>
-    <div class="sw-row-label">Ports 25–48 &nbsp;·&nbsp; {spd25}G PoE++ (802.3bt, {poe_max25}W max) &nbsp;→&nbsp; PP-B / direct</div>
-    <div class="sw-grid">{row2}</div>
+    <div class="sw-zones">
+      {zone_html(1,  24)}{sep}
+      {zone_html(25, 32)}{sep}
+      {zone_html(33, 40)}{sep}
+      {zone_html(41, 48)}
+    </div>
     <div class="sw-sfp-row">{sfp_row}</div>
   </div>
 </div>
 <div class="card">
   <h2>Spare Port Strategy</h2>
   <div class="sw-strategy">
-    <h3>Design principle — fill sequentially, never restack</h3>
-    <p>The port assignment is grouped by purpose and speed, so EtherLighting produces natural colour clusters on the physical panel. Adding a device extends the cluster without disrupting existing cables.</p>
-    <h3>1G band (ports 1–24 → PP-T): cameras, PCs, TVs, IoT</h3>
+    <h3>Fill sequentially within each band — never restack</h3>
+    <p>Four distinct bands give natural EtherLighting colour clusters. Adding a device extends the relevant cluster without moving any existing cables.</p>
+    <h3>Band 1 — 1G PoE+ (ports 1–24 → PP-T)</h3>
     <ul>
-      <li>Ports 1–16 active; <strong>{len(spare_1g)} spare</strong> (ports {min(spare_1g) if spare_1g else "—"}–24)</li>
-      <li>Next device: use PP-T{(next_1g or 0):02d} → SW-{next_1g or "?"} — patch cable straight down to switch</li>
-      <li>All spares are 802.3at PoE+ up to {poe_max1}W — suitable for cameras, dimmers, small IoT</li>
+      <li>Ports 1–16 active; <strong>{len(spare_1g_poe_plus)} spare</strong> (SW {min(spare_1g_poe_plus) if spare_1g_poe_plus else "—"}–24, PP-T17–24)</li>
+      <li>Next 1G device: PP-T{(next_1g or 0):02d} → SW-{next_1g or "?"}, patch cable straight down to switch</li>
+      <li>Suits: cameras, PCs, TVs, IoT (32W max per port)</li>
     </ul>
-    <h3>2.5G band (ports 25–48 → PP-B / direct): APs and servers</h3>
+    <h3>Band 2 — 1G PoE++ (ports 25–32, all spare)</h3>
     <ul>
-      <li>APs: ports 25–29 (PP-B01–05); Servers: ports 45–47 (direct); Port 48 spare</li>
-      <li>Next AP or high-bandwidth device: SW-{next_25g or "?"} (growing right from AP cluster)</li>
-      <li>All spares are 802.3bt PoE++ up to {poe_max25}W — ready for future U7 Pro XGS or similar</li>
-      <li>Servers grow left from port 48 if you add a 4th node</li>
+      <li><strong>8 spare</strong> — reserve for high-draw 1G devices (PTZ cameras, future high-power 1G APs)</li>
+      <li>64W per port without needing 2.5G — use these before bumping a device to Band 4</li>
+    </ul>
+    <h3>Band 3 — 2.5G PoE+ (ports 33–40, all spare)</h3>
+    <ul>
+      <li><strong>8 spare</strong> — 2.5G link with moderate PoE (32W); useful for future NAS, 2.5G workstations, or devices that don't need full PoE++</li>
+    </ul>
+    <h3>Band 4 — 2.5G PoE++ (ports 41–48 → PP-B / direct)</h3>
+    <ul>
+      <li>APs: SW 41–45 (PP-B01–05); Servers: SW 46–48 (direct)</li>
+      <li><strong>{len(spare_25g_poe_pp)} spare</strong> in this band — all used; next AP displaces a server port or use Band 3 if 2.5G without PoE++ is sufficient</li>
+      <li>Next 2.5G PoE++ device: SW-{next_25g or "none (band full)"}</li>
     </ul>
     <h3>When to restack</h3>
-    <p>Essentially never. You would need &gt;24 distinct 1G drops <em>and</em> &gt;24 2.5G devices before any band runs out. With EtherLighting, leaving spares dark in each cluster is intentional — it signals "room to grow here" on the physical panel.</p>
+    <p>Only if Band 4 fills entirely (needs 3 more APs and 1 more server simultaneously) <em>or</em> if Band 1 fills past SW-24. Both are unlikely given the house size. EtherLighting: spare ports sit dark — intentional, signals headroom visually.</p>
   </div>
 </div>"""
 
