@@ -8,7 +8,7 @@ DHCP and hands this out as the resolver (ADR-011).
 | Host / VMID | **oneill** (NUC) / CT 111 (unprivileged LXC, Debian 12) |
 | IP | `YOUR_TECHNITIUM_IP` (static, set in the CT config — reserve/exclude in UniFi) |
 | Ports | `53` DNS, `5380` web console (LAN-only HTTP) |
-| Serves | home / IoT / guest VLANs (camera + management excluded — no internet) |
+| Serves | **home VLAN only** (IoT/guest use the gateway for DNS-by-VLAN-role; camera + management excluded — no internet) |
 | Upstreams | DoH forwarders — Cloudflare, Quad9 (`forwarderProtocol: Https`) |
 | Blocking | OISD Big (`https://big.oisd.nl/domainswild2`), `NxDomain`, 24h refresh |
 

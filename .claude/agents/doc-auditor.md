@@ -34,19 +34,27 @@ Read `homelab/PLAN.md` first to establish the canonical values, then audit the r
    Committed files must use only `YOUR_*` placeholders.
 2. **Cross-file logical consistency.** For each host, check VMID, RAM figure, and status across all
    docs; assert each matches PLAN.md. Report divergences.
-2. **Naming consistency.** Canonical hostnames only (e.g. `mgmt-vm`, not `admin VM`). Flag strays
+3. **Naming consistency.** Canonical hostnames only (e.g. `mgmt-vm`, not `admin VM`). Flag strays
    outside ADRs (ADRs may keep history if marked superseded).
-3. **Superseded-term scan.** Flag retired terms presented as current: `WireGuard` as a current
+4. **Superseded-term scan.** Flag retired terms presented as current: `WireGuard` as a current
    remote-access option (superseded by Tailscale, ADR-003), "not yet active" for Ansible,
    "initial build" / "planned" for things now running.
-4. **Service/phase status.** Every doc's statement of what's deployed and the current phase must
+5. **Service/phase status.** Every doc's statement of what's deployed and the current phase must
    agree with PLAN.md.
-5. **SSoT enforcement.** Flag live facts (IPs/RAM/status) restated outside PLAN.md / the inventory
+6. **SSoT enforcement.** Flag live facts (IPs/RAM/status) restated outside PLAN.md / the inventory
    that should be links instead.
-6. **Map integrity.** Verify paths referenced in `index.md` actually exist; verify the
+7. **Map integrity.** Verify paths referenced in `index.md` actually exist; verify the
    `.claude/agents/` contents match what CLAUDE.md's agent table claims (names and count).
-7. **ADR hygiene.** ADRs containing live IPs/sizing that disagree with PLAN.md and are NOT marked
+8. **ADR hygiene.** ADRs containing live IPs/sizing that disagree with PLAN.md and are NOT marked
    superseded → flag (surface, don't rewrite history).
+9. **Tech-radar currency.** Check `docs/tech-radar.md` against PLAN.md: (a) any Deferred row
+   whose trigger phase is ≤ the current phase (implies the decision was due and may have been
+   taken without updating the radar); (b) any Adopted row whose status says "still to be confirmed"
+   or "pending" when PLAN.md shows it complete; (c) Review log — does it have an entry for the
+   most recently closed phase? Missing entry = radar was not reviewed at gate.
+10. **Component doc currency.** For each `docs/components/<svc>.md`: check the stated VLAN
+    membership, port, VMID, and "Serves" field against the ADR it references and PLAN.md. These
+    facts change when a design decision changes — flag any that contradict the current config.
 
 ## Output
 

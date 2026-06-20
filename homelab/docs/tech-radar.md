@@ -22,12 +22,14 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
 | Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
 | Service dashboard | **Glance** (was Homepage) | Phase 3 ✓ — front-door live on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6) |
-| VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). **HA native partial backup still to be confirmed** landing on the share (CT 113). Off-site copy deferred. |
-| Media server | Plex | Phase 5 — apophis, QuickSync passthrough |
+| VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
+| Media server | Jellyfin (was Plex) | Phase 5 — apophis, QuickSync passthrough |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 5 — apophis |
 | Password manager | Vaultwarden (self-hosted) | Phase 6 (ADR-010) — sequenced after HA + backups; Bitwarden cloud bridges now |
 | Secret handling | Ansible Vault | Infra/machine secrets; human passwords → Vaultwarden |
 | Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
+| Updates / patching | unattended-upgrades + `provision-patching.yml` | Phase 3 ✓ — ADR-015 accepted and live. Guests: security-only, midday, no auto-reboot. Hosts + mgmt-vm: manual monthly window; zero-downtime once Phase 4 HA exists. |
+| Infra portal | Python + D2 generator → CT 116 nginx | Phase 3 ✓ — `infra-portal-generate.py` on mgmt-vm, daily systemd timer, rsync to CT 116 via restricted deploy key. Switch VLAN/PoE view, rack layout, network topology SVG (ADR-020). |
 
 ---
 
@@ -35,12 +37,11 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| Updates / patching | unattended-upgrades + rolling Proxmox window | Phase 3–4 | **ADR-015 accepted** (guests: security-only, midday, no auto-reboot; hosts + mgmt-vm: manual monthly window, last day @ midday; zero-downtime once Phase 4 HA exists). Next: build `provision-patching.yml` (gated). |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |
-| MCP server (Proxmox API) | Community / custom | Phase 3 | Ansible active, AI agents need infra control |
-| MCP server (Grafana) | Grafana MCP | Phase 3 | Grafana deployed and being actively used |
+| MCP server (Proxmox API) | Community / custom | Phase 4+ | Parked — Ansible covers current needs; revisit when agent tool-use is a regular workflow |
+| MCP server (Grafana) | Grafana MCP | Phase 4+ | Parked — Grafana live but read-via-browser; revisit if agent-driven dashboard work becomes common |
 | Infra agent tool access | scoped-MCP pattern (TadMSTR) | Phase 4 | More than 2 agents needing scoped tool sets |
 | Workflow engine | Temporal | New house | Complex multi-step automation beyond Ansible |
 | Dependency updates | Renovate | New house | Active container/package deployments to manage |
@@ -88,5 +89,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-14 | Phase 2 | Config decoupled from public repo (ADR-006); local-only config backed up to private repo (ADR-007) |
 | 2026-06-14 | Phase 2/3 planning | Adopted Terraform (ADR-008); 3-node cluster + HA via ZFS replication (ADR-009); Vaultwarden self-hosted, sequenced after HA+backups (ADR-010); Monitoring→Homepage prioritised; patching to design |
 | 2026-06-17 | Phase 3 | Monitoring stack live incl. Alertmanager→ntfy (ADR-013). Dashboard: **Homepage → Glance** (ADR-014) to keep oneill Docker-free; wall-tablet UI reassigned to HA (Phase 6); Docker deferred to Phase 5/Gluetun |
+| 2026-06-19 | Phase 3 ✓ CLOSED | Phase 3 fully complete. Backups tested (PBS + HA native, restore drill ✅). Patching adopted (ADR-015). Infra portal live (ADR-020). MCP rows parked. Plex renamed Jellyfin. |
 
 *Add a row each time this radar is reviewed at a phase boundary.*
