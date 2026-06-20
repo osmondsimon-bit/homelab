@@ -48,7 +48,7 @@ def load_data(data_dir: str) -> dict:
 
     for key, path in [
         ("vlans",        d / "network/vlans.yaml"),
-        ("topology",     d / "network/topology.yaml"),
+        ("gateway",      d / "network/gateway.yaml"),
         ("switch_ports", d / "network/switch_ports.yaml"),
         ("compute",      d / "compute/hosts.yaml"),
         ("rack",         d / "rack/layout.yaml"),
@@ -72,22 +72,23 @@ def get_ports(data: dict) -> list:
 def network_d2(data: dict) -> str:
     ports    = get_ports(data)
     compute  = data.get("compute", {})
-    topology = data.get("topology", {})
-
     aps     = [p for p in ports if p.get("device_type") == "Access Point" and p.get("switch_port")]
     cameras = [p for p in ports if p.get("purpose") == "Security" and p.get("switch_port")]
     hosts   = compute.get("hosts", [])
-    sw      = topology.get("switch", {})
-    gw      = topology.get("gateway", {})
+    sp      = data.get("switch_ports", {})
+    gw_data = data.get("gateway", {}).get("cloud_gateway_fibre", {})
+    gw_model  = gw_data.get("model", "UniFi Gateway")
+    sw_model  = sp.get("model", "Core Switch")
+    sw_poe_w  = sp.get("poe_budget_w", "?")
 
     lines = ["direction: right", ""]
     lines += [
         f'ISP: ISP Fiber {{shape: cloud; style.fill: "#f1f5f9"}}',
-        f'UDM: {gw.get("model", "UniFi Gateway")} {{style.fill: "#d1fae5"}}',
-        f'Switch: {sw.get("model", "Core Switch")}\\n{sw.get("poe_budget_w", "?")}W PoE budget {{style.fill: "#dbeafe"}}',
+        f'CGF: {gw_model} {{style.fill: "#d1fae5"}}',
+        f'Switch: {sw_model}\\n{sw_poe_w}W PoE budget {{style.fill: "#dbeafe"}}',
         "",
-        "ISP -> UDM: WAN fiber",
-        'UDM -> Switch: SFP+1 10G {style.stroke: "#1d4ed8"; style.stroke-width: 2}',
+        "ISP -> CGF: WAN fiber",
+        'CGF -> Switch: 2.5G LAN {style.stroke: "#1d4ed8"; style.stroke-width: 2}',
         "",
     ]
 
@@ -140,8 +141,8 @@ def rack_d2(data: dict) -> str:
         "UPS":    "#fef3c7",
         "Switch": "#dbeafe",
         "Patch":  "#e0e7ff",
-        "Dream":  "#d1fae5",
-        "UDM":    "#d1fae5",
+        "UCG":    "#d1fae5",
+        "CGF":    "#d1fae5",
     }
 
     lines = ["direction: down", ""]
@@ -279,6 +280,9 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
                width:100%;overflow:hidden;display:-webkit-box;
                -webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .sw-port .pmeta{font-size:7px;font-weight:600;color:rgba(255,255,255,.7);white-space:nowrap}
+.sw-port .peth{font-size:7px;font-weight:400;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden}
+.pp-full-row{display:flex;justify-content:space-between;margin-bottom:6px}
+.pp-full-row .sw-port{flex:0 0 calc(100% / 26);min-width:0}
 .sw-spare{background:#1e293b!important;border-color:#334155!important}
 .sw-spare .pnum{color:#475569!important}
 .sw-spare .pdev{color:#334155!important}
@@ -288,6 +292,14 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
              background:#1e293b;color:#f8fafc;font-size:9px;border:1px solid #334155}
 .sw-sfp-port .pnum{font-size:10px;font-weight:700;display:block;margin-bottom:3px}
 .sw-sfp-uplink{background:#0f4c81!important;border-color:#1d6ebc!important}
+.sw-sfp-cell{border-radius:4px;padding:4px 2px;text-align:center;
+             min-height:72px;background:#1e293b;border:1px solid #334155;
+             display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.sw-sfp-cell .pnum{font-weight:700;font-size:10px;color:#94a3b8}
+.sw-sfp-cell .pdev{font-size:7px;color:#475569;white-space:nowrap;overflow:hidden}
+.sw-sfp-uplink-cell{background:#0f4c81!important;border-color:#1d6ebc!important}
+.sw-sfp-uplink-cell .pnum{color:#93c5fd!important}
+.sw-panel-sep{border-top:1px solid rgba(255,255,255,.18);margin:8px 0 6px}
 .sw-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center}
 .sw-legend span{display:flex;align-items:center;gap:5px}
 .sw-legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -296,6 +308,26 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
 .sw-strategy h3:first-child{margin-top:0}
 .sw-strategy ul{padding-left:18px}
 .sw-strategy li{margin-bottom:3px}
+.pp-panel{background:#0f172a;border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.pp-strip-label{font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.3px;margin-bottom:6px}
+.pp-grid{display:grid;grid-template-columns:repeat(24,1fr);gap:3px}
+.pp-port{border-radius:3px;padding:4px 2px;text-align:center;
+         min-height:72px;border:1px solid rgba(255,255,255,.08);cursor:default;
+         display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.pp-port:hover{filter:brightness(1.12)}
+.pp-port .pnum{font-weight:700;font-size:9px;line-height:1;color:#fff}
+.pp-port .pdev{font-size:7px;line-height:1.2;color:rgba(255,255,255,.88);
+               width:100%;overflow:hidden;display:-webkit-box;
+               -webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;text-align:center}
+.pp-port .psw{font-size:7px;font-weight:600;color:rgba(255,255,255,.65);white-space:nowrap}
+.pp-spare{background:#1e293b!important;border-color:#334155!important}
+.pp-spare .pnum{color:#475569!important}
+.pp-spare .pdev{color:#334155!important}
+.pp-spare .psw{color:#475569!important}
+.pp-intentional{background:#0d1117!important;border-color:#1f2937!important;border-style:dashed!important}
+.pp-intentional .pnum{color:#374151!important}
+.pp-intentional .pdev{color:#1f2937!important}
+.pp-intentional .psw{color:#374151!important}
 """
 
 JS = """
@@ -423,19 +455,68 @@ VLAN_BG = {
 }
 
 def _sw_port_map(data: dict) -> dict:
-    """Build a dict of switch port number → port info from switch_ports.yaml."""
-    sp = data.get("switch_ports", {})
+    """Build {sw_port_num: port_data} from data_schedule.json (wall runs) + switch_ports.yaml rack_equipment."""
     m: dict = {}
-    for section in ("pp_a", "pp_b"):
-        for p in (sp.get(section) or {}).get("active_ports", []):
-            sw = p.get("sw")
-            if sw is not None:
-                m[int(sw)] = {**p, "_section": section}
+    for p in get_ports(data):
+        sw_str = p.get("switch_port") or ""
+        try:
+            sw = int(sw_str)
+        except (ValueError, TypeError):
+            continue
+        m[sw] = {
+            "pp":     p.get("patch_panel_port"),
+            "eth":    p.get("port_id"),
+            "room":   p.get("room") or "",
+            "device": p.get("device_type") or "",
+            "vlan":   p.get("vlan"),
+            "poe_w":  p.get("poe_draw_w") if p.get("poe_required") else None,
+            "_section": "data_schedule",
+        }
+    sp = data.get("switch_ports", {})
     for p in (sp.get("rack_equipment") or {}).get("connections", []):
         sw = p.get("sw")
         if sw is not None:
             m[int(sw)] = {**p, "_section": "rack_equipment"}
     return m
+
+
+def _pp_port_map(data: dict) -> tuple:
+    """Build col→port_data dicts for PP-A and PP-B from data_schedule.json + switch_ports.yaml rack_equipment."""
+    pp_a: dict = {}
+    pp_b: dict = {}
+    for p in get_ports(data):
+        pp_label = p.get("patch_panel_port") or ""
+        sw_str   = p.get("switch_port") or ""
+        try:
+            col = int(pp_label[4:])
+            sw  = int(sw_str)
+        except (ValueError, IndexError, TypeError):
+            continue
+        entry = {
+            "pp":     pp_label,
+            "sw":     sw,
+            "eth":    p.get("port_id"),
+            "room":   p.get("room") or "",
+            "device": p.get("device_type") or "",
+            "vlan":   p.get("vlan"),
+            "poe_w":  p.get("poe_draw_w") if p.get("poe_required") else None,
+        }
+        if pp_label.startswith("PP-A"):
+            pp_a[col] = entry
+        else:
+            pp_b[col] = entry
+    sp = data.get("switch_ports", {})
+    for p in (sp.get("rack_equipment") or {}).get("connections", []):
+        pp_label = p.get("pp") or ""
+        try:
+            col = int(pp_label[4:])
+        except (ValueError, IndexError):
+            continue
+        if pp_label.startswith("PP-A"):
+            pp_a[col] = {**p}
+        else:
+            pp_b[col] = {**p}
+    return pp_a, pp_b
 
 
 def switch_section_html(data: dict) -> str:
@@ -497,7 +578,7 @@ def switch_section_html(data: dict) -> str:
         b     = get_band(lo)
         speed = f'{b.get("speed_gbps", "?")}G'
         ptype = b.get("poe_type", "")
-        # Shorten label
+        pmax  = b.get("poe_max_w_per_port", "?")
         ptype_short = ptype.replace("802.3at", "at").replace("802.3bt", "bt")\
                            .replace("(", "").replace(")", "").strip()
         label = f"{speed} {ptype_short}"
@@ -507,7 +588,7 @@ def switch_section_html(data: dict) -> str:
         return (f'<div class="sw-zone" style="flex:{cols}">'
                 f'<div class="sw-grid" style="{grid_style}">{top_html}</div>'
                 f'<div class="sw-grid" style="{grid_style}">{bottom_html}</div>'
-                f'<div class="sw-zone-label">{lo}–{hi} · {label}</div>'
+                f'<div class="sw-zone-label">{lo}&ndash;{hi} &middot; {label} &middot; &le;{pmax}W/port</div>'
                 f'</div>')
 
     sep = '<div class="sw-zone-sep"></div>'
@@ -523,6 +604,24 @@ def switch_section_html(data: dict) -> str:
 
     sfp_row = "".join(sfp_html(s) for s in sfp_conns)
 
+    def sfp_cell_html(sfp: dict) -> str:
+        port = sfp.get("port", "SFP+?")
+        conn = sfp.get("connection") or "spare"
+        is_uplink = "UDM" in conn or "uplink" in conn.lower()
+        cls  = "sw-sfp-cell sw-sfp-uplink-cell" if is_uplink else "sw-sfp-cell"
+        return (f'<div class="{cls}">'
+                f'<span class="pnum">{port}</span>'
+                f'<span class="pdev">{conn[:16]}</span></div>')
+
+    sfp_zone_right = (
+        f'<div class="sw-zone" style="flex:2">'
+        f'<div class="sw-grid" style="grid-template-columns:repeat(2,1fr)">'
+        + "".join(sfp_cell_html(s) for s in sfp_conns) +
+        f'</div>'
+        f'<div class="sw-zone-label">SFP+1&ndash;4 &middot; 10G</div>'
+        f'</div>'
+    )
+
     legend_items = "".join(
         f'<span><span class="dot" style="background:{c}"></span>{v}</span>'
         for v, c in VLAN_BG.items()
@@ -536,6 +635,89 @@ def switch_section_html(data: dict) -> str:
     spare_1g_poe_pp    = [n for n in range(25, 33) if n not in port_map]
     spare_25g_poe_plus = [n for n in range(33, 41) if n not in port_map]
     spare_25g_poe_pp   = [n for n in range(41, 49) if n not in port_map]
+
+    # PP sandwich — zone-aligned strips above and below the switch face
+    pp_a_map, pp_b_map = _pp_port_map(data)
+    pp_cam_zone = {1, 2, 3, 4, 5}
+
+    def pp_row_zone_old(panel, lo, hi, pp_map, cam_zone=None):
+        n = hi - lo + 1
+        if cam_zone is None:
+            cam_zone = set()
+        def cell(col):
+            p = pp_map.get(col)
+            num = f"{col:02d}"
+            if p is None:
+                intentional = col in cam_zone
+                note  = "cam zone" if intentional else "spare"
+                tip   = (f"PP-{panel}{num}: camera zone - unpatched (EtherLighting red stripe)"
+                         if intentional else f"PP-{panel}{num}: spare")
+                extra = ' style="border-style:dashed"' if intentional else ""
+                return (f'<div class="sw-port sw-spare"{extra} title="{tip}">'
+                        f'<span class="pnum">{num}</span>'
+                        f'<span class="pdev">{note}</span>'
+                        f'<span class="pmeta">&mdash;</span></div>')
+            vlan   = p.get("vlan")
+            bg     = VLAN_BG.get(vlan, "#94a3b8")
+            device = p.get("device") or ""
+            room   = p.get("room") or ""
+            sw     = p.get("sw")
+            eth    = p.get("eth") or ""
+            label  = device if device else room
+            sw_str = f"SW-{sw}" if sw is not None else "-"
+            vlan_s = vlan if vlan else "-"
+            eth_s  = f" | {eth}" if eth else ""
+            tip    = f"PP-{panel}{num} -> {sw_str} | {room} | {device} | {vlan_s}{eth_s}"
+            return (f'<div class="sw-port" style="background:{bg}" title="{tip}">'
+                    f'<span class="pnum">{num}</span>'
+                    f'<span class="pdev">{label}</span>'
+                    f'<span class="pmeta">{sw_str}</span>'
+                    f'<span class="peth">{eth}</span></div>')
+        cells = "".join(cell(c) for c in range(lo, hi + 1))
+        return (f'<div class="sw-zone" style="flex:{n}">'
+                f'<div class="sw-grid" style="grid-template-columns:repeat({n},1fr)">{cells}</div>'
+                f'</div>')
+
+    pp_a_zone_old = lambda lo, hi: pp_row_zone_old("A", lo, hi, pp_a_map)
+    pp_b_zone_old = lambda lo, hi: pp_row_zone_old("B", lo, hi, pp_b_map, pp_cam_zone)
+
+    def pp_full_row(panel, pp_map, cam_zone=None):
+        if cam_zone is None:
+            cam_zone = set()
+        def cell(col):
+            p = pp_map.get(col)
+            num = f"{col:02d}"
+            if p is None:
+                intentional = col in cam_zone
+                note  = "cam zone" if intentional else "spare"
+                tip   = (f"PP-{panel}{num}: camera zone - unpatched (EtherLighting red stripe)"
+                         if intentional else f"PP-{panel}{num}: spare")
+                extra = ' style="border-style:dashed"' if intentional else ""
+                return (f'<div class="sw-port sw-spare"{extra} title="{tip}">'
+                        f'<span class="pnum">{num}</span>'
+                        f'<span class="pdev">{note}</span>'
+                        f'<span class="pmeta">&mdash;</span></div>')
+            vlan   = p.get("vlan")
+            bg     = VLAN_BG.get(vlan, "#94a3b8")
+            device = p.get("device") or ""
+            room   = p.get("room") or ""
+            sw     = p.get("sw")
+            eth    = p.get("eth") or ""
+            label  = device if device else room
+            sw_str = f"SW-{sw}" if sw is not None else "-"
+            vlan_s = vlan if vlan else "-"
+            eth_s  = f" | {eth}" if eth else ""
+            tip    = f"PP-{panel}{num} -> {sw_str} | {room} | {device} | {vlan_s}{eth_s}"
+            return (f'<div class="sw-port" style="background:{bg}" title="{tip}">'
+                    f'<span class="pnum">{num}</span>'
+                    f'<span class="pdev">{label}</span>'
+                    f'<span class="pmeta">{sw_str}</span>'
+                    f'<span class="peth">{eth}</span></div>')
+        cells = "".join(cell(c) for c in range(1, 25))
+        return f'<div class="pp-full-row">{cells}</div>'
+
+    pp_a_full = lambda: pp_full_row("A", pp_a_map)
+    pp_b_full = lambda: pp_full_row("B", pp_b_map, pp_cam_zone)
 
     return f"""
 <div class="card">
@@ -552,46 +734,50 @@ def switch_section_html(data: dict) -> str:
   </div>
   <div class="sw-legend">{legend_items}</div>
   <div class="sw-panel">
+    <div class="pp-strip-label" style="margin-bottom:5px">PP-A &mdash; Top patch panel (above switch) &middot; col N &rarr; SW 2N&minus;1 (patch cable goes straight down)</div>
+    {pp_a_full()}
+    <div class="sw-panel-sep"></div>
+    <div class="pp-strip-label" style="margin-bottom:5px;color:#6b7280">{model} &mdash; Switch face</div>
     <div class="sw-zones">
       {zone_html(1,  24)}{sep}
       {zone_html(25, 32)}{sep}
       {zone_html(33, 40)}{sep}
-      {zone_html(41, 48)}
+      {zone_html(41, 48)}{sep}
+      {sfp_zone_right}
     </div>
-    <div class="sw-sfp-row">{sfp_row}</div>
+    <div class="sw-panel-sep"></div>
+    <div class="pp-strip-label" style="margin-bottom:5px">PP-B &mdash; Bottom patch panel (below switch) &middot; col N &rarr; SW 2N (patch cable goes straight up)</div>
+    {pp_b_full()}
   </div>
 </div>
 <div class="card">
   <h2>Spare Port Strategy</h2>
   <div class="sw-strategy">
-    <h3>Fill sequentially within each band — never restack</h3>
-    <p>PP-A (top row, odd ports) and PP-B (bottom row, even ports) share 24 columns. Column position determines EtherLighting colour. Adding a device extends the relevant cluster without moving existing cables.</p>
+    <h3>Formula patch layout (2026-06-20)</h3>
+    <p>All patches are now formula: col N → SW 2N-1 (PP-A, straight down) and col N → SW 2N (PP-B, straight up). Shortest possible cable runs. Column determines EtherLighting colour. Wall runs are fixed — only front patch cables change in a restack.</p>
     <h3>Band 1 — 1G PoE+ (ports 1–24)</h3>
     <ul>
-      <li>Top row PP-A cols 1–5 (SW 1,3,5,7,9): cameras only — solid red EtherLighting stripe. PP-B01–05 (SW 2,4,6,8,10) intentionally unpatched to keep the bottom row dark in the camera zone.</li>
-      <li>Cols 6–10 both rows: home devices (blue). Col 12 PP-A: IoT hub (green). Col 11 PP-A/B spare.</li>
-      <li><strong>{len(spare_1g_poe_plus)} spare 1G PoE+ ports.</strong> Next home device: PP-A11 → SW-21 (top) or PP-B11 → SW-22 (bottom).</li>
-      <li>Suits: PCs, TVs, IoT devices (32W max per port)</li>
+      <li>PP-A cols 1–5 (SW 1,3,5,7,9): cameras — solid red EtherLighting top stripe. PP-B01–05 unpatched (keeps bottom dark in camera zone).</li>
+      <li>Col 12 both rows: IoT (green) — kitchen hub SW-23, SigEnergy SW-24.</li>
+      <li>Cols 6–11 spare, plus PP-B01–05 camera zone unpatched. <strong>{len(spare_1g_poe_plus)} unallocated 1G PoE+ ports.</strong> Next IoT: PP-A11 → SW-21 or PP-B11 → SW-22.</li>
     </ul>
-    <h3>Band 2 — 1G PoE++ (ports 25–32, all spare)</h3>
+    <h3>Band 2 — 1G PoE++ (ports 25–32)</h3>
     <ul>
-      <li><strong>8 spare</strong> — reserve for high-draw 1G devices (PTZ cameras, future high-power 1G APs)</li>
-      <li>64W per port without needing 2.5G — use before bumping a device to Band 4</li>
+      <li>Cols 13–16 both rows (SW-25 to SW-32): all 8 Home wall devices — 4 PCs (Bed1/Bed3/Bed2/Study) and 4 TVs (Lounge A, Lounge B, Dining A, Dining B). <strong>{len(spare_1g_poe_pp)} spare.</strong></li>
+      <li>Band 2 is fully utilised. Any new Home wall device needs a band 1 slot or a minor restack.</li>
     </ul>
     <h3>Band 3 — 2.5G PoE+ (ports 33–40)</h3>
     <ul>
-      <li>Cols 19–20 both rows (SW 37–40): rack equipment — CGF LAN (SW-37), apophis (SW-38), oneill (SW-39), carter (SW-40).</li>
-      <li>Cols 17–18 (SW 33–36): <strong>{len(spare_25g_poe_plus)} spare</strong> — 2.5G with moderate PoE (32W). PP-A17 front face is used for WAN passthrough (eth21 → CGF WAN2) so SW-33 remains unpatched.</li>
-      <li>Suits: future NAS, 2.5G workstations, additional rack equipment</li>
+      <li>SW-33 spare (PP-A17). SW-34 Master TV (PP-B17). SW-35 Study PC (PP-A18). SW-36 spare (PP-B18). SW-37 CGF LAN (PP-A19). SW-38 apophis (PP-B19). SW-39 oneill (PP-A20). SW-40 carter (PP-B20). <strong>{len(spare_25g_poe_plus)} spare.</strong></li>
+      <li>PP-A17 is spare — eth21 (5G WAN) runs directly to the CGF WAN2 rear port, no patch panel involved.</li>
     </ul>
     <h3>Band 4 — 2.5G PoE++ (ports 41–48)</h3>
     <ul>
-      <li>Cols 21–22 both rows (SW 41–44): 4×U7 Pro XGS APs via PP-A21/B21/A22/B22. Cols 23–24 spare.</li>
-      <li><strong>{len(spare_25g_poe_pp)} spare</strong> — capacity for 4 more APs or high-draw 2.5G devices.</li>
-      <li>Next AP: PP-A23 → SW-45 (top row col 23), or PP-B23 → SW-46 for a second drop in that column.</li>
+      <li>SW-41 Foyer AP (PP-A21). SW-42 Hall AP (PP-B21). SW-43 Dining AP (PP-A22). SW-44 Study AP (PP-B22). SW-45–48 spare. <strong>{len(spare_25g_poe_pp)} spare 2.5G PoE++ ports.</strong></li>
+      <li>Next AP: PP-A23 → SW-45 or PP-B23 → SW-46 (formula). Cols 23–24 both rows are free.</li>
     </ul>
-    <h3>When to restack</h3>
-    <p>Only if all spare bands fill. Unlikely given the house size. EtherLighting: spare ports dark — intentional, signals headroom visually.</p>
+    <h3>Expansion notes</h3>
+    <p>Band 2 is full (8 Home wall devices). Band 3 has 2 spare slots. Band 4 has 4 spare 2.5G PoE++ slots for up to 2 more APs on formula patches. Band 1 has ample spare 1G capacity.</p>
   </div>
 </div>"""
 
