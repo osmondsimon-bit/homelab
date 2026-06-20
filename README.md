@@ -2,7 +2,7 @@
 
 Infrastructure documentation, provisioning scripts, and configuration for a Proxmox-based home server.
 
-**Host:** apophis — Intel i7-8700T, 16 GB RAM, ~500 GB SSD, running Proxmox VE at `YOUR_PROXMOX_IP`  
+**Host:** apophis — Intel i7-8700T, 32 GB RAM, ~500 GB SSD, running Proxmox VE at `YOUR_PROXMOX_IP`  
 **mgmt-vm:** Ubuntu Server at `YOUR_MGMT_VM_IP` — git, Claude Code, scripts, Ansible control node
 
 ## Key docs
@@ -19,6 +19,6 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 
 ## Current phase
 
-Phase 3 — Foundation + observability (Phase 2: Tailscale + Technitium DNS ✓ complete)
+Phase 4 — Multi-node + HA (Phase 3: Foundation + observability ✓ closed 2026-06-17)
 
 See [PLAN.md](homelab/PLAN.md) for full phase order and service inventory.

@@ -18,7 +18,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
   README.md  CLAUDE.md  AGENTS.md  index.md  .gitignore
   homelab/                   ← THE project root
     PLAN.md                  single source of truth (phases, VMIDs, status, RAM)
-    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 015-patching)
+    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 020-infra-portal)
       template.md
     docs/                    ALL narrative docs:
       components/<svc>.md     one per deployed service (what it is, how configured)
@@ -29,6 +29,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
     ansible/                 configures (ADR-005); inventory/ + playbooks/ live here
     terraform/               creates VMs/LXCs (bpg/proxmox, ADR-008)
     scripts/                 bash fallbacks/utilities (backup-local-config.sh, …)
+    physical_infra/          gitignored design surface — house/network/rack YAML (ADR-019)
 ```
 
 ### Where does X go? (decision rules)

@@ -3,6 +3,8 @@
 **Date:** 2026-06-16  
 **Status:** Accepted
 
+> **Update 2026-06-18:** All Phase 3 backup carry-forwards closed. PBS encryption enabled. HA native backup confirmed landing on CT 113 share. mgmt-vm restore drill ✅ PASS. HA native restore drill ✅ PASS (encrypted backup proven restorable on isolated test VLAN; `vzdump-qemu-200` retired). Backup-freshness monitoring live (ADR-017).
+
 ## Context
 
 VM/LXC-level backups have been the standing **[High]** gap (PLAN.md) — config is already

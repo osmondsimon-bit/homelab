@@ -70,6 +70,8 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **Single source of truth (two-tier):** Logical facts — which hosts/VMs/LXCs exist, VMIDs, RAM budget, phase/service status, canonical hostnames — are owned by `homelab/PLAN.md`; other docs link to it. **Real network addresses (IPs, subnets, MACs) are never published** — they live only in the gitignored Ansible config (`ansible/inventory/`, `group_vars/`) and the operator's private notes. Committed files use `YOUR_*` placeholders only (ADR-006).
 
+**Doc hygiene (keep docs fresh as you work):** When a service's config changes (VLAN, port, RAM, purpose), update its `docs/components/<svc>.md` in the same commit. When a capability moves from planned → live, move it in `docs/tech-radar.md`. Do not leave "still to be confirmed" or "Phase X" triggers in the radar past the phase they were due. The `doc-auditor` enforces this at phase gates — but fixing drift mid-phase is cheaper than a batch cleanup later.
+
 ## Agents
 
 Reviewers assist with this homelab (four agents + the `/phase-gate` and `/security-review` skills). Invoke them at the right moment — don't skip the gates.
@@ -112,4 +114,4 @@ Two goals: **stretch session runway** (minimize token/compute cost without addin
 
 ## Roadmap
 
-See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 3 is built out and ready for `/phase-gate` closeout**: PBS/mgmt-vm backups, Monitoring, and Glance are live; HA native backup verification remains the key backup gap. Terraform import is deferred to cluster scale (ADR-008). Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 Foundation + observability → 4 Multi-node cluster + HA (oneill joins cluster, 2nd ThinkCentre, ZFS replication) → 5 Plex + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.
+See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phase 3 CLOSED 2026-06-17** (Foundation + observability: PBS, Monitoring, Glance, all backup carry-forwards clear). **Phase 4 next** (new node ~2026-06-26). Terraform import deferred to cluster scale (ADR-008). Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 Foundation + observability ✓ → 4 Multi-node cluster + HA (oneill joins cluster, 2nd ThinkCentre, ZFS replication) → 5 Jellyfin + media → 6 Vaultwarden + HA expansion. Cross-cutting: backups + patching.

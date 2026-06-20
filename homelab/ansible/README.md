@@ -28,8 +28,7 @@ ansible proxmox -m ping        # expect: apophis | SUCCESS => "ping": "pong"
 ```
 
 No Proxmox API token or per-container SSH keys are needed — lifecycle is driven via
-`pct` over the single root SSH connection. See ADR-005 for why, and the planned
-refinement to the `community.general.proxmox` API modules.
+`pct` over the single root SSH connection. See ADR-005 for why.
 
 ## Layout
 

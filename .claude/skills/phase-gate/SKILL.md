@@ -25,6 +25,12 @@ conclusions + `file:line` refs, not transcripts, and verify any claim before act
 3. **Triage:** fix blockers / HIGH findings now; record any accepted deferrals in PLAN.md
    so they're tracked, not lost.
 
+3b. **Update `homelab/docs/tech-radar.md`:**
+    - Move newly adopted capabilities from Deferred → Adopted.
+    - Update any Deferred row whose trigger phase is now past (e.g. "Phase 3" → "Phase 4+").
+    - Add a Review log row for this phase (date, phase, one-line outcome).
+    - This must happen at every phase close — drift here causes the next doc-auditor to flag it.
+
 4. **Only when clean:** update `homelab/PLAN.md` (mark the phase ✓ in Phase order + the
    relevant status lines) and write `homelab/docs/phases/<N>-<name>.md` — what shipped, key
    decisions/ADRs, verification done, and items carried forward.

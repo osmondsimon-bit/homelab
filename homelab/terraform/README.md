@@ -3,8 +3,8 @@
 Terraform **creates** the lab's infrastructure (VMs, LXCs, disks, NICs) via the `bpg/proxmox`
 provider. Ansible **configures** what Terraform creates (ADR-008). Run from the mgmt-vm.
 
-> Status: scaffold only. First `apply`/`import` is a deliberate next step — needs a Proxmox API
-> token and careful import of the running VMs.
+> Status: scaffold only. Import is **deferred to Phase 4 cluster scale** (ADR-008) — pulling it
+> forward just to manage RAM is double work; PLAN.md holds the desired VM shapes until then.
 
 ## Bootstrap (one-time)
 
@@ -29,10 +29,11 @@ terraform plan
 
 ## Importing the existing VMs
 
-The running VMs (mgmt-vm=100, home-assistant=200, tailscale=110) predate Terraform. Bring each
-under management with `terraform import`, then reconcile the HCL until `terraform plan` shows **no
-changes** — so a future `apply` never tries to recreate a live VM. Do this one VM at a time,
-plan-only, against the real config. Import is the fiddly part; take it slow.
+All current guests (VMs: mgmt-vm/100, home-assistant/200; LXCs: tailscale/110, technitium/111,
+pbs/112, ha-backup-share/113, monitoring/114, glance/115, infra-portal/116) predate Terraform.
+Import is deferred to Phase 4 cluster scale — bring each under management with `terraform import`,
+then reconcile the HCL until `terraform plan` shows **no changes**. Do one guest at a time,
+plan-only. Import is the fiddly part; take it slow.
 
 ## Layout
 
