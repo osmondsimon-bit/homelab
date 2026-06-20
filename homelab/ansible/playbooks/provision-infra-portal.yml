@@ -291,6 +291,12 @@
       register: d2_install
       changed_when: d2_install.rc == 0
 
+    - name: Remove stale generator copy from /usr/local/bin (now called from repo path)
+      become: true
+      ansible.builtin.file:
+        path: /usr/local/bin/infra-portal-generate.py
+        state: absent
+
     - name: Deploy generation wrapper script
       become: true
       ansible.builtin.copy:
