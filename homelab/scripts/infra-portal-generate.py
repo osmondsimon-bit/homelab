@@ -426,15 +426,15 @@ def _sw_port_map(data: dict) -> dict:
     """Build a dict of switch port number → port info from switch_ports.yaml."""
     sp = data.get("switch_ports", {})
     m: dict = {}
-    for section in ("pp_top", "pp_bottom"):
+    for section in ("pp_a", "pp_b"):
         for p in (sp.get(section) or {}).get("active_ports", []):
             sw = p.get("sw")
             if sw is not None:
                 m[int(sw)] = {**p, "_section": section}
-    for p in (sp.get("direct_connections") or []):
+    for p in (sp.get("rack_equipment") or {}).get("connections", []):
         sw = p.get("sw")
         if sw is not None:
-            m[int(sw)] = {**p, "_section": "direct", "device": p.get("device", ""), "vlan": p.get("vlan")}
+            m[int(sw)] = {**p, "_section": "rack_equipment"}
     return m
 
 
@@ -536,8 +536,6 @@ def switch_section_html(data: dict) -> str:
     spare_1g_poe_pp    = [n for n in range(25, 33) if n not in port_map]
     spare_25g_poe_plus = [n for n in range(33, 41) if n not in port_map]
     spare_25g_poe_pp   = [n for n in range(41, 49) if n not in port_map]
-    next_1g   = min(spare_1g_poe_plus) if spare_1g_poe_plus else None
-    next_25g  = min(spare_25g_poe_pp)  if spare_25g_poe_pp  else None
 
     return f"""
 <div class="card">
@@ -567,30 +565,33 @@ def switch_section_html(data: dict) -> str:
   <h2>Spare Port Strategy</h2>
   <div class="sw-strategy">
     <h3>Fill sequentially within each band — never restack</h3>
-    <p>Four distinct bands give natural EtherLighting colour clusters. Adding a device extends the relevant cluster without moving any existing cables.</p>
-    <h3>Band 1 — 1G PoE+ (ports 1–24 → PP-T)</h3>
+    <p>PP-A (top row, odd ports) and PP-B (bottom row, even ports) share 24 columns. Column position determines EtherLighting colour. Adding a device extends the relevant cluster without moving existing cables.</p>
+    <h3>Band 1 — 1G PoE+ (ports 1–24)</h3>
     <ul>
-      <li>Ports 1–16 active; <strong>{len(spare_1g_poe_plus)} spare</strong> (SW {min(spare_1g_poe_plus) if spare_1g_poe_plus else "—"}–24, PP-T17–24)</li>
-      <li>Next 1G device: PP-T{(next_1g or 0):02d} → SW-{next_1g or "?"}, patch cable straight down to switch</li>
-      <li>Suits: cameras, PCs, TVs, IoT (32W max per port)</li>
+      <li>Top row PP-A cols 1–5 (SW 1,3,5,7,9): cameras only — solid red EtherLighting stripe. PP-B01–05 (SW 2,4,6,8,10) intentionally unpatched to keep the bottom row dark in the camera zone.</li>
+      <li>Cols 6–10 both rows: home devices (blue). Col 12 PP-A: IoT hub (green). Col 11 PP-A/B spare.</li>
+      <li><strong>{len(spare_1g_poe_plus)} spare 1G PoE+ ports.</strong> Next home device: PP-A11 → SW-21 (top) or PP-B11 → SW-22 (bottom).</li>
+      <li>Suits: PCs, TVs, IoT devices (32W max per port)</li>
     </ul>
     <h3>Band 2 — 1G PoE++ (ports 25–32, all spare)</h3>
     <ul>
       <li><strong>8 spare</strong> — reserve for high-draw 1G devices (PTZ cameras, future high-power 1G APs)</li>
-      <li>64W per port without needing 2.5G — use these before bumping a device to Band 4</li>
+      <li>64W per port without needing 2.5G — use before bumping a device to Band 4</li>
     </ul>
-    <h3>Band 3 — 2.5G PoE+ (ports 33–40, all spare)</h3>
+    <h3>Band 3 — 2.5G PoE+ (ports 33–40)</h3>
     <ul>
-      <li><strong>8 spare</strong> — 2.5G link with moderate PoE (32W); useful for future NAS, 2.5G workstations, or devices that don't need full PoE++</li>
+      <li>Cols 19–20 both rows (SW 37–40): rack equipment — CGF LAN (SW-37), apophis (SW-38), oneill (SW-39), carter (SW-40).</li>
+      <li>Cols 17–18 (SW 33–36): <strong>{len(spare_25g_poe_plus)} spare</strong> — 2.5G with moderate PoE (32W). PP-A17 front face is used for WAN passthrough (eth21 → CGF WAN2) so SW-33 remains unpatched.</li>
+      <li>Suits: future NAS, 2.5G workstations, additional rack equipment</li>
     </ul>
-    <h3>Band 4 — 2.5G PoE++ (ports 41–48 → PP-B / direct)</h3>
+    <h3>Band 4 — 2.5G PoE++ (ports 41–48)</h3>
     <ul>
-      <li>APs: SW 41–45 (PP-B01–05); Servers: SW 46–48 (direct)</li>
-      <li><strong>{len(spare_25g_poe_pp)} spare</strong> in this band — all used; next AP displaces a server port or use Band 3 if 2.5G without PoE++ is sufficient</li>
-      <li>Next 2.5G PoE++ device: SW-{next_25g or "none (band full)"}</li>
+      <li>Cols 21–22 both rows (SW 41–44): 4×U7 Pro XGS APs via PP-A21/B21/A22/B22. Cols 23–24 spare.</li>
+      <li><strong>{len(spare_25g_poe_pp)} spare</strong> — capacity for 4 more APs or high-draw 2.5G devices.</li>
+      <li>Next AP: PP-A23 → SW-45 (top row col 23), or PP-B23 → SW-46 for a second drop in that column.</li>
     </ul>
     <h3>When to restack</h3>
-    <p>Only if Band 4 fills entirely (needs 3 more APs and 1 more server simultaneously) <em>or</em> if Band 1 fills past SW-24. Both are unlikely given the house size. EtherLighting: spare ports sit dark — intentional, signals headroom visually.</p>
+    <p>Only if all spare bands fill. Unlikely given the house size. EtherLighting: spare ports dark — intentional, signals headroom visually.</p>
   </div>
 </div>"""
 
