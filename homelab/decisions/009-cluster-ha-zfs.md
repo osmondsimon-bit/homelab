@@ -47,3 +47,31 @@ Build a **3-node Proxmox cluster**: apophis + Intel NUC + 2nd ThinkCentre M920Q.
   cluster/replication link if bandwidth becomes a factor.
 - Backups (ADR-pending / PLAN) are a prerequisite for the apophis ZFS migration and for treating HA
   as truly safe — sequenced alongside the cluster, not after.
+
+## Refinements (2026-06-22 — carter arrived; pre-cluster design review, infra-designer-reviewed)
+
+These refine, not change, the direction above. carter = i5-8500 / 32 GB (8th-gen Coffee Lake,
+same generation as apophis's i7-8700T → a migration-compatible pair). Implementation specifics
+live in PLAN.md / runbooks.
+
+- **The nodes are deliberately unequal; the NUC must never be a core-VM failover target.**
+  Core/critical VMs (Home Assistant VM 200; later Vaultwarden) get HA **only on the matched
+  apophis + carter pair**, enforced by a Proxmox **HA group** containing just those two. This
+  lets those VMs run a high, fixed CPU type and live-migrate cleanly between the pair with **no
+  penalty from the weaker node**. oneill (N150) = **quorum vote + light, reproducible services**
+  (rebuilt from Ansible, never migrated) — a weak CPU is fine for a quorum vote. Storage-side HA
+  = **ZFS replication apophis↔carter** for the HA-flagged set (needs apophis's LVM→ZFS migration,
+  Phase 4b).
+
+- **Single-NIC hosts → the shared network device is an ACCEPTED availability SPOF.** Each host has
+  one Ethernet port, so a redundant (second) corosync ring is not available today. With all nodes
+  on one shared device (gateway now, a switch later), a multi-minute outage of that device is a
+  multi-minute *cluster* outage — node-HA cannot help when the network substrate itself is gone,
+  and **corosync cannot distinguish "peer down" from "shared device down"** (the split-brain
+  problem; quorum is the only safe response, so there is no "ignore if it's the switch" mode).
+  Decision: **bound the damage rather than eliminate it** — (1) controlled, *manual* UniFi
+  control-plane updates applied with the cluster in HA maintenance (auto-update disabled), since
+  the observed real-world cause was a UniFi auto-update reboot (see the Zigbee outage root cause);
+  (2) conservative HA scope so few nodes are fence-eligible; (3) corosync tuned to ride out short
+  blips. A **second corosync ring via a USB-Gigabit NIC** is the documented future option, deferred
+  (USB-NIC jitter is acceptable only on a *secondary* ring) — revisit with the new-house network.
