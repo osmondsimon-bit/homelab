@@ -84,6 +84,60 @@ groups:
           summary: "Home Assistant unreachable (2m)"
           description: "Prometheus can't scrape Home Assistant (up=0) for 2m — HA VM down, HA crashed, or the metrics token broke. Automations may be offline."
 
+      # Zigbee2MQTT bridge offline while HA itself is UP — the silent gap that hid an
+      # 8h overnight outage on 2026-06-21 (SLZB-06 coordinator went EHOSTUNREACH at 00:19,
+      # Z2MQTT crash-looped and stayed dead with no auto-restart). HomeAssistantDown does
+      # NOT catch this: HA was healthy, only the Zigbee bridge was down, so every
+      # zigbee automation silently stopped firing. Signal is the bridge connectivity
+      # sensor Z2MQTT exports to HA (binary_sensor.zigbee2mqtt_bridge_connection_state):
+      #   · ==0  -> bridge published offline (MQTT LWT) while the broker stayed up.
+      #   · absent while HA up -> sensor went "unavailable" (HA drops the series); the
+      #     `unless` clause catches that WITHOUT firing during a whole-HA outage (which
+      #     HomeAssistantDown already owns).
+      # SERIES SOURCE: two gates must both pass (verified 2026-06-22).
+      #  1. HA SIDE (the blocker): HA's prometheus: integration is filtered to domains
+      #     sensor+climate only, so binary_sensor is NOT exported. Add the entity to HA's
+      #     filter.include_entities (configuration.yaml) or this rule stays inert:
+      #       prometheus:
+      #         filter:
+      #           include_entities:
+      #             - binary_sensor.zigbee2mqtt_bridge_connection_state
+      #  2. PROM SIDE (done): the ADR-016 keep-list in provision-monitoring.yml has a pinned
+      #     exception for this entity. Prefix is the default homeassistant_ (the hass_* names
+      #     in retention are stale from an old namespace — ignore them).
+      # After both, verify: homeassistant_binary_sensor_state{entity="binary_sensor.zigbee2mqtt_bridge_connection_state"}
+      # NOTE: only the ==0 form is used (safe when absent — won't false-fire). When the
+      # Z2MQTT add-on dies, its MQTT last-will publishes bridge/state=offline, so the
+      # sensor reports "off" (=0) rather than going unavailable, so ==0 catches the outage.
+      - alert: Zigbee2MQTTBridgeDown
+        expr: homeassistant_binary_sensor_state{entity="binary_sensor.zigbee2mqtt_bridge_connection_state"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Zigbee2MQTT bridge offline (5m)"
+          description: "The Zigbee2MQTT bridge has been offline for 5m while Home Assistant is up — Zigbee automations are not firing. Usual cause: SLZB-06 coordinator unreachable or the Z2MQTT add-on crashed without restart. Check the add-on log + that the coordinator is on the network."
+
+      # The SLZB-06 Zigbee coordinator's TCP port is unreachable from the monitoring CT —
+      # a blackbox tcp_connect probe of zigbee_coordinator_target (:6638). This is the ROOT
+      # CAUSE signal for Zigbee outages and is INDEPENDENT of HA/Z2MQTT. CONFIRMED root cause
+      # of the 2026-06-21 outage (unpoller data): the UniFi Cloud Gateway REBOOTED at ~14:20
+      # UTC (00:19 local, UTC+10) — the SLZB-06 is on the gateway's own switch port 2 and HA
+      # reaches it cross-VLAN THROUGH that gateway, so the reboot killed the link + routing for
+      # ~2 min. Z2MQTT gave up retrying ~75s before the network recovered, then nothing
+      # restarted it for 8h. UniFi link/port monitoring did NOT catch it (link was back in 2
+      # min; Z2MQTT stayed dead) — only this app-layer probe does. probe_success=0 => TCP
+      # connect failed; if the blackbox exporter itself is down the job's up=0 is caught by
+      # TargetDown. NOTE: cross-VLAN probe (.2 -> .4) — if it fires always, check the firewall.
+      - alert: ZigbeeCoordinatorUnreachable
+        expr: probe_success{job="blackbox-zigbee-coordinator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Zigbee coordinator (SLZB-06) unreachable (2m)"
+          description: "TCP probe of the SLZB-06 Zigbee coordinator has failed for 2m — the coordinator is off the network (usually a UniFi gateway reboot, since the SLZB-06 hangs off the gateway's switch port; also firmware/PoE/link). Z2MQTT will crash and Zigbee automations stop. The self-heal automation should recover it; if it persists, check the gateway + SLZB-06."
+
       # A backup group hasn't had a fresh backup within its own staleness budget
       # (homelab_backup_max_age_seconds, default 36h). Metrics come from the backup-hub
       # textfile collector (backup-freshness.sh / provision-backup-monitoring.yml, ADR-017):
