@@ -245,6 +245,40 @@
       changed_when: true
       when: unifi_password | length > 0
 
+    # --- Blackbox exporter (TCP-connect probes for non-scrapeable devices, ADR-013) ---
+    # Black-box reachability for things Prometheus can't scrape. Primary use: a TCP probe
+    # of the SLZB-06 Zigbee coordinator's Z2MQTT port (zigbee_coordinator_target) so a
+    # coordinator drop — the root cause of Zigbee outages — is caught independent of HA.
+    - name: Check whether blackbox-exporter is installed
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- dpkg -s prometheus-blackbox-exporter"
+      register: blackbox_present
+      changed_when: false
+      failed_when: false
+
+    - name: Install blackbox-exporter inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ monitoring_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y -qq prometheus-blackbox-exporter >/dev/null
+        '
+      when: blackbox_present.rc != 0
+      changed_when: true
+
+    - name: Write blackbox-exporter config (tcp_connect module)
+      ansible.builtin.shell: >
+        echo '{{ blackbox_yml | b64encode }}' | base64 -d |
+        pct exec {{ monitoring_ctid }} -- bash -c 'cat > /etc/prometheus/blackbox.yml'
+      vars:
+        blackbox_yml: |
+          modules:
+            tcp_connect:
+              prober: tcp
+              timeout: 5s
+              tcp:
+                preferred_ip_protocol: ip4
+      changed_when: true
+
     # --- Home Assistant token (Prometheus reads it via credentials_file) ---
     - name: Write the HA token file (when a token is given)
       ansible.builtin.shell: >
@@ -311,11 +345,28 @@
               # entities, never matched here). Add new measurement metric names below
               # when a new device_class appears. (up/scrape_* bypass relabeling.)
               metric_relabel_configs:
-                - source_labels: [__name__]
-                  # Prefix-agnostic: matches HA's default `homeassistant_` and a
-                  # custom `namespace: hass_` so the keep-list survives either config.
-                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius)'
+                # Prefix-agnostic (HA default `homeassistant_` OR custom `namespace: hass_`):
+                # KEEP the numeric measurement metrics (any entity; note the `;.*` suffix once
+                # `entity` is concatenated) OR the ONE pinned Zigbee bridge connectivity sensor.
+                # binary_sensor_state is otherwise excluded by ADR-016; this single, named series
+                # is the signal for Zigbee2MQTTBridgeDown and adds negligible cardinality.
+                # (up/scrape_* are synthetic and bypass relabeling.)
+                - source_labels: [__name__, entity]
+                  separator: ';'
+                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state'
                   action: keep
+          {% endif %}
+          {% if zigbee_coordinator_target is defined %}
+            - job_name: blackbox-zigbee-coordinator
+              metrics_path: /probe
+              params: { module: ["tcp_connect"] }
+              static_configs:
+                - targets: ["{{ zigbee_coordinator_target }}"]
+              # Probe the target THROUGH the blackbox exporter on :9115; instance = the device.
+              relabel_configs:
+                - { source_labels: [__address__], target_label: __param_target }
+                - { source_labels: [__param_target], target_label: instance }
+                - { target_label: __address__, replacement: "localhost:9115" }
           {% endif %}
       changed_when: true
 
@@ -503,6 +554,7 @@
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           set -e
+          promtool check config /etc/prometheus/prometheus.yml
           promtool check rules /etc/prometheus/rules/homelab.yml /etc/prometheus/rules/recording.yml
           amtool check-config /etc/prometheus/alertmanager.yml
         '
@@ -512,8 +564,8 @@
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           systemctl daemon-reload
-          systemctl enable --now prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy >/dev/null 2>&1
-          systemctl restart prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy
+          systemctl enable --now prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy prometheus-blackbox-exporter >/dev/null 2>&1
+          systemctl restart prometheus grafana-server pve-exporter unpoller prometheus-alertmanager am-ntfy prometheus-blackbox-exporter
         '
       changed_when: true
 

@@ -80,6 +80,12 @@ monitoring_node_targets:                                    # node_exporter on t
   - "YOUR_PROXMOX_IP:9100"                                  # apophis
   - "YOUR_NUC_IP:9100"                                      # oneill
 
+# Blackbox exporter (:9115) TCP-connect probe targets — black-box reachability of
+# devices we can't scrape. SLZB-06 Zigbee coordinator: probing its Z2MQTT TCP port
+# catches the coordinator dropping off-network (the root cause of Zigbee outages),
+# independent of HA/Z2MQTT. Cross-VLAN (mgmt -> IoT): firewall must permit it.
+zigbee_coordinator_target: "YOUR_ZIGBEE_COORD_IP:6638"     # SLZB-06 — Z2MQTT TCP port (6638)
+
 # pve-exporter scrape targets (names MUST match inventory hostnames for token lookup)
 monitoring_pve_nodes:
   - { name: apophis, host: YOUR_PROXMOX_IP }

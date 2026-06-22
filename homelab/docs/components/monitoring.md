@@ -9,7 +9,7 @@ Prometheus, native packages, no Docker.
 | Host / VMID | **oneill** (NUC) / CT 114 (unprivileged LXC, Debian 12, `features nesting=1`) |
 | IP / ports | `YOUR_MONITORING_IP` — Grafana `:3000`, Prometheus `:9090`, Alertmanager `:9093` (LAN/Tailscale only, no public exposure) |
 | TSDB | Prometheus data on a quota'd ZFS bind-mount (`rpool/data/monitoring-tsdb`), ~30-day retention. **Not backed up** — history is non-critical, rebuilds from code |
-| Exporters | node (`:9100` on apophis+oneill), pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus` |
+| Exporters | node (`:9100` on apophis+oneill), pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP-connect probe of the SLZB-06 Zigbee coordinator (`zigbee_coordinator_target`) |
 | Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; apophis dead-man's-switch covers "oneill down" |
 
 ## How it's managed
