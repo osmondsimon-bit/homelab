@@ -467,12 +467,12 @@ After a power blip, a host only comes back if its firmware is set to power on. H
   (If an Admin BIOS password is ever enabled — `.../authentication/Admin/is_enabled` = 1 — write it
   to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22.**
   carter: run the same one-liner once it's on the network.
-- **oneill (Intel NUC) — NO remote interface** (`/sys/class/firmware-attributes/` is absent). Either
-  (a) **behavioural test:** graceful `shutdown`, then toggle its power at the outlet/UPS and see if
-  it boots back (Proxmox UI / ping returns) — no monitor needed, just access to the plug; or
-  (b) one physical BIOS visit (**F2** → Power / Secondary Power Settings → "After Power Failure" =
-  Power On). NUCs often default to "Last State", which already returns an always-on box — the test
-  confirms. ⚠️ *Status unverified.*
+- **oneill (Intel NUC) — NO remote interface** (`/sys/class/firmware-attributes/` is absent).
+  ⚠️ **TESTED 2026-06-22: does NOT auto-recover** — AC pulled while running, it stayed off and needed
+  a manual power-button press. It needs a **physical BIOS visit: F2 → Power / Secondary Power
+  Settings → "After Power Failure" = Power On.** No remote/SSH path exists for the NUC. Until that's
+  done, treat a power blip as "oneill stays down until someone presses the button" (DNS, monitoring,
+  PBS all offline meanwhile).
 - **UPS:** confirm the UPS also feeds the **network device** (gateway/switch) — else a blip still
   causes the common-mode outage ADR-009 warns about.
 
