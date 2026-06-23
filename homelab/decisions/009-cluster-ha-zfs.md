@@ -1,6 +1,6 @@
-# ADR-009: 3-node Proxmox cluster with HA via ZFS replication (local storage)
+# ADR-009: 3-node Proxmox cluster + ZFS replication for resilience (manual failover, local storage)
 
-**Date:** 2026-06-14  
+**Date:** 2026-06-14 (HA approach revised 2026-06-22 — automatic HA manager rejected; see Refinements)  
 **Status:** Accepted (direction; executed as hardware arrives)
 
 ## Context
@@ -21,9 +21,12 @@ Build a **3-node Proxmox cluster**: apophis + Intel NUC + 2nd ThinkCentre M920Q.
 
 - **Storage:** standardise each node's local storage on **ZFS**. New nodes (NUC, ThinkCentre) are
   built on ZFS from the start; apophis migrates from LVM-thin to ZFS (rebuild/restore — planned).
-- **HA via replication:** use Proxmox **ZFS replication** (per-VM, e.g. every 1–15 min) + the HA
-  manager so a flagged VM restarts on a surviving node from the latest replicated snapshot.
-  Accept the small data-loss window inherent to async replication.
+- **Resilience via replication (HA-manager part revised 2026-06-22):** use Proxmox **ZFS
+  replication** (per-VM, e.g. every 1–15 min) so a recent copy of each critical VM lives on a
+  second node. *The original plan added the automatic HA manager for auto-restart; that was
+  **rejected 2026-06-22** (see Refinements) in favour of **manual failover** — the automatic HA
+  manager is unsafe on a single-network-path lab.* Accept the small data-loss window inherent to
+  async replication.
 - **Quorum:** three nodes give clean quorum (tolerates one node down). No QDevice needed.
 - **Service placement:**
   - apophis — compute-heavy: Plex (QuickSync iGPU), media stack.
@@ -50,28 +53,45 @@ Build a **3-node Proxmox cluster**: apophis + Intel NUC + 2nd ThinkCentre M920Q.
 
 ## Refinements (2026-06-22 — carter arrived; pre-cluster design review, infra-designer-reviewed)
 
-These refine, not change, the direction above. carter = i5-8500 / 32 GB (8th-gen Coffee Lake,
-same generation as apophis's i7-8700T → a migration-compatible pair). Implementation specifics
-live in PLAN.md / runbooks.
+carter = i5-8500 / 32 GB (8th-gen Coffee Lake, same generation as apophis's i7-8700T → a
+migration-compatible pair). The first refinement **materially changes** the HA approach above.
+Implementation specifics live in PLAN.md / runbooks.
 
-- **The nodes are deliberately unequal; the NUC must never be a core-VM failover target.**
-  Core/critical VMs (Home Assistant VM 200; later Vaultwarden) get HA **only on the matched
-  apophis + carter pair**, enforced by a Proxmox **HA group** containing just those two. This
-  lets those VMs run a high, fixed CPU type and live-migrate cleanly between the pair with **no
-  penalty from the weaker node**. oneill (N150) = **quorum vote + light, reproducible services**
-  (rebuilt from Ansible, never migrated) — a weak CPU is fine for a quorum vote. Storage-side HA
-  = **ZFS replication apophis↔carter** for the HA-flagged set (needs apophis's LVM→ZFS migration,
-  Phase 4b).
+- **Automatic HA manager REJECTED — use MANUAL failover.** The original decision assumed the
+  Proxmox HA manager would auto-restart a flagged VM on a surviving node. That is the wrong fit
+  for this lab: every host has a **single NIC**, all nodes share **one network device** (gateway
+  now, a switch later), **no second corosync ring is possible**, and redundant switching is never
+  planned (pre-new-house). The dominant failure is therefore a **common-mode network outage** that
+  hits all nodes at once — and the HA manager's watchdog reacts to the resulting quorum loss by
+  **fencing (hard-rebooting) healthy nodes**: harm with no benefit, since there is nowhere to fail
+  over to when the network itself is gone. corosync also **cannot distinguish "peer down" from
+  "shared device down"** (split-brain; quorum is the only safe response), so there is no "ignore
+  if it's the switch" mode to build. Decision:
+  - **Run the cluster with NO HA-flagged resources** → the watchdog is never armed → a network
+    blip is **benign**: running VMs keep running; `/etc/pve` just goes read-only on the minority
+    side until quorum returns. This also makes corosync jitter on the shared NIC non-dangerous.
+  - **Critical-VM resilience = scheduled ZFS replication + MANUAL failover.** Replicate the HA VM
+    (and later Vaultwarden) **apophis↔carter** (matched pair; oneill is not a target) every few
+    minutes; if a node truly dies, start the VM on the survivor from the latest snapshot via a
+    documented runbook. A few minutes of attention for a rare event.
+  - Right trade here: a single *node* hardware death (where auto-HA helps) is rare; *network* blips
+    (where auto-HA harms) are common. Manual failover keeps the upside and drops the downside.
 
-- **Single-NIC hosts → the shared network device is an ACCEPTED availability SPOF.** Each host has
-  one Ethernet port, so a redundant (second) corosync ring is not available today. With all nodes
-  on one shared device (gateway now, a switch later), a multi-minute outage of that device is a
-  multi-minute *cluster* outage — node-HA cannot help when the network substrate itself is gone,
-  and **corosync cannot distinguish "peer down" from "shared device down"** (the split-brain
-  problem; quorum is the only safe response, so there is no "ignore if it's the switch" mode).
-  Decision: **bound the damage rather than eliminate it** — (1) controlled, *manual* UniFi
-  control-plane updates applied with the cluster in HA maintenance (auto-update disabled), since
-  the observed real-world cause was a UniFi auto-update reboot (see the Zigbee outage root cause);
-  (2) conservative HA scope so few nodes are fence-eligible; (3) corosync tuned to ride out short
-  blips. A **second corosync ring via a USB-Gigabit NIC** is the documented future option, deferred
-  (USB-NIC jitter is acceptable only on a *secondary* ring) — revisit with the new-house network.
+- **Node roles stay unequal.** apophis + carter carry the critical VMs and their replication;
+  **oneill (N150) = quorum vote + light, reproducible services** (Technitium, Monitoring, Glance,
+  PBS, Tailscale — rebuilt from Ansible, not migrated). Quorum matters less without HA (VMs run
+  regardless), but 3 nodes still keeps config editable when one is down. Live-migration across the
+  apophis↔carter pair uses a fixed CPU type (not `host`).
+
+- **Resilience leans on independent, non-cluster mechanisms** (higher ROI here than node-HA):
+  per-guest **`onboot=1` + startup order/delay** so VMs auto-recover after any reboot; **host BIOS
+  set to power on after AC loss**; a **UPS that also covers the network device** so a power blip
+  doesn't cause the common-mode outage at all; **service-level redundancy** (2nd Technitium for
+  DNS); PBS backups as the ultimate fallback. See the power-loss/autostart runbook. A second
+  corosync ring via USB-Gigabit NIC stays a documented future option (secondary ring only) if
+  automatic HA is ever revisited — deferred.
+
+- **Controlled control-plane updates** regardless of the above: disable UniFi auto-update (gateway
+  + switch), apply firmware manually in a window, and alert on pending updates via existing
+  unpoller metrics → ntfy. (A UniFi auto-update reboot was the root cause of the 2026-06-21 Zigbee
+  outage.)
