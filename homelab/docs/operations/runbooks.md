@@ -467,12 +467,11 @@ After a power blip, a host only comes back if its firmware is set to power on. H
   (If an Admin BIOS password is ever enabled — `.../authentication/Admin/is_enabled` = 1 — write it
   to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22.**
   carter: run the same one-liner once it's on the network.
-- **oneill (Intel NUC) — NO remote interface** (`/sys/class/firmware-attributes/` is absent).
-  ⚠️ **TESTED 2026-06-22: does NOT auto-recover** — AC pulled while running, it stayed off and needed
-  a manual power-button press. It needs a **physical BIOS visit: F2 → Power / Secondary Power
-  Settings → "After Power Failure" = Power On.** No remote/SSH path exists for the NUC. Until that's
-  done, treat a power blip as "oneill stays down until someone presses the button" (DNS, monitoring,
-  PBS all offline meanwhile).
+- **oneill (generic N150 mini-PC, AMI Aptio BIOS) — NO remote interface** (`/sys/class/firmware-attributes/`
+  absent). ✅ **FIXED 2026-06-22.** Root cause: BIOS **"State After G3" = S5** (stay off after power
+  loss); changed to **S0** (power on) — confirmed self-boots on AC restore. On this board the setting
+  is under **"State After G3" (S0/S5)**, *not* "Restore AC Power Loss"; if you're back in this BIOS,
+  also check **Deep Sleep/ErP = Disabled**. Entry key: Del (try F2/Esc). No remote/SSH path for it.
 - **UPS:** confirm the UPS also feeds the **network device** (gateway/switch) — else a blip still
   causes the common-mode outage ADR-009 warns about.
 
