@@ -446,6 +446,56 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 
 ---
 
+## Power-loss & autostart resilience (ADR-009)
+
+This lab uses **manual failover, not the Proxmox HA manager** (ADR-009 — automatic HA is unsafe on a
+single-network-path lab). So a host's own auto-recovery after a reboot/power event is what keeps
+services up. Two independent things must both be true: the **host powers itself back on**, and its
+**guests start automatically**.
+
+### A. Per-host: power on after AC loss (BIOS — needs console access)
+
+After a power blip, a host only comes back if its firmware is set to power on (not stay off). This
+is a BIOS setting, so it can't be set remotely — do it at the console on next boot.
+
+- **apophis / carter (ThinkCentre M920Q):** BIOS → Power → **"After Power Loss" = Power On** (not
+  *Stay Off* / *Last State*).
+- **oneill (Intel NUC):** BIOS → Power → **"After Power Failure" = Power On**. ⚠️ *Unverified today —
+  oneill may currently stay off after a blip. Check this.*
+- **UPS:** confirm the UPS also feeds the **network device** (gateway/switch). If the network device
+  drops on a blip while hosts ride through, you still get the common-mode outage ADR-009 warns about.
+
+### B. Per-guest: autostart + ordering
+
+Check every guest auto-starts and in a sane order (DNS first → dependencies → HA VM). Audit current
+state per host:
+
+```bash
+# VMs
+for v in $(qm list | awk 'NR>1{print $1}'); do echo "VM $v:"; qm config $v | grep -E 'onboot|startup' || echo '  (no onboot/startup → defaults: onboot off)'; done
+# CTs
+for c in $(pct list | awk 'NR>1{print $1}'); do echo "CT $c:"; pct config $c | grep -E 'onboot|startup' || echo '  (no onboot/startup)'; done
+```
+
+Set autostart + ordering (lower `order` starts first; `up=` is a post-start delay in seconds):
+
+```bash
+qm set <vmid> --onboot 1 --startup order=3,up=30      # e.g. HA VM: later, after DNS
+pct set <ctid> --onboot 1 --startup order=1,up=10      # e.g. Technitium: first
+```
+
+Suggested order: Technitium/DNS = 1 → Tailscale/PBS/monitoring = 2 → Home Assistant VM = 3.
+
+### C. Verify (don't assume)
+
+- **Autostart only** (safe, no power risk): reboot a non-critical guest's host in a window, or
+  `qm stop` then reboot the host, and confirm guests come up unattended in order.
+- **Full power-loss test** (the real proof): in a maintenance window, physically cut power to one
+  host (or its UPS outlet) and confirm it powers back on **and** its guests autostart. Do one host
+  at a time; never two (quorum). Record the result + recovery time here.
+
+---
+
 ## Onboarding a new guest / node / storage (ADR-017)
 
 Observability + a continuity plan are part of provisioning, not a later add-on. Work
