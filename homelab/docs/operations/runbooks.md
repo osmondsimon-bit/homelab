@@ -453,17 +453,28 @@ single-network-path lab). So a host's own auto-recovery after a reboot/power eve
 services up. Two independent things must both be true: the **host powers itself back on**, and its
 **guests start automatically**.
 
-### A. Per-host: power on after AC loss (BIOS — needs console access)
+### A. Per-host: power on after AC loss
 
-After a power blip, a host only comes back if its firmware is set to power on (not stay off). This
-is a BIOS setting, so it can't be set remotely — do it at the console on next boot.
+After a power blip, a host only comes back if its firmware is set to power on. How to check/set it:
 
-- **apophis / carter (ThinkCentre M920Q):** BIOS → Power → **"After Power Loss" = Power On** (not
-  *Stay Off* / *Last State*).
-- **oneill (Intel NUC):** BIOS → Power → **"After Power Failure" = Power On**. ⚠️ *Unverified today —
-  oneill may currently stay off after a blip. Check this.*
-- **UPS:** confirm the UPS also feeds the **network device** (gateway/switch). If the network device
-  drops on a blip while hosts ride through, you still get the common-mode outage ADR-009 warns about.
+- **apophis / carter (Lenovo ThinkCentre) — REMOTE, no console needed.** Recent kernels expose the
+  Lenovo BIOS via the `thinklmi` driver, so set it over SSH (no BIOS password is set here):
+  ```bash
+  base="/sys/class/firmware-attributes/thinklmi/attributes/After Power Loss"
+  cat "$base/current_value"                  # Power On / Power Off / Last State
+  printf "Power On" > "$base/current_value"   # set it; applies on the next power event
+  ```
+  (If an Admin BIOS password is ever enabled — `.../authentication/Admin/is_enabled` = 1 — write it
+  to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22.**
+  carter: run the same one-liner once it's on the network.
+- **oneill (Intel NUC) — NO remote interface** (`/sys/class/firmware-attributes/` is absent). Either
+  (a) **behavioural test:** graceful `shutdown`, then toggle its power at the outlet/UPS and see if
+  it boots back (Proxmox UI / ping returns) — no monitor needed, just access to the plug; or
+  (b) one physical BIOS visit (**F2** → Power / Secondary Power Settings → "After Power Failure" =
+  Power On). NUCs often default to "Last State", which already returns an always-on box — the test
+  confirms. ⚠️ *Status unverified.*
+- **UPS:** confirm the UPS also feeds the **network device** (gateway/switch) — else a blip still
+  causes the common-mode outage ADR-009 warns about.
 
 ### B. Per-guest: autostart + ordering
 
