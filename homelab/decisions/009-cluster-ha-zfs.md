@@ -77,11 +77,17 @@ Implementation specifics live in PLAN.md / runbooks.
   - Right trade here: a single *node* hardware death (where auto-HA helps) is rare; *network* blips
     (where auto-HA harms) are common. Manual failover keeps the upside and drops the downside.
 
-- **Node roles stay unequal.** apophis + carter carry the critical VMs and their replication;
-  **oneill (N150) = quorum vote + light, reproducible services** (Technitium, Monitoring, Glance,
-  PBS, Tailscale — rebuilt from Ansible, not migrated). Quorum matters less without HA (VMs run
-  regardless), but 3 nodes still keeps config editable when one is down. Live-migration across the
-  apophis↔carter pair uses a fixed CPU type (not `host`).
+- **Cluster scope: apophis + carter ONLY (2 nodes); oneill stays STANDALONE** (revised 2026-06-22 —
+  supersedes the original "3-node" framing). The cluster exists purely for **live-migration +
+  `pvesr` replication** of the critical VMs across the matched Coffee-Lake pair. **oneill is NOT a
+  cluster member** (nor a QDevice): its guests (Technitium, Monitoring, Glance, PBS, Tailscale) are
+  reproducible from Ansible — or, for PBS datastore *state*, a separate off-site-backup concern —
+  and since we run **no auto-HA**, the only thing 3-node membership would add is *seamless quorum*,
+  which isn't worth evacuating oneill (that would drop home-VLAN DNS). **2-node quorum:** a node-down
+  makes `/etc/pve` read-only (running VMs keep running); **manual failover runs `pvecm expected 1`**
+  first (runbook). Live-migration across apophis↔carter uses a fixed CPU type (not `host`). DNS
+  redundancy is a *service-layer* concern (gateway as secondary DNS, and/or a 2nd Technitium), not a
+  reason to cluster oneill.
 
 - **Resilience leans on independent, non-cluster mechanisms** (higher ROI here than node-HA):
   per-guest **`onboot=1` + startup order/delay** so VMs auto-recover after any reboot; **host BIOS
