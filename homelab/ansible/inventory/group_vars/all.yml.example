@@ -79,6 +79,7 @@ backup_stale_max_age_seconds: 129600                        # 36h — BackupStal
 monitoring_node_targets:                                    # node_exporter on the PVE hosts (:9100)
   - "YOUR_PROXMOX_IP:9100"                                  # apophis
   - "YOUR_NUC_IP:9100"                                      # oneill
+  - "YOUR_CARTER_IP:9100"                                   # carter
 
 # Blackbox exporter (:9115) TCP-connect probe targets — black-box reachability of
 # devices we can't scrape. SLZB-06 Zigbee coordinator: probing its Z2MQTT TCP port
@@ -90,6 +91,9 @@ zigbee_coordinator_target: "YOUR_ZIGBEE_COORD_IP:6638"     # SLZB-06 — Z2MQTT 
 monitoring_pve_nodes:
   - { name: apophis, host: YOUR_PROXMOX_IP }
   - { name: oneill, host: YOUR_NUC_IP }
+  # clustered nodes SHARE one cluster-wide token (lives in shared /etc/pve); token_from
+  # reuses that node's token instead of re-minting (avoids racing on the same token).
+  - { name: carter, host: YOUR_CARTER_IP, token_from: apophis }
 
 # UniFi (unpoller) + Home Assistant scrape targets (ADR-013). Passwords/tokens are
 # entered at runtime (vars_prompt), never stored here.
@@ -120,6 +124,7 @@ glance_prometheus_url: "http://YOUR_MONITORING_IP:9090"     # monitoring CT — 
 glance_hosts:                                               # Proxmox nodes — host CPU/RAM/updates panes + node links
   - { name: apophis, node_exporter_instance: "YOUR_PROXMOX_IP:9100", pve_instance: "YOUR_PROXMOX_IP" }
   - { name: oneill,  node_exporter_instance: "YOUR_NUC_IP:9100",     pve_instance: "YOUR_NUC_IP" }
+  - { name: carter,  node_exporter_instance: "YOUR_CARTER_IP:9100",  pve_instance: "YOUR_CARTER_IP" }
 
 # Glance "Service Status" tiles — ONE place to add a new service (ADR-017 onboarding).
 # URLs reference the existing *_ip vars (IPs stay DRY); optional: check_url, allow_insecure,

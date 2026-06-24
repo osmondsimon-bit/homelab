@@ -16,6 +16,9 @@
   hosts: proxmox
   gather_facts: false
   tasks:
+    # Mint once per cluster/standalone node. Hosts with `token_from` (clustered members
+    # that share another node's cluster-wide token) skip minting — re-minting the same
+    # shared token from two nodes races and breaks the ACL.
     - name: (Re)create the monitoring API token and grant PVEAuditor
       ansible.builtin.shell: |
         pveum user token remove root@pam monitoring >/dev/null 2>&1 || true
@@ -23,11 +26,13 @@
         pveum acl modify / --roles PVEAuditor --tokens 'root@pam!monitoring' >/dev/null 2>&1
       register: pve_tok
       changed_when: true
+      when: (monitoring_pve_nodes | selectattr('name', 'equalto', inventory_hostname) | first).token_from is not defined
 
     - name: Stash the token value (read-only, used only in pve.yml)
       ansible.builtin.set_fact:
         pve_token_value: "{{ (pve_tok.stdout | from_json).value }}"
       no_log: true
+      when: (monitoring_pve_nodes | selectattr('name', 'equalto', inventory_hostname) | first).token_from is not defined
 
 - name: Provision Monitoring LXC (Prometheus + Grafana + pve-exporter)
   hosts: oneill
@@ -50,8 +55,8 @@
   tasks:
     - name: Sanity-check both PVE tokens were minted (run without --limit)
       ansible.builtin.assert:
-        that: hostvars[item.name].pve_token_value is defined
-        fail_msg: "No token for {{ item.name }} — run without --limit so play 1 hits every host."
+        that: hostvars[item.token_from | default(item.name)].pve_token_value is defined
+        fail_msg: "No token for {{ item.name }} (source {{ item.token_from | default(item.name) }}) — run without --limit so play 1 hits every minting host."
         quiet: true
       loop: "{{ monitoring_pve_nodes }}"
 
@@ -178,7 +183,7 @@
           {{ n.name }}:
             user: root@pam
             token_name: monitoring
-            token_value: {{ hostvars[n.name].pve_token_value }}
+            token_value: {{ hostvars[n.token_from | default(n.name)].pve_token_value }}
             verify_ssl: false
           {% endfor %}
       no_log: true
