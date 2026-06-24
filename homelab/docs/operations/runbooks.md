@@ -506,6 +506,48 @@ Suggested order: Technitium/DNS = 1 → Tailscale/PBS/monitoring = 2 → Home As
 
 ---
 
+## Phase 4b: rebuild apophis on ZFS (one-time) — infra-designer-reviewed 2026-06-22
+
+Goal: move apophis from LVM-thin to **ZFS-on-root** so it can host `pvesr`-replicated VMs for
+manual failover (ADR-009). apophis hosts VM 100 (mgmt-vm, the Ansible/Claude host), VM 200 (HAOS),
+CT 110 (Tailscale). Strategy: evacuate everything to **carter**, reinstall apophis on ZFS, rejoin,
+migrate back, set up replication. HA stays up on carter throughout. **Do this in a maintenance
+window**, one step at a time, honouring every VERIFY gate.
+
+### Pre-flight gates (all must pass before the destructive step)
+- **Migration method / CPU type.** Both VMs are `cpu: host`, which **blocks live migration**. Pick one:
+  - *Live (zero-downtime move):* `qm set 100 --cpu x86-64-v2-AES` and `qm set 200 --cpu x86-64-v2-AES`, then **restart each VM** (stop/start, to apply), then live-migrate. Portable type is also correct cluster hygiene long-term. *(host is still fine for cold failover — only live migration needs this.)*
+  - *Offline (simpler, brief downtime):* leave `cpu: host`, `qm shutdown`, then `qm migrate <id> carter --targetstorage local-zfs --with-local-disks`, then start on carter. ~2–3 min downtime per VM.
+- **carter AC power-recovery** must be set to power-on (PLAN backlog) — carter is the *sole* host running production during the reinstall; if it loses power and stays off, both VMs are down with no path back.
+- **PBS encryption key:** lives in cluster-shared `/etc/pve/priv/storage/` → carter retains a copy and it returns to apophis on rejoin, so the reinstall won't lose it. Still confirm an **off-box** copy exists (fingerprint `70:ed:…:79:81` in the password manager) as whole-cluster-loss insurance.
+- **Fresh backups:** trigger a manual PBS backup of VM 100; confirm the latest HAOS native backup landed on CT 113 (<24h).
+- **SSH trust:** cluster root keys return via shared `/etc/pve`; the **mgmt-vm's** root key is node-local → re-added in step 6 (`ssh-copy-id`). No need to hand-save it.
+
+> **Key fact — `/etc/pve` is cluster-shared.** Reinstalling apophis wipes only its *node-local* state. On `pvecm add`, apophis pulls the cluster filesystem from carter, so **users, 2FA, ACLs, the monitoring PVE token, the PBS key, storage.cfg, and VM configs all return automatically.** Node-local things to redo: SSH host key, mgmt-vm's root authorized_key, no-sub apt repos, node_exporter.
+
+### Sequence (VERIFY at each gate; rollback notes inline)
+1. **Migrate VM 200 → carter** (`--targetstorage local-zfs`, with local disks). *Drive from the apophis GUI, not from inside mgmt-vm.* **VERIFY:** HA UI loads, Z2MQTT connected, Zigbee devices respond. *Rollback: migration is non-destructive — source stays until success; if it fails, 200 is still on apophis.*
+2. **Migrate VM 100 → carter.** *Drive from a browser NOT inside mgmt-vm* (this session drops + reconnects; same IP via the UniFi MAC reservation). **VERIFY:** SSH to mgmt-vm works, `hostname`=mgmt-vm, git repo intact.
+3. **Rebuild Tailscale on oneill:** `pct stop 110 && pct destroy 110` on apophis, then `ansible-playbook playbooks/provision-tailscale.yml` targeting oneill. **VERIFY:** Tailscale up on oneill, remote access works.
+4. **Remove apophis from the cluster.** Power apophis off first, then on **carter**: `pvecm expected 1` (else carter, now 1/2, goes read-only) → `pvecm delnode apophis`. **VERIFY:** `pvecm status` on carter = Quorate, Expected 1; VMs 100+200 running on carter.
+5. **Reinstall apophis** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on the SSD, hostname `apophis`. Then: set no-subscription repos (same as carter onboarding), `apt update && dist-upgrade`, restore root `authorized_keys`. **VERIFY:** boots, `pveversion`=9.2.3, `zpool list` shows rpool.
+6. **Rejoin (carter root has 2FA — cluster-wide):** from mgmt-vm `ssh-keygen -R YOUR_PROXMOX_IP` (clear apophis's old host key) then `ssh-copy-id root@YOUR_PROXMOX_IP` (re-add the node-local mgmt-vm key); on **apophis's shell (a TTY)** run `pvecm add YOUR_CARTER_IP` — enter carter's root pw **+ 2FA OTP** (the GUI/API join fails with 2FA, as when we first formed the cluster). On rejoin apophis pulls the cluster-shared `/etc/pve` → users/2FA/ACLs/monitoring-token/storage.cfg return automatically. **VERIFY:** `pvecm status` = 2 nodes, Quorate, Expected 2.
+7. **Fix storage:** `pvesm set local-zfs --nodes apophis,carter` and `pvesm remove local-lvm` (apophis has no LVM now). **VERIFY:** local-zfs active on both.
+8. **Migrate 100 + 200 back to apophis** (`--targetstorage local-zfs`). **VERIFY:** HA + mgmt-vm healthy on apophis.
+9. **Verify monitoring resumes:** the PVE monitoring token is in cluster-shared `/etc/pve` → it returns on rejoin, so apophis's pve-exporter should auth automatically. **node_exporter** is node-local → reinstall it: `ansible-playbook playbooks/install-node-exporter.yml --limit apophis`. **VERIFY:** apophis node + pve-exporter targets up in Prometheus; only re-run `provision-monitoring.yml` if the pve target stays down.
+10. **2FA — no re-enrollment needed:** root@pam + simon@pve TOTP lives in cluster-shared `/etc/pve/priv/tfa.cfg` and returns on rejoin. **VERIFY:** log into apophis's GUI with TOTP to confirm it works.
+11. **Set up replication:** `pvesr create --guest 200 --target carter --schedule '*/15' --remove-job on-error`. **VERIFY:** `pvesr list` shows it; `pvesr sync` then `zfs list -t snapshot` on carter shows a `__replicate__` snapshot.
+
+## Manual failover (VM 200, when apophis is truly dead) — ADR-009
+
+No auto-HA (no fencing). Failover is a deliberate human action:
+1. **Confirm apophis is actually dead** (not a network blip).
+2. On **carter**: `pvecm expected 1` (makes carter quorate alone → `/etc/pve` writable).
+3. `zfs list -t snapshot rpool/data/vm-200-disk-1` — note the latest `__replicate__` snapshot (≤15 min data loss accepted).
+4. `qm start 200` on carter (config is cluster-shared, synced to the last replication).
+5. Confirm HA up + Z2MQTT reconnects (self-heal automation assists).
+6. When apophis returns: `pvecm expected 2`, re-sync/restart replication, migrate 200 back when stable.
+
 ## Onboarding a new guest / node / storage (ADR-017)
 
 Observability + a continuity plan are part of provisioning, not a later add-on. Work
