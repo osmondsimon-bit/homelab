@@ -73,6 +73,7 @@
         --mp0 /{{ habackup_dataset }},mp={{ habackup_mount }}
         --unprivileged 1
         --onboot 1
+        --startup order=2,up=10
       when: ct_status.rc != 0
 
     - name: Ensure CT is running

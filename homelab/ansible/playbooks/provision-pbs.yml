@@ -75,6 +75,7 @@
         --mp0 /{{ pbs_datastore_dataset }},mp={{ pbs_datastore_mount }}
         --unprivileged 1
         --onboot 1
+        --startup order=2,up=10
       when: ct_status.rc != 0
 
     - name: Ensure CT is running

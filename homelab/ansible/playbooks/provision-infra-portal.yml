@@ -84,6 +84,7 @@
         --unprivileged 1
         --features nesting=1
         --onboot 1
+        --startup order=4,up=5
       when: pct_status.rc != 0
 
     - name: Start CT {{ portal_ctid }}
