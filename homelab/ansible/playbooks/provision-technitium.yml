@@ -1,27 +1,38 @@
 ---
-# Provision the Technitium DNS LXC on Proxmox as a DNS-only resolver with
-# ad/tracker blocking (see decisions/011-dns-engine.md). UniFi keeps DHCP and
-# hands this CT out as the network resolver — the cutover is documented in
+# Provision the Technitium DNS resolver LXC(s) on Proxmox — DNS-only resolvers with
+# ad/tracker blocking (see decisions/011-dns-engine.md). UniFi keeps DHCP and hands
+# these CTs out as the network resolvers; the cutover is documented in
 # docs/operations/runbooks.md. Idempotent — safe to re-run.
 #
+# MULTI-INSTANCE (DNS redundancy): the resolvers are defined declaratively in
+# `technitium_instances` (group_vars) — one entry per CT, each pinned to a node
+# ({ ctid, hostname, ip, node, rootfs_storage }). The per-instance logic lives in
+# tasks/technitium-instance.yml and is included once per entry, guarded so each CT
+# is created on its own node. Shared shape/config (cores/ram/disk, forwarders,
+# blocklists) come from the global technitium_* vars, so every resolver stays
+# config-identical. Run with `--limit <node>` to (re)converge just one instance.
+#
 # Run from the mgmt-vm (control node), inside homelab/ansible/:
-#   ansible-playbook playbooks/provision-technitium.yml
+#   ansible-playbook playbooks/provision-technitium.yml                 # all instances
+#   ansible-playbook playbooks/provision-technitium.yml --limit carter  # just the carter one
 #
-# You'll be prompted for an admin console password. It is set via the Technitium
+# You'll be prompted for the admin console password. It is set via the Technitium
 # API on first install only and is never stored (no_log). On later re-runs the
-# password step is skipped (the default admin/admin no longer applies).
+# password step is skipped (the default admin/admin no longer applies). When
+# (re)converging an EXISTING instance, the prompt value must match that instance's
+# current admin password (it's used to log in and apply config).
 #
-# Variables live in inventory/group_vars/all.yml. The CT lifecycle is driven via
-# `pct` over SSH to the Proxmox host (single credential), consistent with the
-# Tailscale playbook; migration of LXC creation to Terraform is planned (ADR-008).
+# The CT lifecycle is driven via `pct` over SSH to the Proxmox host (single
+# credential), consistent with the Tailscale playbook; migration of LXC creation to
+# Terraform is planned (ADR-008).
 
-- name: Provision Technitium DNS LXC (DNS-only resolver)
+- name: Provision Technitium DNS resolver LXC(s) — DNS-only, redundant
   hosts: proxmox
   gather_facts: false
 
   vars_prompt:
     - name: tech_admin_password
-      prompt: "Technitium admin console password (set on first install only)"
+      prompt: "Technitium admin console password (set on first install; must match existing on re-converge)"
       private: true
 
   tasks:
@@ -31,170 +42,18 @@
         fail_msg: "Use at least 12 characters for the Technitium admin password."
         quiet: true
 
-    - name: Check whether CT {{ technitium_ctid }} already exists
-      ansible.builtin.command: "pct status {{ technitium_ctid }}"
-      register: ct_status
-      changed_when: false
-      failed_when: false
+    - name: Provision + configure each Technitium instance on its node
+      ansible.builtin.include_tasks: tasks/technitium-instance.yml
+      loop: "{{ technitium_instances }}"
+      loop_control:
+        loop_var: instance
+        label: "{{ instance.hostname }} (CT {{ instance.ctid }}) on {{ instance.node }}"
+      when: instance.node == inventory_hostname
 
-    - name: Ensure Debian template is downloaded
-      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
-      args:
-        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
-      when: ct_status.rc != 0
-
-    - name: Create unprivileged Technitium LXC
-      ansible.builtin.command: >
-        pct create {{ technitium_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
-        --hostname {{ technitium_hostname }}
-        --cores {{ technitium_cores }}
-        --memory {{ technitium_ram_mb }}
-        --swap 0
-        --rootfs {{ rootfs_storage }}:{{ technitium_disk_gb }}
-        --net0 name=eth0,bridge={{ bridge }},ip={{ technitium_ip }},gw={{ gateway }}
-        --unprivileged 1
-        --features nesting=1
-        --onboot 1
-      when: ct_status.rc != 0
-
-    - name: Ensure CT is running
-      ansible.builtin.command: "pct start {{ technitium_ctid }}"
-      register: ct_start
-      changed_when: "'already running' not in (ct_start.stderr | default(''))"
-      failed_when:
-        - ct_start.rc != 0
-        - "'already running' not in (ct_start.stderr | default(''))"
-
-    - name: Wait for the CT to be responsive
-      ansible.builtin.command: "pct exec {{ technitium_ctid }} -- true"
-      register: ct_ready
-      until: ct_ready.rc == 0
-      retries: 15
-      delay: 3
-      changed_when: false
-
-    # Deterministic fresh-install gate: is dns.service already enabled? This (not
-    # parsing the installer's stdout) drives whether we install and whether the
-    # default-credentials password change runs — so a re-run never re-touches it
-    # and a first run never silently leaves admin/admin in place.
-    - name: Check whether Technitium is already installed
-      ansible.builtin.command: "pct exec {{ technitium_ctid }} -- systemctl is-enabled dns.service"
-      register: dns_present
-      changed_when: false
-      failed_when: false
-
-    - name: Install Technitium DNS Server inside the CT
-      ansible.builtin.shell: |
-        pct exec {{ technitium_ctid }} -- bash -c '
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qq
-          apt-get install -y -qq curl >/dev/null
-          curl -sSL https://download.technitium.com/dns/install.sh | bash
-        '
-      register: tech_install
-      changed_when: true
-      when: dns_present.rc != 0
-
-    - name: Wait for the Technitium web console to come up (port 5380)
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS -o /dev/null "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
-      register: tech_web
-      until: tech_web.rc == 0
-      retries: 20
-      delay: 3
-      changed_when: false
-      when: dns_present.rc != 0
-
-    # First-install only (default credentials are admin/admin): get a token, then
-    # set the operator password. Gated on the deterministic fresh-install check.
-    - name: Get first-login API token (default admin/admin)
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
-      register: tech_login
-      changed_when: false
-      when: dns_present.rc != 0
-
-    # changePassword needs BOTH the current password (pass=admin, the install
-    # default) and the new one (newPass). Technitium returns HTTP 200 even on API
-    # errors, so curl alone can't detect failure — we parse the JSON status and
-    # fail loudly if it isn't "ok" (otherwise the console silently stays on
-    # admin/admin, a LAN-reachable open admin console).
-    - name: Set the admin console password via API
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/user/changePassword?token={{ (tech_login.stdout | from_json).token }}&pass=admin&newPass={{ tech_admin_password | urlencode }}"
-      register: tech_pwchange
-      no_log: true
-      changed_when: true
-      failed_when: (tech_pwchange.stdout | from_json).status != "ok"
-      when: dns_present.rc != 0
-
-    - name: Confirm default credentials are now rejected
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
-      register: tech_defcheck
-      changed_when: false
-      failed_when: (tech_defcheck.stdout | from_json).status == "ok"
-      when: dns_present.rc != 0
-
-    # ---- Apply DNS config via the Technitium API (idempotent — runs every time) ----
-    # Log in with the operator password (set above on first install, or the current
-    # one on a re-run) for a fresh token, then enforce forwarders + blocking +
-    # blocklists declaratively. Technitium returns HTTP 200 even on API errors, so
-    # every step parses the JSON status (and the last reads the config back) and
-    # fails loudly — a mistyped param can't silently no-op.
-    - name: Log in to the Technitium API
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass={{ tech_admin_password | urlencode }}"
-      register: tech_cfg_login
-      no_log: true
-      changed_when: false
-      failed_when: (tech_cfg_login.stdout | from_json).status != "ok"
-
-    - name: Configure forwarders, blocking and blocklists
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/settings/set?token={{ (tech_cfg_login.stdout | from_json).token }}&forwarders={{ technitium_forwarders | join(',') | urlencode }}&forwarderProtocol={{ technitium_forwarder_protocol }}&enableBlocking=true&blockingType={{ technitium_blocking_type }}&blockListUrls={{ technitium_blocklist_urls | join(',') | urlencode }}&blockListUpdateIntervalHours={{ technitium_blocklist_update_hours }}"
-      register: tech_settings
-      changed_when: true
-      failed_when: (tech_settings.stdout | from_json).status != "ok"
-
-    # Run every time so the list is always populated (fresh install) and current
-    # (re-runs) — OISD is a few MB; the 24h auto-update handles refresh in between.
-    - name: Force a block list download now
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/settings/forceUpdateBlockLists?token={{ (tech_cfg_login.stdout | from_json).token }}"
-      register: tech_forceupdate
-      changed_when: true
-      failed_when: (tech_forceupdate.stdout | from_json).status != "ok"
-
-    - name: Verify blocking + blocklist are applied (read-back)
-      ansible.builtin.command: >
-        pct exec {{ technitium_ctid }} --
-        curl -fsS "http://127.0.0.1:5380/api/settings/get?token={{ (tech_cfg_login.stdout | from_json).token }}"
-      register: tech_verify
-      changed_when: false
-      failed_when: >
-        (tech_verify.stdout | from_json).response.enableBlocking != true
-        or technitium_blocklist_urls[0] not in (tech_verify.stdout | from_json).response.blockListUrls
-
-    - name: Get the CT's LAN IP for reporting
-      ansible.builtin.command: "pct exec {{ technitium_ctid }} -- hostname -I"
-      register: tech_ip
-      changed_when: false
-
-    - name: Report result and next steps
+    - name: Reminder — DHCP + onboarding
       ansible.builtin.debug:
         msg:
-          - "Technitium DNS LXC {{ technitium_ctid }} is up at {{ tech_ip.stdout | trim }}."
-          - "Web console: http://{{ technitium_ip | regex_replace('/.*$', '') }}:5380  (user: admin)"
-          - "Forwarders + blocking + blocklists were configured via API (list downloads in background)."
-          - "NEXT (see docs/operations/runbooks.md for the full cutover):"
-          - "  1. Verify: dig @{{ technitium_ip | regex_replace('/.*$', '') }} example.com (resolves)"
-          - "     + dig @{{ technitium_ip | regex_replace('/.*$', '') }} securepubads.g.doubleclick.net (blocked)"
-          - "  2. Reserve {{ technitium_ip }} in UniFi, then point DHCP DNS at it (cutover)."
+          - "Resolvers provisioned. NEXT (see docs/operations/runbooks.md):"
+          - "  1. Reserve each instance IP in UniFi."
+          - "  2. Hand BOTH out on the home-VLAN DHCP (primary + secondary DNS) for redundancy."
+          - "  3. Dashboards/alerts already cover each CT (Glance tile + GuestDown via pve_up)."

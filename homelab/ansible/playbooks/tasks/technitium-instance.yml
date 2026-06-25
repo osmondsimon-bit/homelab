@@ -1,0 +1,172 @@
+# Provision + declaratively configure ONE Technitium DNS resolver instance.
+# Included once per entry in `technitium_instances` (see provision-technitium.yml),
+# guarded by `when: instance.node == inventory_hostname` so each CT is created on its
+# own node. Operates on the loop var `instance` ({ ctid, hostname, ip, node,
+# rootfs_storage }); shared shape/config (cores/ram/disk, forwarders, blocklists) come
+# from the global technitium_* vars. Idempotent — safe to re-run.
+
+- name: "[{{ instance.hostname }}] Check whether CT {{ instance.ctid }} already exists"
+  ansible.builtin.command: "pct status {{ instance.ctid }}"
+  register: ct_status
+  changed_when: false
+  failed_when: false
+
+- name: "[{{ instance.hostname }}] Ensure Debian template is downloaded"
+  ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+  args:
+    creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+  when: ct_status.rc != 0
+
+- name: "[{{ instance.hostname }}] Create unprivileged Technitium LXC"
+  ansible.builtin.command: >
+    pct create {{ instance.ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+    --hostname {{ instance.hostname }}
+    --cores {{ technitium_cores }}
+    --memory {{ technitium_ram_mb }}
+    --swap 0
+    --rootfs {{ instance.rootfs_storage }}:{{ technitium_disk_gb }}
+    --net0 name=eth0,bridge={{ bridge }},ip={{ instance.ip }},gw={{ gateway }}
+    --unprivileged 1
+    --features nesting=1
+    --onboot 1
+    --startup {{ technitium_startup | default('order=1') }}
+  when: ct_status.rc != 0
+
+- name: "[{{ instance.hostname }}] Ensure CT is running"
+  ansible.builtin.command: "pct start {{ instance.ctid }}"
+  register: ct_start
+  changed_when: "'already running' not in (ct_start.stderr | default(''))"
+  failed_when:
+    - ct_start.rc != 0
+    - "'already running' not in (ct_start.stderr | default(''))"
+
+- name: "[{{ instance.hostname }}] Wait for the CT to be responsive"
+  ansible.builtin.command: "pct exec {{ instance.ctid }} -- true"
+  register: ct_ready
+  until: ct_ready.rc == 0
+  retries: 15
+  delay: 3
+  changed_when: false
+
+# Deterministic fresh-install gate: is dns.service already enabled? This (not
+# parsing the installer's stdout) drives whether we install and whether the
+# default-credentials password change runs — so a re-run never re-touches it
+# and a first run never silently leaves admin/admin in place.
+- name: "[{{ instance.hostname }}] Check whether Technitium is already installed"
+  ansible.builtin.command: "pct exec {{ instance.ctid }} -- systemctl is-enabled dns.service"
+  register: dns_present
+  changed_when: false
+  failed_when: false
+
+- name: "[{{ instance.hostname }}] Install Technitium DNS Server inside the CT"
+  ansible.builtin.shell: |
+    pct exec {{ instance.ctid }} -- bash -c '
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -y -qq curl >/dev/null
+      curl -sSL https://download.technitium.com/dns/install.sh | bash
+    '
+  register: tech_install
+  changed_when: true
+  when: dns_present.rc != 0
+
+- name: "[{{ instance.hostname }}] Wait for the Technitium web console to come up (port 5380)"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS -o /dev/null "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
+  register: tech_web
+  until: tech_web.rc == 0
+  retries: 20
+  delay: 3
+  changed_when: false
+  when: dns_present.rc != 0
+
+# First-install only (default credentials are admin/admin): get a token, then
+# set the operator password. Gated on the deterministic fresh-install check.
+- name: "[{{ instance.hostname }}] Get first-login API token (default admin/admin)"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
+  register: tech_login
+  changed_when: false
+  when: dns_present.rc != 0
+
+# changePassword needs BOTH the current password (pass=admin, the install
+# default) and the new one (newPass). Technitium returns HTTP 200 even on API
+# errors, so curl alone can't detect failure — we parse the JSON status and
+# fail loudly if it isn't "ok" (otherwise the console silently stays on
+# admin/admin, a LAN-reachable open admin console).
+- name: "[{{ instance.hostname }}] Set the admin console password via API"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/user/changePassword?token={{ (tech_login.stdout | from_json).token }}&pass=admin&newPass={{ tech_admin_password | urlencode }}"
+  register: tech_pwchange
+  no_log: true
+  changed_when: true
+  failed_when: (tech_pwchange.stdout | from_json).status != "ok"
+  when: dns_present.rc != 0
+
+- name: "[{{ instance.hostname }}] Confirm default credentials are now rejected"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
+  register: tech_defcheck
+  changed_when: false
+  failed_when: (tech_defcheck.stdout | from_json).status == "ok"
+  when: dns_present.rc != 0
+
+# ---- Apply DNS config via the Technitium API (idempotent — runs every time) ----
+# Log in with the operator password (set above on first install, or the current
+# one on a re-run) for a fresh token, then enforce forwarders + blocking +
+# blocklists declaratively. Technitium returns HTTP 200 even on API errors, so
+# every step parses the JSON status (and the last reads the config back) and
+# fails loudly — a mistyped param can't silently no-op.
+- name: "[{{ instance.hostname }}] Log in to the Technitium API"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass={{ tech_admin_password | urlencode }}"
+  register: tech_cfg_login
+  no_log: true
+  changed_when: false
+  failed_when: (tech_cfg_login.stdout | from_json).status != "ok"
+
+- name: "[{{ instance.hostname }}] Configure forwarders, blocking and blocklists"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/settings/set?token={{ (tech_cfg_login.stdout | from_json).token }}&forwarders={{ technitium_forwarders | join(',') | urlencode }}&forwarderProtocol={{ technitium_forwarder_protocol }}&enableBlocking=true&blockingType={{ technitium_blocking_type }}&blockListUrls={{ technitium_blocklist_urls | join(',') | urlencode }}&blockListUpdateIntervalHours={{ technitium_blocklist_update_hours }}"
+  register: tech_settings
+  changed_when: true
+  failed_when: (tech_settings.stdout | from_json).status != "ok"
+
+# Run every time so the list is always populated (fresh install) and current
+# (re-runs) — OISD is a few MB; the 24h auto-update handles refresh in between.
+- name: "[{{ instance.hostname }}] Force a block list download now"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/settings/forceUpdateBlockLists?token={{ (tech_cfg_login.stdout | from_json).token }}"
+  register: tech_forceupdate
+  changed_when: true
+  failed_when: (tech_forceupdate.stdout | from_json).status != "ok"
+
+- name: "[{{ instance.hostname }}] Verify blocking + blocklist are applied (read-back)"
+  ansible.builtin.command: >
+    pct exec {{ instance.ctid }} --
+    curl -fsS "http://127.0.0.1:5380/api/settings/get?token={{ (tech_cfg_login.stdout | from_json).token }}"
+  register: tech_verify
+  changed_when: false
+  failed_when: >
+    (tech_verify.stdout | from_json).response.enableBlocking != true
+    or technitium_blocklist_urls[0] not in (tech_verify.stdout | from_json).response.blockListUrls
+
+- name: "[{{ instance.hostname }}] Get the CT's LAN IP for reporting"
+  ansible.builtin.command: "pct exec {{ instance.ctid }} -- hostname -I"
+  register: tech_ip
+  changed_when: false
+
+- name: "[{{ instance.hostname }}] Report result"
+  ansible.builtin.debug:
+    msg:
+      - "Technitium '{{ instance.hostname }}' (CT {{ instance.ctid }}) on {{ instance.node }} is up at {{ tech_ip.stdout | trim }}."
+      - "Web console: http://{{ instance.ip | regex_replace('/.*$', '') }}:5380  (user: admin)"
+      - "Forwarders + blocking + blocklists configured via API (list downloads in background)."
+      - "Verify: dig @{{ instance.ip | regex_replace('/.*$', '') }} example.com  +  dig @{{ instance.ip | regex_replace('/.*$', '') }} securepubads.g.doubleclick.net (blocked)."
