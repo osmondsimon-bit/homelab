@@ -70,3 +70,34 @@ immediately as a policy.
   audit (enumerate authorized_keys across all guests + both PVE hosts; confirm
   key-only root login on hosts; inventory where the mgmt-vm private key is backed up)
   is a follow-on action — tracked in PLAN.md.
+
+## Revision — 2026-06-25 (Phase 5 planning; reconciled to as-built + a state survey)
+
+A survey of what's actually deployed found the model partly aspirational. Three changes:
+
+1. **`ansible-vault` dropped — it was never wired in.** No vault password file, no encrypted
+   vars, no playbook uses it. Tier 2 no longer lists an "ansible-vault master password."
+   Persistent *admin* passwords that playbooks prompt for (Grafana, PBS, Technitium ×2,
+   HA-backup-share) — which today live **nowhere durable** (a forgotten one blocks a
+   re-converge) — become **Tier 1**: they live in Vaultwarden and the operator pastes them
+   at the `vars_prompt`. Machine tokens stay Tier 3 (gitignored env files / `group_vars`).
+   Runs stay manual/interactive; nothing secret is stored encrypted-in-repo. Rationale: the
+   lab is small and hand-driven; vault was a moving part with no user. (Revisit only if
+   non-interactive/CI runs are ever needed.)
+
+2. **Vaultwarden availability is MANUAL failover, not auto-HA.** ADR-009 shipped manual
+   failover (no HA manager/fencing), so the original "fails over to another node" assumption
+   in ADR-010/018 is wrong. Vaultwarden is a `pvesr`-replicated guest (apophis→carter); a
+   node loss means a *manual* start on the survivor. The **offline client cache** is what
+   covers that window — acceptable for a vault.
+
+3. **2FA recovery codes are now an explicit Tier 2 anchor** (Keychain, outside the lab). The
+   Phase 4 cluster-join 401 saga showed a lost/desynced phone can lock root out of Proxmox;
+   each account's TOTP recovery codes must be saved to Keychain so 2FA is itself recoverable.
+
+**Exposure:** Vaultwarden is **Tailscale-only** (no public surface). The phone syncs over the
+tailnet; the app's offline cache still lets you *read* passwords when off-tailnet. Decided
+2026-06-25.
+
+Updated Tier 2 anchors (outside the lab, in Keychain): **PBS encryption key · HA backup
+encryption key · 2FA/TOTP recovery codes**. (No ansible-vault password — removed.)

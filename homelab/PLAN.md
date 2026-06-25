@@ -95,10 +95,22 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 2. Tailscale ✓ (CT 110) + Technitium DNS ✓ (CT 111 on oneill, serving the home VLAN; IoT/guest use the gateway) — **✓ completed**
 3. **Foundation + observability:** PBS/mgmt-vm backups ✓ → **Monitoring** ✓ (Prometheus + Grafana + Alertmanager) → **Glance** ✓ (front-door dashboard, ADR-014; was Homepage). **✓ closed via `/phase-gate` 2026-06-17** — see `docs/phases/3-foundation-observability.md`. Carry-forwards: ~~HA native backup~~ ✅ landing, ~~mgmt-vm restore drill~~ ✅ PASS, ~~PBS encryption~~ ✅ enabled (2026-06-17), ~~HA-native-restore drill~~ ✅ **PASS 2026-06-18** (`vzdump-qemu-200` retired). **Phase 3 backup carry-forwards all clear.** (Terraform import deferred to cluster scale — ADR-008.)
 4. **Multi-node + HA — ✅ CLOSED 2026-06-25 (`/phase-gate`):** apophis + carter form the 2-node cluster `homelab` (oneill stays standalone); local storage on ZFS; `pvesr` replication of VM 200 + **manual failover** (no HA manager/fencing — single-NIC network isn't HA-grade); 2nd Technitium (CT 117 on carter) removes the DNS SPOF; corosync ride-out + cluster-aware monitoring. Tailscale stays on apophis. Record: `docs/phases/4-multinode-ha.md`.
-5. **Secrets + HA expansion:** self-host Vaultwarden (host TBD pending cluster design — ADR-010, ADR-018); HACS, Node-RED, ESPHome, HA → Grafana _(swapped ahead of Media 2026-06-25)_
+5. **Secrets + HA expansion:** self-host Vaultwarden (native LXC on **apophis**, `pvesr`-replicated to carter, **Tailscale-only** — ADR-010/018 revised 2026-06-25) + SSH access audit; then HACS, Node-RED, ESPHome, HA → Grafana, wall-tablet _(swapped ahead of Media 2026-06-25)_
 6. **Media:** Jellyfin (preferred over Plex — open source, no licence; QuickSync) + qBittorrent/Gluetun on apophis — low priority, revisit once media importance clearer; Minecraft server TBD
 - Cross-cutting (designed early, not deferred to the end): VM-level backups, a patching approach
 - Deferred to the new house: NAS / shared storage, cameras, Frigate
+
+### Phase 5 — Secrets + HA expansion (execution plan, 2026-06-25)
+
+Architecture decided: ADR-018 5-tier model (revised 2026-06-25 — `ansible-vault` dropped as never-wired-in; persistent admin passwords → Vaultwarden Tier 1, pasted at prompts; 2FA recovery codes added as Tier 2 anchors) + ADR-010 Vaultwarden (native LXC on apophis, replicated to carter, Tailscale-only). Order:
+
+1. [ ] **SSH access audit (do first — cheap, independent).** Enumerate `authorized_keys` on all three hosts + every guest; confirm **key-only root** on the PVE hosts (no password auth); remove stale keys; record where the mgmt-vm private key is backed up; verify `~/.git-credentials` is a scoped PAT, not a broad token.
+2. [ ] **VM 200 manual-failover drill BEFORE Vaultwarden** (carried from Phase 4) — Vaultwarden depends on the same `pvesr` manual-failover mechanism, so prove it first.
+3. [ ] **Provision Vaultwarden** — native `vaultwarden` binary in an unprivileged LXC on **apophis** (next free VMID/IP, reserve in UniFi first), **Argon2id** KDF, sign-ups disabled after the operator account, **Tailscale-only** (no public surface). Add to `pvesr` replication apophis→carter + the manual-failover runbook. ADR-017 onboarding (Glance tile, GuestDown, backup decision). **infra-designer gate + /security-review before provisioning.**
+4. [ ] **Migrate Tier 1 creds** Bitwarden→Vaultwarden (one-step export/import) — incl. the previously-homeless playbook admin passwords (Grafana, PBS, Technitium ×2, HA-backup-share); thereafter paste them at `vars_prompt`.
+5. [ ] **2FA recovery codes → Keychain (Tier 2 anchor).** Save each Proxmox account's TOTP recovery codes off-box — the Phase 4 401 saga showed a lost/desynced phone = root lockout.
+6. [ ] **Off-site backup kickoff** — encrypted Vaultwarden export to PBS **+** an off-site copy (ciphertext, safe in any cloud bucket); first concrete step toward closing the off-site SPOF.
+7. [ ] **HA expansion** (after Vaultwarden): HACS, Node-RED, ESPHome, HA → Grafana, wall-tablet kiosk dashboard.
 
 ## Open tasks & decisions (carry-over)
 
