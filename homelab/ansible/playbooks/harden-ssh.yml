@@ -1,0 +1,58 @@
+---
+# harden-ssh.yml — key-only root SSH on the Proxmox hosts (ADR-018 SSH audit, 2026-06-25).
+#
+# The 2026-06-25 SSH audit found root password-auth enabled over SSH on all three hosts
+# (PermitRootLogin yes + PasswordAuthentication yes). Pubkey access already works (the
+# mgmt-vm key + the cluster cross-node keys), so we can safely switch to key-only.
+#
+# Drops a sshd_config.d hardening file and RELOADS sshd (not restart — live sessions
+# survive). Validates with `sshd -t` before reloading and reads the effective policy back
+# so a missing `Include` line (or any mistake) is caught loudly. Idempotent.
+#
+# PRECONDITION: pubkey SSH to every host must already work (it does — verified in the audit;
+# the fact this playbook connects at all proves it). Rollback: delete the drop-in + reload.
+#
+# Run from the mgmt-vm, inside homelab/ansible/:
+#   ansible-playbook playbooks/harden-ssh.yml
+#
+# NOTE: the service CTs already lock root SSH (permitrootlogin without-password + no root
+# authorized_keys), and most don't need sshd at all (managed via `pct exec`). Tightening /
+# removing sshd inside the CTs is a tracked follow-up, not done here.
+
+- name: Harden SSH on Proxmox hosts (key-only root)
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Drop the SSH hardening config (key-only root, no password auth)
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/10-homelab-harden.conf
+        mode: "0644"
+        content: |
+          # Managed by harden-ssh.yml (ADR-018 SSH audit, 2026-06-25). Do not edit by hand.
+          # Key-only root; no interactive/password auth. Pubkey access (mgmt-vm + cluster keys).
+          PermitRootLogin prohibit-password
+          PasswordAuthentication no
+          PubkeyAuthentication yes
+          KbdInteractiveAuthentication no
+      register: harden_cfg
+
+    - name: Validate sshd config before applying
+      ansible.builtin.command: sshd -t
+      changed_when: false
+
+    - name: Reload sshd (SIGHUP — keeps live sessions) when changed
+      ansible.builtin.shell: systemctl reload ssh 2>/dev/null || systemctl reload sshd
+      when: harden_cfg.changed
+      changed_when: true
+
+    - name: Read back the EFFECTIVE policy (proves password auth is off)
+      ansible.builtin.shell: |
+        sshd -T | grep -iE "^permitrootlogin|^passwordauthentication|^pubkeyauthentication"
+      register: eff
+      changed_when: false
+
+    - name: Fail loudly if password auth is still on (e.g. missing Include)
+      ansible.builtin.assert:
+        that: "'passwordauthentication no' in eff.stdout"
+        fail_msg: "PasswordAuthentication still enabled on {{ inventory_hostname }} — drop-in not honoured (check `Include /etc/ssh/sshd_config.d/*.conf` in sshd_config)."
+        success_msg: "{{ inventory_hostname }}: {{ eff.stdout_lines | join(' | ') }}"
