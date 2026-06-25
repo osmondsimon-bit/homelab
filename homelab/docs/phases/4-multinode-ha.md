@@ -61,7 +61,7 @@ shipped, key decisions, verification, and carry-forwards. Authoritative status: 
 - **Failback commands** explicit in the manual-failover runbook step 6.
 - **Off-site backup** still unresolved (oneill holds the only copy) — explicitly carried.
 - **CT 111 + CT 117 reprovision drills** — outstanding (now lower-risk with the 2nd resolver live).
-- **Operator step to finish DNS failover:** reserve `.13` in UniFi + add it as secondary DNS on the
-  home-VLAN DHCP (primary stays `.6`).
+- **DNS failover — ✅ complete 2026-06-25:** `.13` reserved in UniFi + handed out as secondary DNS on the
+  home-VLAN DHCP (primary `.6`); clients fail over automatically, DNS SPOF fully removed.
 - **Accepted SPOFs:** carter is the sole replication target (2-node trade); `corosync.conf` is
   live-only pmxcfs state (auto-restores from `/etc/pve` on rejoin).
