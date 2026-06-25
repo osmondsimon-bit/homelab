@@ -80,7 +80,7 @@ Implementation specifics live in PLAN.md / runbooks.
 - **Cluster scope: apophis + carter ONLY (2 nodes); oneill stays STANDALONE** (revised 2026-06-22 —
   supersedes the original "3-node" framing). The cluster exists purely for **live-migration +
   `pvesr` replication** of the critical VMs across the matched Coffee-Lake pair. **oneill is NOT a
-  cluster member** (nor a QDevice): its guests (Technitium, Monitoring, Glance, PBS, Tailscale) are
+  cluster member** (nor a QDevice): its guests (Technitium, Monitoring, Glance, PBS) are
   reproducible from Ansible — or, for PBS datastore *state*, a separate off-site-backup concern —
   and since we run **no auto-HA**, the only thing 3-node membership would add is *seamless quorum*,
   which isn't worth evacuating oneill (that would drop home-VLAN DNS). **2-node quorum:** a node-down
