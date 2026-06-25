@@ -19,6 +19,6 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 
 ## Current phase
 
-Phase 4 — Multi-node + HA (Phase 3: Foundation + observability ✓ closed 2026-06-17)
+Phase 5 — Media (Jellyfin). Phase 4: Multi-node + HA ✓ closed 2026-06-25 (2-node cluster apophis+carter, ZFS replication + manual failover, DNS redundancy). Phase 3: Foundation + observability ✓ closed 2026-06-17.
 
 See [PLAN.md](homelab/PLAN.md) for full phase order and service inventory.

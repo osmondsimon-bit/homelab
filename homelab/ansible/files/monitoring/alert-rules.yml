@@ -84,6 +84,30 @@ groups:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} has pve_up=0 — stopped/crashed for 5m (deduplicated across cluster exporters)."
 
+      # pvesr replication health — the manual-failover safety net (ADR-009). VM 200 (HA) is
+      # replicated apophis->carter every 15 min (job 200-0); if that silently stops, a failover
+      # would start HA from a STALE or absent snapshot. pve-exporter exports these only from the
+      # SOURCE node's exporter (one series per job); max by(id) future-proofs the failback
+      # direction (carter->apophis) and is harmless now. NOTE: a real source-node (apophis)
+      # outage legitimately stalls replication — that alert firing alongside a node outage is
+      # expected (you're already failing over), not a false positive.
+      - alert: ReplicationFailing
+        expr: max by(id) (pve_replication_failed_syncs) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proxmox replication job {{ $labels.id }} failing"
+          description: "pvesr job {{ $labels.id }} has failed its last sync(s) for 15m — the manual-failover copy is going stale. Check `pvesr status` on the source node."
+      - alert: ReplicationStale
+        expr: (time() - max by(id) (pve_replication_last_sync_timestamp_seconds)) > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proxmox replication job {{ $labels.id }} stale (>1h)"
+          description: "pvesr job {{ $labels.id }} has not completed a sync in over 1h (runs every 15 min) — replication may be stopped; the failover copy is stale. Check `pvesr status`."
+
       # Home Assistant is the automation hub — alert FASTER than the generic 5m TargetDown.
       # up{job="home-assistant"}==0 means HA's /api/prometheus is unreachable: VM down, HA
       # crashed, or the scrape token broke. This is the reliable HA-down signal even on a

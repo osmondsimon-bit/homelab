@@ -73,8 +73,10 @@ CT 110) to free apophis for Plex.
 - **Single resolver = single point of failure for name resolution.** Mitigated three
   ways: (1) the LXC is lightweight and `onboot`; (2) UniFi can hand out a *secondary*
   DNS (e.g. `1.1.1.1`) so clients still resolve if Technitium is down — at the cost of
-  bypassing blocking for those queries; (3) Phase 4 migration to the NUC + the cluster
-  opens the door to a second Technitium instance later. The secondary-resolver trade-off
+  bypassing blocking for those queries; (3) a second Technitium instance. *(Updated 2026-06-25:
+  option 3 is now LIVE — CT 117 `technitium2` on carter, config-identical via the
+  `technitium_instances` playbook loop; DNS SPOF resolved without sacrificing ad-blocking.)*
+  The secondary-resolver trade-off
   (resilience vs. guaranteed blocking) is called out in the cutover runbook; default is
   **no public secondary** so blocking is never silently bypassed.
 - Technitium needs a static LAN IP, reserved/excluded in UniFi (same discipline as the
