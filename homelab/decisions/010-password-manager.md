@@ -44,3 +44,21 @@ infrastructure being built anyway.
 - Master-password strength + KDF settings matter — they are the actual protection on a stolen
   encrypted blob. Use a strong master password and modern KDF (Argon2id).
 - One more dataset in the backup set; trivial in size.
+
+## Revision — 2026-06-25 (Phase 5; reconciled to the as-built cluster)
+
+- **Failover is MANUAL, not automatic.** ADR-009 shipped manual failover (no HA manager).
+  Vaultwarden runs on **apophis**, `pvesr`-replicated to **carter** (same set as VM 200); on
+  an apophis loss it's started manually on carter (Manual-failover runbook). The **offline
+  client cache** covers the failover window — the availability concern is met without auto-HA.
+- **Deployment:** native `vaultwarden` Rust binary in an **unprivileged LXC** (no Docker —
+  keeps Phase 5 Docker-free; Docker still doesn't arrive until the media phase, ADR-014).
+  Strong master password + **Argon2id** KDF. Sign-ups disabled after the operator account.
+- **Exposure:** **Tailscale-only** — no Cloudflare Tunnel/public hostname (decided 2026-06-25).
+- **Backup:** encrypted Vaultwarden export to PBS **and** an off-site copy — this is the
+  **first off-site backup item** (ciphertext, safe in any cloud bucket), starting to close the
+  standing off-site-backup SPOF.
+- **Tier alignment (ADR-018):** Vaultwarden holds **Tier 1** human/admin passwords only —
+  including the previously-homeless playbook admin passwords (operator pastes them at the
+  prompt). The bootstrapping anchors (PBS/HA keys, 2FA recovery codes) stay in Keychain,
+  **never** in Vaultwarden, so recovery is non-circular.
