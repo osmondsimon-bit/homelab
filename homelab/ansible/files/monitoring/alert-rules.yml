@@ -42,32 +42,45 @@ groups:
           description: "{{ $labels.instance }} has had under 10% memory available for 10m."
 
       # A PVE storage (datastore/rpool/local-*) running out — pve-exporter metrics.
+      # max by(id): clustered nodes (apophis+carter) each report cluster-wide storage,
+      # so every clustered storage has 2 identical series — aggregate to one alert per id.
       - alert: PVEStorageFull
         expr: >
-          (pve_disk_usage_bytes{id=~"storage/.*"}
-           / pve_disk_size_bytes{id=~"storage/.*"}) > 0.90
+          max by(id) (
+            pve_disk_usage_bytes{id=~"storage/.*"}
+            / pve_disk_size_bytes{id=~"storage/.*"}
+          ) > 0.90
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "PVE storage >90% full: {{ $labels.id }}"
-          description: "{{ $labels.id }} (scraped via {{ $labels.instance }}) is over 90% used."
+          description: "{{ $labels.id }} is over 90% used."
 
       # A guest (LXC/VM) is stopped/crashed while its Proxmox host is still up + scraped.
       # `up`/TargetDown only covers explicitly-scraped targets (the hosts, the HA VM, UniFi) —
       # the service LXCs aren't scraped, so this catches e.g. Tailscale or Technitium dying on
-      # their own. A whole-HOST outage instead makes these pve_up series go ABSENT (not 0) and is
-      # caught by TargetDown on the node/pve job, so there's no double-alert.
+      # their own. min by(id): the clustered nodes (apophis+carter) each report cluster-wide
+      # pve_up, so apophis guests (qemu/100, qemu/200, lxc/110) have 2 series — aggregating to
+      # one prevents a double-alert. min is safe: a genuinely-stopped guest is 0 on BOTH
+      # exporters (min=0 → fires once), and min behaves identically to the old bare `== 0` for a
+      # whole-host outage.
+      # CAVEAT (verify in a node-down drill): the old comment assumed a whole-HOST outage made
+      # pve_up go ABSENT (leaving it to TargetDown). Under clustering that no longer holds — the
+      # surviving node's exporter keeps reporting the dead node's guests, possibly as 0. So an
+      # apophis outage MAY now fire GuestDown for its guests alongside Node/TargetDown. Confirm
+      # the actual behaviour next time a node is down and tighten (e.g. join to the guest's home
+      # node) if it's noisy.
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · qemu/100 mgmt-vm · 200 home-assistant.
       - alert: GuestDown
-        expr: pve_up{id=~"lxc/.*|qemu/.*"} == 0
+        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*"}) == 0
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Proxmox guest down: {{ $labels.id }}"
-          description: "Guest {{ $labels.id }} (on {{ $labels.instance }}) has pve_up=0 — stopped/crashed for 5m while its host is up."
+          description: "Guest {{ $labels.id }} has pve_up=0 — stopped/crashed for 5m (deduplicated across cluster exporters)."
 
       # Home Assistant is the automation hub — alert FASTER than the generic 5m TargetDown.
       # up{job="home-assistant"}==0 means HA's /api/prometheus is unreachable: VM down, HA
