@@ -19,13 +19,23 @@ tailscale_disk_gb: 4
 tailscale_ip: YOUR_TAILSCALE_LAN_IP/24                                # verify free; reserve in UniFi
 tailscale_advertise_routes: "YOUR_LAN_CIDR"                # add IoT/mgmt subnets if wanted
 
-# --- Technitium DNS LXC (DNS-only resolver, ADR-011) -------------------------
-technitium_ctid: 111                                        # ensure this VMID is free
-technitium_hostname: technitium
+# --- Technitium DNS LXC (DNS-only resolvers, ADR-011) ------------------------
+# Shared shape + config (both resolvers stay identical). Per-instance identity is in
+# technitium_instances below. technitium_ip = the PRIMARY (kept for the Glance tile +
+# docs references).
+technitium_hostname: technitium                            # primary hostname (back-compat refs)
 technitium_ram_mb: 1024                                     # headroom for blocklists in memory
 technitium_cores: 1
 technitium_disk_gb: 4
-technitium_ip: YOUR_TECHNITIUM_IP/24                        # verify free; reserve in UniFi
+technitium_startup: "order=1"                               # autostart ordering for the resolver CTs
+technitium_ip: YOUR_TECHNITIUM_IP/24                        # PRIMARY; verify free; reserve in UniFi
+
+# DNS redundancy: two resolvers on independent nodes — a single node loss never takes
+# out DNS. Provisioned + kept config-identical by provision-technitium.yml. Put the 2nd
+# on a DIFFERENT node than the 1st; hand BOTH out as DHCP DNS servers (primary+secondary).
+technitium_instances:
+  - { ctid: 111, hostname: technitium,  ip: YOUR_TECHNITIUM_IP/24,  node: oneill, rootfs_storage: local-zfs }
+  - { ctid: 117, hostname: technitium2, ip: YOUR_TECHNITIUM2_IP/24, node: carter, rootfs_storage: local-zfs }
 
 # Technitium config applied via API on every playbook run (declarative, ADR-011)
 technitium_forwarders:                                      # encrypted upstreams
@@ -131,7 +141,8 @@ glance_hosts:                                               # Proxmox nodes — 
 # alt_status_codes (for endpoints that answer 401/403 when healthy).
 glance_services:
   - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
-  - { title: "Technitium DNS", url: "http://{{ technitium_ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  - { title: "Technitium DNS", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  - { title: "Technitium DNS 2", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Grafana", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
   - { title: "Prometheus", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
   - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
