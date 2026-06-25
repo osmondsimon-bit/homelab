@@ -1,7 +1,7 @@
 # ADR-009: 3-node Proxmox cluster + ZFS replication for resilience (manual failover, local storage)
 
 **Date:** 2026-06-14 (HA approach revised 2026-06-22 — automatic HA manager rejected; see Refinements)  
-**Status:** Accepted (direction; executed as hardware arrives)
+**Status:** Accepted — **Phase 4 complete (2026-06-25)**. The 2-node cluster `homelab` (apophis + carter) is live; oneill stays standalone; `pvesr` replication + manual failover for VM 200 in production. The "3-node" framing in the title/Context below is the original direction — see **Refinements** for the as-built 2-node decision.
 
 ## Context
 

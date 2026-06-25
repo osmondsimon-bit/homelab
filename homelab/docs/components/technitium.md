@@ -79,5 +79,7 @@ stops them; that needs a client-side blocker.
 ## Continuity
 
 Stateless relative to Ansible (all config in git) → recovery is a reprovision, RTO ~15–20 min.
-No LXC-level backup yet; covered by the Phase 3 VM-level backup task. Single instance = DNS
-SPOF for now (ADR-011) — second instance planned with the Phase 4 cluster.
+No LXC-level backup yet; reproducible-from-code. **DNS redundancy live (Phase 4 ✓ 2026-06-25):**
+2nd resolver CT 117 `technitium2` on carter — config-identical via the `technitium_instances`
+playbook loop, on an independent node from CT 111. GuestDown covers `lxc/117`. (Operator step:
+hand both `.6` + the 2nd IP out as DHCP DNS servers so clients fail over.)

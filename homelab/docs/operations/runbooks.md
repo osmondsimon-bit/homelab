@@ -182,7 +182,7 @@ drops DNS for the **home VLAN** (IoT/guest use the gateway, so they're unaffecte
 2. Do the maintenance.
 3. **Remove** the `1.1.1.1` secondary afterwards (so blocking is never silently bypassed).
 
-A permanent fix (second Technitium instance) lands with the cluster in Phase 4.
+DNS redundancy is now live (Phase 4 ✓ 2026-06-25): CT 117 `technitium2` on carter. The remaining operator step is to hand **both** resolver IPs out as DHCP DNS servers (primary + secondary) on the home VLAN so clients fail over automatically — then planned oneill maintenance no longer needs the temporary `1.1.1.1` secondary above.
 
 ### Recover CT 111 (lost / corrupted, or oneill rebuilt)
 
@@ -528,7 +528,7 @@ window**, one step at a time, honouring every VERIFY gate.
 ### Sequence (VERIFY at each gate; rollback notes inline)
 1. **Migrate VM 200 → carter** (`--targetstorage local-zfs`, with local disks). *Drive from the apophis GUI, not from inside mgmt-vm.* **VERIFY:** HA UI loads, Z2MQTT connected, Zigbee devices respond. *Rollback: migration is non-destructive — source stays until success; if it fails, 200 is still on apophis.*
 2. **Migrate VM 100 → carter.** *Drive from a browser NOT inside mgmt-vm* (this session drops + reconnects; same IP via the UniFi MAC reservation). **VERIFY:** SSH to mgmt-vm works, `hostname`=mgmt-vm, git repo intact.
-3. **Rebuild Tailscale on oneill:** `pct stop 110 && pct destroy 110` on apophis, then `ansible-playbook playbooks/provision-tailscale.yml` targeting oneill. **VERIFY:** Tailscale up on oneill, remote access works.
+3. ~~**Rebuild Tailscale on oneill**~~ — **SKIPPED (2026-06-25): Tailscale stays on apophis** (decided; supersedes the earlier "→ oneill" intent). CT 110 was migrated carter→apophis during 4b instead. See execution notes below.
 4. **Remove apophis from the cluster.** Power apophis off first, then on **carter**: `pvecm expected 1` (else carter, now 1/2, goes read-only) → `pvecm delnode apophis`. **VERIFY:** `pvecm status` on carter = Quorate, Expected 1; VMs 100+200 running on carter.
 5. **Reinstall apophis** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on the SSD, hostname `apophis`. Then: set no-subscription repos (same as carter onboarding), `apt update && dist-upgrade`, restore root `authorized_keys`. **VERIFY:** boots, `pveversion`=9.2.3, `zpool list` shows rpool.
 6. **Rejoin (carter root has 2FA — cluster-wide):** from mgmt-vm `ssh-keygen -R YOUR_PROXMOX_IP` (clear apophis's old host key) then `ssh-copy-id root@YOUR_PROXMOX_IP` (re-add the node-local mgmt-vm key); on **apophis's shell (a TTY)** run `pvecm add YOUR_CARTER_IP` — enter carter's root pw **+ 2FA OTP** (the GUI/API join fails with 2FA, as when we first formed the cluster). On rejoin apophis pulls the cluster-shared `/etc/pve` → users/2FA/ACLs/monitoring-token/storage.cfg return automatically. **VERIFY:** `pvecm status` = 2 nodes, Quorate, Expected 2.

@@ -16,10 +16,10 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
 | Provisioning (create + configure) | Ansible (`pct` in playbooks) | Interim mechanism — `provision-*.yml` pct-create + configure the LXCs and recover cleanly (ADR-005) |
 | Provisioning (declarative IaC) | Terraform (`bpg/proxmox`) | Scaffolded (ADR-008) — **import deferred to cluster scale**; will take over the create role then |
-| Multi-node cluster + HA | Proxmox cluster + ZFS replication | Accepted direction (ADR-009) — 3 nodes (apophis + NUC + ThinkCentre), executed as hardware lands |
-| DNS + ad blocking | Technitium DNS | Phase 2 ✓ — live on **oneill** (NUC), CT 111. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big + DoH, config automated via API. Serves the **home VLAN**; IoT/guest use the gateway (DNS-by-VLAN-role). |
+| Multi-node cluster + manual failover | Proxmox cluster + ZFS replication (`pvesr`) | **Phase 4 ✓ 2026-06-25** — **2-node** cluster `homelab` (apophis + carter); oneill stays standalone (ADR-009, revised from 3-node). `pvesr` job 200-0 replicates VM 200 every 15 min; **manual failover, NO HA manager/fencing** (single-NIC network isn't HA-grade). Corosync 10s token ride-out; replication-health alerts live. |
+| DNS + ad blocking | Technitium DNS | Phase 2 ✓ — CT 111 on **oneill**. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big + DoH, config automated via API. Serves the **home VLAN**; IoT/guest use the gateway (DNS-by-VLAN-role). **Phase 4 ✓ 2026-06-25: DNS redundancy** — 2nd resolver CT 117 `technitium2` on **carter** (config-identical via the `technitium_instances` playbook loop), independent node from CT 111, removes the DNS SPOF. (Operator: hand both out as DHCP DNS servers.) |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
-| Remote access (admin) | Tailscale | Deployed — CT 110; to migrate to the NUC |
+| Remote access (admin) | Tailscale | Deployed — CT 110 on **apophis**. Stays on apophis (decided 2026-06-25 — supersedes the earlier "migrate to the NUC" intent; ADR-003) |
 | Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
 | Service dashboard | **Glance** (was Homepage) | Phase 3 ✓ — front-door live on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 6) |
 | VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
@@ -42,7 +42,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |
 | MCP server (Proxmox API) | Community / custom | Phase 4+ | Parked — Ansible covers current needs; revisit when agent tool-use is a regular workflow |
 | MCP server (Grafana) | Grafana MCP | Phase 4+ | Parked — Grafana live but read-via-browser; revisit if agent-driven dashboard work becomes common |
-| Infra agent tool access | scoped-MCP pattern (TadMSTR) | Phase 4 | More than 2 agents needing scoped tool sets |
+| Infra agent tool access | scoped-MCP pattern (TadMSTR) | Phase 5+ | Still parked — 4 agents exist (infra-designer, infra-manager, doc-auditor, continuity-reviewer) but each is narrow + manually-invoked; scoped-MCP plumbing not yet worth the overhead. Reassess Phase 5. |
 | Workflow engine | Temporal | New house | Complex multi-step automation beyond Ansible |
 | Dependency updates | Renovate | New house | Active container/package deployments to manage |
 
@@ -90,5 +90,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-14 | Phase 2/3 planning | Adopted Terraform (ADR-008); 3-node cluster + HA via ZFS replication (ADR-009); Vaultwarden self-hosted, sequenced after HA+backups (ADR-010); Monitoring→Homepage prioritised; patching to design |
 | 2026-06-17 | Phase 3 | Monitoring stack live incl. Alertmanager→ntfy (ADR-013). Dashboard: **Homepage → Glance** (ADR-014) to keep oneill Docker-free; wall-tablet UI reassigned to HA (Phase 6); Docker deferred to Phase 5/Gluetun |
 | 2026-06-19 | Phase 3 ✓ CLOSED | Phase 3 fully complete. Backups tested (PBS + HA native, restore drill ✅). Patching adopted (ADR-015). Infra portal live (ADR-020). MCP rows parked. Plex renamed Jellyfin. |
+| 2026-06-25 | Phase 4 ✓ CLOSED | 2-node cluster `homelab` (apophis + carter) live; apophis rebuilt on ZFS; `pvesr` replication + **manual failover** for VM 200 (no HA manager); 2nd Technitium (CT 117 on carter) removes the DNS SPOF; corosync 10s ride-out; monitoring deduped for clustered `pve_*` + replication-health alerts. Radar updated: Multi-node cluster, Technitium, Tailscale, Infra-agent-tool-access rows. Carry-forward: VM 200 failover drill + carter-rebuild runbook + off-site backup. |
 
 *Add a row each time this radar is reviewed at a phase boundary.*
