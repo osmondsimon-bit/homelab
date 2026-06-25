@@ -438,7 +438,8 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 |------|-------------|--------|
 | 2026-06-17 | PBS mgmt-vm (VM 100) | ✅ PASS — restored 24 s, booted, `group_vars/all.yml` + git repo present |
 | 2026-06-18 | HA native partial → fresh HAOS (isolated VLAN 5) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
-| _pending_ | CT 111 Ansible reprovision | untested — records the real RTO |
+| 2026-06-25 | **VM 200 `pvesr` failover (apophis→carter)** | ✅ PASS — disabled job 200-0, `zfs clone` of the latest `__replicate__` snapshot → **no-network** test VM 299 on carter; HAOS **booted off the replicated copy** (~1 GB read / 119 MB written, CPU climbing). Procedure validated (clone→create→start). Live HA untouched; clones+VM destroyed; replication re-enabled + re-synced OK. *Bootability proven non-destructively; full app-on-network is the real failover's job (uses VM 200's own config/IP).* |
+| _pending_ | CT 111 / CT 117 Ansible reprovision | untested — records the real RTO |
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
 > local; PBS snapshot names are **UTC** (`…T16:30:03Z` = 02:30 AEST). Don't mistake the offset

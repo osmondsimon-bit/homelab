@@ -54,8 +54,9 @@ shipped, key decisions, verification, and carry-forwards. Authoritative status: 
 
 ## Carried forward (continuity-reviewer — accepted at the gate, tracked in PLAN.md)
 
-- **VM 200 manual-failover drill** — not yet run (the alerts close the *silent-failure* gap;
-  the drill is scheduled for a Phase 5 window).
+- **VM 200 manual-failover drill** — ✅ **done 2026-06-25 (early Phase 5)**: non-destructive
+  clone-to-test-VM drill proved carter's replicated copy boots; procedure validated. (At Phase 4
+  close this was pending, covered by the replication-health alerts; now exercised.)
 - **Carter-rebuild runbook** — symmetric to the apophis 4b runbook; must include the 2FA join-blocker
   step. Not yet written.
 - **Failback commands** explicit in the manual-failover runbook step 6.
