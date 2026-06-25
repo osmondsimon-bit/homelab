@@ -10,7 +10,7 @@ look the lab actually has **three distinct dashboard surfaces**, and conflating 
 
 1. **Wall tablet** (household control — lights/scenes/climate, glance at home state) → a **Home
    Assistant Lovelace** dashboard in kiosk mode. This is HA's job, not a startpage's, and it slots
-   into the **Phase 6 HA-expansion** work (HACS, Mushroom/bubble-card, kiosk-mode, Fully Kiosk). Out
+   into the **Phase 5 HA-expansion** work (HACS, Mushroom/bubble-card, kiosk-mode, Fully Kiosk). Out
    of scope here.
 2. **Deep graphs / history** → **Grafana** (already live, CT 114).
 3. **Ops/admin front-door** ("is everything up, and where do I click to open it?") across ~8 web UIs
@@ -32,7 +32,7 @@ Run **Glance** (`github.com/glanceapp/glance`) as the front-door, **not** Homepa
   `pnpm`/Next.js **source build** (Node drift, rebuild per upgrade, no packaged artifact) — *worse*
   for Ansible reproducibility than a container. Introducing Docker/containerd on oneill (the
   "simple services" node) for a convenience dashboard isn't worth it. **The Docker decision is
-  deferred to Phase 5**, where the media stack's **Gluetun** (container-only by design) forces it
+  deferred to the media phase (Phase 6)**, where the media stack's **Gluetun** (container-only by design) forces it
   anyway — confined to apophis.
 - **What it does:** a `monitor` widget listing every service with a **status indicator + click-through
   link**, so the front-door also *links to Grafana* for graphs (no embedding — keeps Grafana full-fat
@@ -59,8 +59,8 @@ Run **Glance** (`github.com/glanceapp/glance`) as the front-door, **not** Homepa
 - Deviates from the tool named in PLAN (Homepage → Glance); PLAN updated. The trade-off is no
   first-party Proxmox/PBS/UniFi/HA tiles — for an admin launchpad, `monitor` status + links suffice;
   richer per-service numbers can be added later via Glance `custom-api` widgets.
-- Keeps oneill **Docker-free**; the container-runtime precedent is taken deliberately in Phase 5 for
+- Keeps oneill **Docker-free**; the container-runtime precedent is taken deliberately in the media phase (Phase 6) for
   Gluetun, on apophis, not snuck in here.
 - New LXC → **infra-designer gate** (this review) + **/security-review** before marking Phase 3 done.
-- The **wall tablet** (HA Lovelace kiosk) is recorded as Phase 6 HA-expansion work — not built here.
+- The **wall tablet** (HA Lovelace kiosk) is recorded as Phase 5 HA-expansion work — not built here.
 - Provisioned by a new `provision-glance.yml` playbook.

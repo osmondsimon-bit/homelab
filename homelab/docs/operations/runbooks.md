@@ -256,7 +256,7 @@ backlog item.)
   tiles (Proxmox/PBS/UniFi) the template sets `allow-insecure: true` + `alt-status-codes`.
 - **Recovery:** stateless → reprovision (RTO ~10 min). Bumping Glance: change `glance_version`,
   re-run, eyeball the page (pre-1.0 config-key renames — see ADR-014).
-- **Not this:** graphs/history → Grafana; household wall-tablet control → Home Assistant (Phase 6).
+- **Not this:** graphs/history → Grafana; household wall-tablet control → Home Assistant (Phase 5 HA-expansion).
 
 ---
 
