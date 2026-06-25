@@ -40,7 +40,7 @@ infrastructure being built anyway.
 - Self-hosted control without the theft/lockout risks — the cluster + backup plans neutralise both.
 - A managed-cloud password manager (Bitwarden) is in use during the interim; one migration later.
 - Vaultwarden placement is HA (runs on the cluster, flagged for failover) — depends on ADR-009
-  being delivered first, which is why it sits in Phase 6.
+  being delivered first, which is why it sits in **Phase 5** (swapped ahead of Media 2026-06-25).
 - Master-password strength + KDF settings matter — they are the actual protection on a stolen
   encrypted blob. Use a strong master password and modern KDF (Argon2id).
 - One more dataset in the backup set; trivial in size.

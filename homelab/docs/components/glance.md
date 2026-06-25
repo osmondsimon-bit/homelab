@@ -49,7 +49,7 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 
 Glance is a native single binary (fits the lab's no-Docker pattern); Homepage is Docker-first
 and its non-Docker path is a fragile Node source build. The Docker decision is deferred to
-Phase 5 (Gluetun forces it on apophis). Full rationale + the three-surfaces analysis: ADR-014.
+the media phase (Phase 6 — Gluetun forces it on apophis). Full rationale + the three-surfaces analysis: ADR-014.
 
 ## Continuity
 

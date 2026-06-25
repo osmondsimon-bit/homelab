@@ -16,7 +16,7 @@
 
 ## Key decisions / notes
 
-- **Glance over Homepage** (ADR-014): keeps oneill **Docker-free** — Homepage is Docker-first and its non-Docker path is a fragile Node build. The Docker decision is deferred to Phase 5 (Gluetun forces it, on apophis). The **three dashboard surfaces** were untangled: wall tablet → Home Assistant Lovelace (Phase 6); graphs → Grafana; admin front-door → Glance.
+- **Glance over Homepage** (ADR-014): keeps oneill **Docker-free** — Homepage is Docker-first and its non-Docker path is a fragile Node build. The Docker decision is deferred to the media phase (Gluetun forces it, on apophis — now Phase 6 after the 2026-06-25 swap). The **three dashboard surfaces** were untangled: wall tablet → Home Assistant Lovelace (HA-expansion phase — now Phase 5); graphs → Grafana; admin front-door → Glance.
 - **IP discipline:** Glance's first IP (`group_vars`-picked) collided with a desktop's DHCP-preferred lease and confused UniFi — moved to the static-services band; **reserve static IPs in UniFi *before* provisioning**. Also scrubbed leaked last-octet fragments from committed files (ADR-006).
 - **Agents/skills versioned** — `.claude/agents/*.md` + `phase-gate` skill published via narrow `.gitignore` exceptions (transcripts/memory/settings stay private).
 
