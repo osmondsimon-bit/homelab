@@ -27,7 +27,7 @@ technitium_hostname: technitium                            # primary hostname (b
 technitium_ram_mb: 1024                                     # headroom for blocklists in memory
 technitium_cores: 1
 technitium_disk_gb: 4
-technitium_startup: "order=1"                               # autostart ordering for the resolver CTs
+technitium_startup: "order=1,up=15"                         # autostart ordering for the resolver CTs
 technitium_ip: YOUR_TECHNITIUM_IP/24                        # PRIMARY; verify free; reserve in UniFi
 
 # DNS redundancy: two resolvers on independent nodes — a single node loss never takes

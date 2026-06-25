@@ -111,6 +111,7 @@
         --unprivileged 1
         --features nesting=1
         --onboot 1
+        --startup order=3,up=10
       when: ct_status.rc != 0
 
     - name: Ensure CT is running

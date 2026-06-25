@@ -53,6 +53,7 @@
         --unprivileged 1
         --features nesting=1
         --onboot 1
+        --startup order=1,up=10
       when: ct_status.rc != 0
 
     - name: Add /dev/net/tun passthrough to the CT config
