@@ -26,43 +26,39 @@ Documentation, provisioning scripts, and configuration for a Proxmox-based home 
 
 ### **Core Principles**
 
-1. **Keep it modular and simple.**
+1. **Ask, don't assume.**
 
-   * Small, focused functions/files; minimal deps; readability first. Leave room for future expansion.
+   * If something is unclear, ask before writing a single line.
+   * Never make silence assumptions about intent, architecture or requirements.
 
-2. **Preserve existing functionality.**
+2. **Simplest solution first.**
 
-   * Modify only when directed; additive or reparative work.
+   * Always implement the simplest thing that could work.
+   * Do not add abstractions or flexibility that weren't explicitly requested.
    * Guard against regressions; validate existing behavior.
    * Lean on regression tests to prevent drift; extend coverage for critical paths.
 
-3. **Mobile-first and observable.**
+3. **Don't touch unrelated code**
 
-   * Design mobile-first, verify desktop.
-   * Ship a favicon in the HTML head.
-   * Surface build/version in the UI and keep it in sync with release metadata.
+   * If afile or function is not directly part of the current task, do not modify it, even if you think it could be improved.
+   
+4. **Flag uncertainty expilcitly**
 
-4. **Log from day one.**
+   * If you are not confident about an approach or technical detail, say so before proceeding.
+   * Confidence without certainty causes more damage than admitting a gap.
+   
+5. **Open to ideas**
 
-   * Structured, meaningful logging for errors/warnings/key actions from the start.
-   * If appropriate, put a page to see logs in the UI.
-   * Create a logging endpoint you (the AI agent) can use to retrieve logs for debugging.
-
-5. **Refine in passes.**
-
-   * Multiple passes for quality/readability; flag non-standard patterns and suggest standardization/accessibility for AI readability.
+   * I'm always open to ideas on better ways to do things.
+   * Please don't hesitate to suggest a better way or one that has long lasting impact over a tactical change.
 
 6. **Maintain documentation and context.**
 
    * Each file starts with a short overview.
    * Keep `README.md`, nested `AGENTS.md`, and `TODO`/`notes.md` current.
-    * **At any point, I should be able to start a new AI conversation and not lose context.**
+   * **At any point, I should be able to start a new AI conversation and not lose context.
 
-7. **Ask questions early.**
-
-   * Don't guess; request clarification early.
-
-8. **Plan first, code second.**
+7. **Plan first, code second.**
 
    * Outline steps and confirm before coding.
 
@@ -113,7 +109,7 @@ Follows Microsoft's best practice for cloud API throttling.
 ### **Homelab Projects**
 
 * Developed in **VSCode** using **Claude Code** (mgmt-vm: Ubuntu Server, YOUR_MGMT_VM_IP).
-* Hypervisor: **Proxmox VE** on apophis (YOUR_PROXMOX_IP, Intel i7-8700T, 32 GB RAM) and oneill (NUC N150, standalone — joins the cluster in Phase 4). Services run as **VMs or LXCs** — not Docker containers. See `homelab/PLAN.md` for service inventory and RAM budget.
+* Hypervisor: **Proxmox VE** — 2-node cluster `homelab` on apophis (YOUR_PROXMOX_IP, i7-8700T, 32 GB) + carter (YOUR_CARTER_IP, i5-8500, 32 GB); oneill (NUC N150) stays **standalone** (NOT a cluster member — ADR-009). Services run as **VMs or LXCs** — not Docker containers. See `homelab/PLAN.md` for service inventory and RAM budget.
 * The AI agent cannot reach the Proxmox host or any VM/LXC directly — they are on a private network. SSH commands must be run by the user unless Tailscale is confirmed active.
 * Remote access: **Cloudflare Tunnel** (Home Assistant only) + **Tailscale** (admin/SSH, live — CT 110). No ports forwarded from the internet.
 * Preferred stack for future app projects: Python, Flask and / or FastAPI, Pico.css (add to repo, not from CDN), SQLite. Bootstrap icons (or Phosphor icons as backup) — import to project, don't load from CDN. No emojis in UI.
