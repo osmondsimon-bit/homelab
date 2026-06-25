@@ -18,6 +18,7 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 | `backup-local-config.sh` | Back up local-only config (real IPs, Claude agents/skills/memory, Codex non-secret config) to the private `homelab-private` repo — no credentials (ADR-007) | mgmt-vm |
 | `unifi-query.sh` | Read-only UniFi (UDM) query helper for config review + troubleshooting — GET-only against the controller API via a view-only account; creds in gitignored `~/.unifi-ro.env` | mgmt-vm |
 | `infra-portal-generate.py` | Python generator — reads `physical_infra/` YAML/JSON, renders D2 diagrams, outputs single-page HTML for the infra portal (CT 116). Run via daily systemd timer or `systemctl start infra-portal-generate.service` (ADR-020) | mgmt-vm |
+| `git-precommit-scan.sh` | Pre-commit guard — blocks a commit that stages a secret (gitleaks) or a real private IP/MAC (ADR-006). Invoked by the untracked `.git/hooks/pre-commit` wrapper. False positive: append `# scan-allow` to the line, or `git commit --no-verify` | mgmt-vm |
 
 > Provisioning is now primarily done via Ansible (`../ansible/`, ADR-005). These
 > scripts are manual fallbacks and references the playbooks encode — not the primary path.
