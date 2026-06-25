@@ -231,7 +231,7 @@ pages:
                   peak:
                     url: << prom >>
                     parameters:
-                      query: max_over_time(guest:pve_cpu_util:percent[24h:5m])
+                      query: max by(id) (max_over_time(guest:pve_cpu_util:percent[24h:5m]))
                 template: |
                   {{ $peak := .Subrequest "peak" }}
                   <div class="list list-gap-10">
@@ -257,7 +257,7 @@ pages:
                   peak:
                     url: << prom >>
                     parameters:
-                      query: max_over_time(guest:pve_mem_util:percent[24h:5m])
+                      query: max by(id) (max_over_time(guest:pve_mem_util:percent[24h:5m]))
                 template: |
                   {{ $peak := .Subrequest "peak" }}
                   <div class="list list-gap-10">
