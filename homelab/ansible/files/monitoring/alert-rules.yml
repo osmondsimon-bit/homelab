@@ -65,12 +65,14 @@ groups:
       # one prevents a double-alert. min is safe: a genuinely-stopped guest is 0 on BOTH
       # exporters (min=0 → fires once), and min behaves identically to the old bare `== 0` for a
       # whole-host outage.
-      # CAVEAT (verify in a node-down drill): the old comment assumed a whole-HOST outage made
-      # pve_up go ABSENT (leaving it to TargetDown). Under clustering that no longer holds — the
-      # surviving node's exporter keeps reporting the dead node's guests, possibly as 0. So an
-      # apophis outage MAY now fire GuestDown for its guests alongside Node/TargetDown. Confirm
-      # the actual behaviour next time a node is down and tighten (e.g. join to the guest's home
-      # node) if it's noisy.
+      # VERIFIED 2026-06-25 (single-guest stop of CT 117): min by(id) fires exactly ONE alert
+      # (the bare expr yields 2 series in steady state → would double-alert), and it fires as
+      # soon as ANY exporter reports the guest down (good detection; max would wait for both).
+      # CAVEAT still open (needs a real node-down drill): the old comment assumed a whole-HOST
+      # outage made pve_up go ABSENT (leaving it to TargetDown). Under clustering that no longer
+      # holds — the surviving node's exporter keeps reporting the dead node's guests, possibly as
+      # 0. So an apophis outage MAY now fire GuestDown for its guests alongside Node/TargetDown.
+      # Confirm next time a node is down and tighten (e.g. join to the guest's home node) if noisy.
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · qemu/100 mgmt-vm · 200 home-assistant.
       - alert: GuestDown
