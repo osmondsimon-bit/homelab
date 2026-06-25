@@ -21,12 +21,21 @@ groups:
         expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
 
       # --- Guests (pve-exporter, joined to names) ---
+      # max by(...) collapses the duplicate cluster-wide series: clustered nodes
+      # (apophis+carter) each run a pve-exporter that reports identical cluster-wide
+      # pve_* metrics, so every guest appears once per exporter instance. Aggregating
+      # by the guest identity (dropping instance/job) dedupes to one series per guest
+      # while keeping both exporters for resilience (PLAN.md Phase 4 follow-up).
       - record: guest:pve_cpu_util:percent
         expr: >
-          (pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100)
-          * on(id,instance,job) group_left(name,node,type) pve_guest_info
+          max by(id,name,node,type) (
+            (pve_cpu_usage_ratio{id=~"lxc/.*|qemu/.*"} * 100)
+            * on(id,instance,job) group_left(name,node,type) pve_guest_info
+          )
 
       - record: guest:pve_mem_util:percent
         expr: >
-          ((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)
-          * on(id,instance,job) group_left(name,node,type) pve_guest_info
+          max by(id,name,node,type) (
+            ((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)
+            * on(id,instance,job) group_left(name,node,type) pve_guest_info
+          )

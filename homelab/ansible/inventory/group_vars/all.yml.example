@@ -136,7 +136,11 @@ glance_services:
   - { title: "Prometheus", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
   - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
   - { title: "Proxmox Backup Server", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
-  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", icon: "di:tailscale" }
+  # Tailscale: tile links to the admin console, but the HEALTH check hits derpmap/default
+  # (clean 200, no auth) — the admin URL 302-redirects into the login page (~1.2s, heavy),
+  # which intermittently trips Glance's monitor timeout (false RED). derpmap is a fast,
+  # no-auth "Tailscale control-plane reachable" probe.
+  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", check_url: "https://login.tailscale.com/derpmap/default", icon: "di:tailscale" }
   - { title: "Infra Portal", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.
