@@ -114,16 +114,16 @@ pages:
             cache: 30s
             url: << prom >>
             parameters:
-              query: sort_desc((pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) * 100)
+              query: sort_desc(max by(id) ((pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) * 100))
             subrequests:
               used:
                 url: << prom >>
                 parameters:
-                  query: pve_disk_usage_bytes{id=~"storage/.*"} / 1e9
+                  query: max by(id) (pve_disk_usage_bytes{id=~"storage/.*"}) / 1e9
               size:
                 url: << prom >>
                 parameters:
-                  query: pve_disk_size_bytes{id=~"storage/.*"} / 1e9
+                  query: max by(id) (pve_disk_size_bytes{id=~"storage/.*"}) / 1e9
             template: |
               {{ $used := .Subrequest "used" }}
               {{ $size := .Subrequest "size" }}
@@ -278,7 +278,7 @@ pages:
                 cache: 30s
                 url: << prom >>
                 parameters:
-                  query: sort_desc(((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                  query: sort_desc(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info))
                 template: |
                   <div class="list list-gap-10">
                   {{ range .JSON.Array "data.result" }}
