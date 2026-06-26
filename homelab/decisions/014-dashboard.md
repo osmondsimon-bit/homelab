@@ -64,3 +64,11 @@ Run **Glance** (`github.com/glanceapp/glance`) as the front-door, **not** Homepa
 - New LXC → **infra-designer gate** (this review) + **/security-review** before marking Phase 3 done.
 - The **wall tablet** (HA Lovelace kiosk) is recorded as Phase 5 HA-expansion work — not built here.
 - Provisioned by a new `provision-glance.yml` playbook.
+
+## Revision — 2026-06-26 (Docker exception: Vaultwarden)
+
+The "Docker arrives only in the media phase" rule has a **deliberate, contained exception**:
+**Vaultwarden (Phase 5)** ships only as an official container, so Docker arrives early — but
+**confined to its own dedicated VM (118)**, not on oneill and not on a Proxmox host. The
+no-Docker principle for the *service-LXC nodes* (oneill) is intact; Docker is isolated to
+single-purpose VMs (Vaultwarden now; the apophis media stack in Phase 6). See ADR-010.

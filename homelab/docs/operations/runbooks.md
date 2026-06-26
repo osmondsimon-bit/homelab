@@ -618,4 +618,50 @@ git status && git diff
 
 ---
 
+## Vaultwarden VM build (as-built 2026-06-26, manual — TO BE CODIFIED into provision-vaultwarden.yml)
+
+VM 118 `vaultwarden` on apophis: Ubuntu 24.04 cloud image + official Docker container + Tailscale Serve.
+**Lessons (why this shape):** a Debian-12 cloud image **kernel-panics** on emulated CPU models
+(`x86-64-v2-AES`, `Skylake-Client`) — Ubuntu boots fine; building Vaultwarden from source OOMs a small
+guest. So: Ubuntu cloud image, the official container, `Skylake-Client-noTSX-IBRS` CPU (boots **and**
+migrates the Coffee-Lake pair).
+
+```bash
+# --- on apophis: create the VM from the Ubuntu cloud image + cloud-init ---
+wget -P /var/lib/vz/template https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+echo "<mgmt-vm pubkey>" > /tmp/k.pub
+qm create 118 --name vaultwarden --memory 2048 --cores 1 --cpu Skylake-Client-noTSX-IBRS \
+  --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
+  --agent enabled=1 --onboot 1 --startup order=2,up=10
+qm set 118 --scsi0 local-zfs:0,import-from=/var/lib/vz/template/noble-server-cloudimg-amd64.img
+qm set 118 --ide2 local-zfs:cloudinit --boot order=scsi0
+qm disk resize 118 scsi0 10G
+qm set 118 --ciuser simon --sshkeys /tmp/k.pub --ipconfig0 ip=<vw-ip>/24,gw=<gw> --nameserver <gw>
+qm start 118    # boots in ~15s, cloud-init brings up the IP + SSH key + sudo
+
+# --- in the VM (ssh simon@<vw-ip>): guest agent, Docker, Tailscale ---
+sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent
+# Docker official apt repo (docker-ce + compose-plugin); Tailscale: curl -fsSL https://tailscale.com/install.sh | sudo sh
+sudo tailscale up --authkey=<reusable,non-ephemeral,pre-approved> --hostname=vaultwarden --ssh=false
+
+# --- deploy the container (in /opt/vaultwarden) ---
+# admin token: TOKEN=$(openssl rand -base64 24); HASH=$(printf %s "$TOKEN" | argon2 "$(openssl rand -base64 12)" -id -t 3 -m 16 -p 4 -l 32 -e)
+#   save plaintext to /root/vw-admin-token.txt (chmod 600), put HASH in the env file.
+# env file NAMED vaultwarden.env (NOT .env — compose treats .env as interpolation source) AND
+#   escape every $ in ADMIN_TOKEN as $$ (this compose version interpolates env_file values too).
+# vaultwarden.env: DOMAIN=https://vaultwarden.<tailnet>.ts.net, ROCKET_ADDRESS=0.0.0.0, ROCKET_PORT=8080,
+#   SIGNUPS_ALLOWED=false (true only for first registration), INVITATIONS_ALLOWED=false, login rate-limit, ADMIN_TOKEN=<$$-escaped hash>
+# docker-compose.yml: image vaultwarden/server:1.36.0, env_file vaultwarden.env, volume ./data:/data,
+#   ports "127.0.0.1:8080:8080", security_opt [no-new-privileges:true], cap_drop [ALL]
+sudo docker compose up -d
+sudo tailscale serve --bg --https=443 http://127.0.0.1:8080   # needs HTTPS+Serve enabled on the tailnet (one-time)
+```
+
+**Onboarding done:** `pvesr create-local-job 118-0 carter --schedule '*/15'`; added 118 to the PBS vzdump
+job + immediate backup; OS password locked (key-only). **Health:** `curl https://vaultwarden.<tailnet>.ts.net/alive`;
+`docker compose -f /opt/vaultwarden/docker-compose.yml logs`. **Restart:** `cd /opt/vaultwarden && sudo docker compose restart`.
+**Lock signups after registering:** set `SIGNUPS_ALLOWED=false`, `docker compose up -d --force-recreate`.
+
+---
+
 *Add new entries as services are deployed. Each service should have: how to check health, how to restart, where to find logs.*
