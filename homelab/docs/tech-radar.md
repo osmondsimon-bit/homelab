@@ -25,8 +25,8 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
 | Media server | Jellyfin (was Plex) | Phase 6 — apophis, QuickSync passthrough (swapped after Vaultwarden 2026-06-25) |
 | Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 6 — apophis |
-| Password manager | Vaultwarden (self-hosted) | **Phase 5** (ADR-010) — swapped ahead of Media 2026-06-25; sequenced after HA + backups; Bitwarden cloud bridges now |
-| Secret handling | Ansible Vault | Infra/machine secrets; human passwords → Vaultwarden |
+| Password manager | Vaultwarden (self-hosted) | **Phase 5 ✓ 2026-06-26** — VM 118 on apophis, Ubuntu 24.04 + Docker container (native-LXC plan OOMed), Tailscale-Serve TLS, tailnet-only; `pvesr` to carter + PBS daily; tailnet ACL locks it to operator devices. ADR-010/014/018. |
+| Secret handling | Tier 3 env files + Vaultwarden (Tier 1) | ADR-018 (revised 2026-06-25): **ansible-vault dropped** as never-wired-in. Machine tokens → gitignored `~/.*.env` on mgmt-vm; human-typed admin passwords → Vaultwarden. Tier 2 anchors (PBS/HA keys, 2FA recovery codes) → Keychain, outside the lab. |
 | Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
 | Updates / patching | unattended-upgrades + `provision-patching.yml` | Phase 3 ✓ — ADR-015 accepted and live. Guests: security-only, midday, no auto-reboot. Hosts + mgmt-vm: manual monthly window; zero-downtime once Phase 4 HA exists. |
 | Infra portal | Python + D2 generator → CT 116 nginx | Phase 3 ✓ — `infra-portal-generate.py` on mgmt-vm, daily systemd timer, rsync to CT 116 via restricted deploy key. Switch VLAN/PoE view, rack layout, network topology SVG (ADR-020). |
@@ -74,7 +74,7 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 |------------|--------|
 | HashiCorp Vault | Vaultwarden is sufficient at this scale |
 | PM2 process manager | Docker-centric; not applicable to Proxmox VM/LXC model |
-| Docker Compose stacks | Services run as native packages/binaries in Proxmox VMs/LXCs, not containers. **Exception coming in Phase 6:** Gluetun is container-only, so Docker arrives then — confined to apophis for the media stack (ADR-014 rationale) |
+| Docker Compose stacks | Services run as native packages/binaries on LXC service nodes (oneill stays Docker-free). **Contained exceptions, each isolated to its own VM:** Vaultwarden (VM 118, Phase 5 — container-only upstream; ADR-014 revised 2026-06-26) and the Phase 6 Gluetun/media stack on apophis. The no-Docker principle for the LXC service nodes is intact. |
 | Btrfs snapshots (btrbk) | Proxmox uses ZFS/ext4; use Proxmox Backup Server instead |
 
 ---
@@ -91,5 +91,6 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-17 | Phase 3 | Monitoring stack live incl. Alertmanager→ntfy (ADR-013). Dashboard: **Homepage → Glance** (ADR-014) to keep oneill Docker-free; wall-tablet UI reassigned to HA (HA-expansion phase); Docker deferred to the media phase/Gluetun |
 | 2026-06-19 | Phase 3 ✓ CLOSED | Phase 3 fully complete. Backups tested (PBS + HA native, restore drill ✅). Patching adopted (ADR-015). Infra portal live (ADR-020). MCP rows parked. Plex renamed Jellyfin. |
 | 2026-06-25 | Phase 4 ✓ CLOSED | 2-node cluster `homelab` (apophis + carter) live; apophis rebuilt on ZFS; `pvesr` replication + **manual failover** for VM 200 (no HA manager); 2nd Technitium (CT 117 on carter) removes the DNS SPOF; corosync 10s ride-out; monitoring deduped for clustered `pve_*` + replication-health alerts. Radar updated: Multi-node cluster, Technitium, Tailscale, Infra-agent-tool-access rows. Carry-forward: VM 200 failover drill + carter-rebuild runbook + off-site backup. |
+| 2026-06-26 | Phase 5 (in progress) | Vaultwarden deployed (VM 118, Ubuntu 24.04 + Docker — native-LXC plan OOMed) → moved to Adopted; **Docker exception** moved Phase 6 → Phase 5 (each in its own VM; ADR-014 revised); **ansible-vault dropped** as never-wired-in (ADR-018) → Secret-handling row corrected; tailnet ACL + secrets-register added. VM 200 manual-failover drill ✅ PASS (carry-forward cleared). Outstanding: VM 118 restore drill, carter-rebuild runbook, off-site backup. |
 
 *Add a row each time this radar is reviewed at a phase boundary.*

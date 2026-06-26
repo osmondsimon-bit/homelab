@@ -50,6 +50,13 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | PVE API scrape token | Prometheus pve exporter (cluster-wide; carter reuses apophis's) |
 | HA long-lived access token | Prometheus HA exporter |
 
+## Tier 4 — `vars_prompt` at provisioning (ephemeral — not stored anywhere)
+
+Short-lived secrets typed at the prompt when a playbook runs and never persisted (no_log). Not a
+storage location — the *durable* copy of any persistent admin password lives in Tier 1 (Vaultwarden)
+and is pasted in at the prompt. Examples: the Tailscale auth key and the Vaultwarden admin token at
+`provision-vaultwarden.yml`; the admin passwords at `provision-{monitoring,pbs,technitium,ha-backup-share}.yml`.
+
 ## Tier 5 — Authenticator app (second factors — not in Vaultwarden)
 
 TOTP seeds stay in Google Authenticator + iCloud Keychain. **Deliberately not co-located** with the

@@ -34,6 +34,8 @@ infrastructure being built anyway.
 - **Scope:** Vaultwarden is for *human* passwords only. Infra/machine secrets (the `ansible-vault`
   password, API tokens) stay in `ansible-vault` — not in Vaultwarden. (Bitwarden Secrets Manager,
   a separate product, was considered for machine secrets and declined as unnecessary.)
+  *(Superseded by ADR-018 revision 2026-06-25 — `ansible-vault` was never wired in and is dropped;
+  machine tokens now live in gitignored env files on the mgmt-vm, Tier 3.)*
 
 ## Consequences
 
