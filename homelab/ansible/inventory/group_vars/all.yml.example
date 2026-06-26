@@ -178,6 +178,7 @@ glance_release_repos:
   - tailscale/tailscale
   - TechnitiumSoftware/DnsServer
   - terrastruct/d2
+  - dani-garcia/vaultwarden
 
 # --- Infra Portal (CT 116, oneill — ADR-020) ---------------------
 portal_ctid: 116

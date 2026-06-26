@@ -299,9 +299,10 @@ backlog item.)
     inside CT 112.
   - apophis storage `pbs-oneill` added with that token + the datastore **fingerprint**
     (`proxmox-backup-manager cert info` on PBS).
-- **Scheduled job (apophis):** **VM 100 (mgmt-vm)** → `pbs-oneill`, daily **02:30**, retention
-  **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs rebuild from their
-  playbooks; HA uses the native partial below. (mgmt-vm is the only guest not reproducible from code.)
+- **Scheduled job (apophis):** **VM 100 (mgmt-vm) + VM 118 (vaultwarden)** → `pbs-oneill`, daily
+  **02:30**, retention **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs
+  rebuild from their playbooks; HA uses the native partial below. The two imaged VMs are the
+  stateful ones not reproducible from code (mgmt-vm hand-built; vaultwarden's Docker data volume).
 - **GC:** datastore `main` runs garbage collection daily.
 - **Encryption (2026-06-17, ADR-012):** client-side encryption is **on** (`pvesm set pbs-oneill
   --encryption-key autogen`) — backups are encrypted before leaving apophis. The key lives at
@@ -313,8 +314,8 @@ backlog item.)
 #### Restore a guest from PBS
 ```bash
 ssh root@YOUR_PROXMOX_IP "pvesm list pbs-oneill"                                            # list points
-ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/100/<ISO-timestamp> <newvmid>"     # VM
-ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-timestamp>"   # CT
+ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/118/<ISO-timestamp> <newvmid>"     # VM (only vm/100, vm/118 are in PBS)
+# CTs are reprovisioned from Ansible, NOT restored from PBS (no CT is in the backup job).
 ```
 
 ### Home Assistant — native partial backup (primary for HA)
@@ -335,8 +336,9 @@ ssh root@YOUR_PROXMOX_IP "pct restore <newctid> pbs-oneill:backup/ct/110/<ISO-ti
   fallback is no longer needed. No `vzdump-qemu` images remain on apophis `local`.
 - **⚠️ Encryption key:** HAOS backups are **encrypted** (`"protected": true` in `backup.json`). The
   key (HAOS → Settings → System → Backups → ⋮ → "Show encryption key") **must be stored off-box** —
-  losing it makes every encrypted backup unrestorable. No credential manager is set up yet, so it's
-  kept in Google Password Manager for now; move it into the password manager when one lands (ADR-010).
+  losing it makes every encrypted backup unrestorable. It's a **Tier 2 anchor (ADR-018)** — it stays
+  in Keychain/Google Password Manager, deliberately **outside** Vaultwarden so recovery is non-circular
+  (Vaultwarden may itself be down). Vaultwarden is now live (VM 118, Phase 5) but Tier 2 secrets do not move into it.
 
 ### Recovery model — what recovers what (avoid doubling up)
 
@@ -347,15 +349,17 @@ don't need image backups — only genuinely stateful or hand-built things do.
 |---|---|---|
 | Ansible playbooks | **the LXCs end-to-end** — `pct create` + config (Tailscale, Technitium, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** (hand-built, no playbook) | oneill |
+| PBS images | **mgmt-vm** (hand-built, no playbook) + **vaultwarden VM 118** (Docker data volume) | oneill |
 | HA native partial | HA config + Zigbee2MQTT + add-ons (restore onto a fresh HAOS) | oneill share |
 | Terraform (ADR-008) | **planned** — declarative VM/LXC definitions; not yet imported (empty scaffold) | git (public) |
 
 **Reality check (2026-06-16):** Terraform manages nothing yet (no state) — the four LXCs are
 created **and** configured by their Ansible playbooks today (re-run to rebuild). The CTs are
-deliberately not in PBS (the playbooks rebuild them). **mgmt-vm and the HA VM are the exceptions
-— neither is recreatable from code:** mgmt-vm relies on its PBS image; HA relies on manually
-creating a HAOS VM then restoring the native partial. The playbook rebuild path is unproven
+deliberately not in PBS (the playbooks rebuild them). **mgmt-vm, the HA VM, and Vaultwarden (VM 118)
+are the exceptions — none is fully recreatable from code:** mgmt-vm relies on its PBS image; HA
+relies on manually creating a HAOS VM then restoring the native partial; Vaultwarden's playbook
+rebuilds the VM+container but its vault data comes from the PBS image (or carter replica). VM 118's
+restore path is **untested** until its PBS restore drill runs (pending). The playbook rebuild path is unproven
 until the **CT 111 reprovision drill** (pending) actually runs it.
 
 **Restore by scenario:**
