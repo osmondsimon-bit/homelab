@@ -646,7 +646,8 @@ sudo tailscale up --authkey=<reusable,non-ephemeral,pre-approved> --hostname=vau
 
 # --- deploy the container (in /opt/vaultwarden) ---
 # admin token: TOKEN=$(openssl rand -base64 24); HASH=$(printf %s "$TOKEN" | argon2 "$(openssl rand -base64 12)" -id -t 3 -m 16 -p 4 -l 32 -e)
-#   save plaintext to /root/vw-admin-token.txt (chmod 600), put HASH in the env file.
+#   put HASH in the env file; store the plaintext TOKEN in Vaultwarden (Tier 1), not on the VM
+#   (the as-built /root/vw-admin-token.txt was deleted 2026-06-26 once it was in the vault).
 # env file NAMED vaultwarden.env (NOT .env — compose treats .env as interpolation source) AND
 #   escape every $ in ADMIN_TOKEN as $$ (this compose version interpolates env_file values too).
 # vaultwarden.env: DOMAIN=https://vaultwarden.<tailnet>.ts.net, ROCKET_ADDRESS=0.0.0.0, ROCKET_PORT=8080,
