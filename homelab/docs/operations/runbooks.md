@@ -662,6 +662,12 @@ job + immediate backup; OS password locked (key-only). **Health:** `curl https:/
 `docker compose -f /opt/vaultwarden/docker-compose.yml logs`. **Restart:** `cd /opt/vaultwarden && sudo docker compose restart`.
 **Lock signups after registering:** set `SIGNUPS_ALLOWED=false`, `docker compose up -d --force-recreate`.
 
+**Tailnet ACL (the vault is reachable only by your devices):** the live policy is the versioned
+reference at [`ansible/files/tailscale-acl.hujson`](../../ansible/files/tailscale-acl.hujson). The
+node is tagged `tag:vaultwarden`; default-deny means only `group:operators` reach it on `:443`.
+ACLs are console/API-only — edit at login.tailscale.com/admin/acls and keep the reference file in
+sync. The file's header documents the safe staged rollout (declare tags → tag machines → tighten acls).
+
 ---
 
 *Add new entries as services are deployed. Each service should have: how to check health, how to restart, where to find logs.*
