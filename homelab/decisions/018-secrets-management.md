@@ -101,3 +101,7 @@ tailnet; the app's offline cache still lets you *read* passwords when off-tailne
 
 Updated Tier 2 anchors (outside the lab, in Keychain): **PBS encryption key · HA backup
 encryption key · 2FA/TOTP recovery codes**. (No ansible-vault password — removed.)
+
+The live, value-free inventory of every credential and its tier is maintained at
+[`docs/operations/secrets-register.md`](../docs/operations/secrets-register.md) (first populated
+2026-06-26 when Vaultwarden was loaded).
