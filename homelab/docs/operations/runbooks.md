@@ -618,7 +618,7 @@ git status && git diff
 
 ---
 
-## Vaultwarden VM build (as-built 2026-06-26, manual — TO BE CODIFIED into provision-vaultwarden.yml)
+## Vaultwarden VM build — codified in `provision-vaultwarden.yml` (manual recipe below for reference)
 
 VM 118 `vaultwarden` on apophis: Ubuntu 24.04 cloud image + official Docker container + Tailscale Serve.
 **Lessons (why this shape):** a Debian-12 cloud image **kernel-panics** on emulated CPU models

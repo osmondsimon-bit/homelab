@@ -51,7 +51,7 @@ technitium_blocklist_urls:                                  # ads/trackers/malwa
 # As-built 2026-06-26: official vaultwarden DOCKER container in a DEDICATED VM (Docker confined
 # here — ADR-014 exception). Ubuntu 24.04 cloud image; container binds 127.0.0.1; Tailscale Serve
 # does TLS (tailnet-only, NOT on the LAN). Replicated apophis->carter + PBS backup. Currently
-# HAND-BUILT — codify into provision-vaultwarden.yml (recipe in docs/operations/runbooks.md).
+# Codified in provision-vaultwarden.yml (manual recipe also in docs/operations/runbooks.md).
 vaultwarden_vmid: 118
 vaultwarden_hostname: vaultwarden
 vaultwarden_ram_mb: 2048

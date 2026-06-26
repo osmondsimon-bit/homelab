@@ -1,0 +1,234 @@
+---
+# Provision Vaultwarden (self-hosted Bitwarden-compatible password manager) — Phase 5,
+# ADR-010 / ADR-014 (Docker exception) / ADR-018. Codifies the as-built recipe in
+# docs/operations/runbooks.md. Idempotent.
+#
+# SHAPE (and why — see the runbook):
+#  - A DEDICATED VM (not an LXC): Vaultwarden ships only as a container; Docker is confined
+#    to this VM (oneill stays Docker-free). Building from source OOMs a small guest.
+#  - Ubuntu 24.04 cloud image: a Debian cloud image KERNEL-PANICS on emulated CPU models.
+#  - CPU Skylake-Client-noTSX-IBRS: boots AND live-migrates the Coffee-Lake pair
+#    (x86-64-v2-AES panics Debian cloud images).
+#  - Official vaultwarden/server container, bound to 127.0.0.1; Tailscale Serve terminates
+#    TLS -> https://vaultwarden.<tailnet>.ts.net (tailnet-only, NEVER on the LAN).
+#  - Hardened: container cap-drop ALL + no-new-privileges, signups off, Argon2id ADMIN_TOKEN.
+#
+# Play 1 creates+boots the VM on apophis; play 2 configures it over SSH (key from cloud-init).
+#
+# Run from the mgmt-vm, inside homelab/ansible/  (targets apophis):
+#   ansible-playbook playbooks/provision-vaultwarden.yml --limit apophis
+# Prompts for a Tailscale auth key + the admin-panel token (neither is stored).
+#
+# FIRST-RUN account bootstrap (signups default OFF): run once with signups ON to register the
+# operator account at the printed URL, then re-run with the default (OFF) to lock it:
+#   ... -e vaultwarden_signups_allowed=true   # register, then re-run without it
+#
+# Tailscale prerequisites (one-time, in the admin console): HTTPS + Serve enabled on the tailnet;
+# afterwards approve the node + disable key expiry + ACL it to operator devices.
+
+- name: Create the Vaultwarden VM on apophis (Ubuntu cloud image + cloud-init)
+  hosts: proxmox
+  gather_facts: false
+  vars:
+    vw_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    vw_cloud_image: "noble-server-cloudimg-amd64.img"
+    vw_ip_bare: "{{ vaultwarden_ip | regex_replace('/.*$', '') }}"
+  vars_prompt:
+    - name: ts_authkey
+      prompt: "Tailscale auth key for the Vaultwarden VM (tskey-auth-...)"
+      private: true
+    - name: vw_admin_token
+      prompt: "Vaultwarden admin-panel token (min 16 chars — stored only as an Argon2id hash)"
+      private: true
+  tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that: [ "ts_authkey is match('^tskey-')", "vw_admin_token | length >= 16" ]
+        fail_msg: "Need a tskey-... auth key and an admin token of at least 16 chars."
+        quiet: true
+
+    - name: Check whether VM {{ vaultwarden_vmid }} already exists
+      ansible.builtin.command: "qm status {{ vaultwarden_vmid }}"
+      register: vm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Download the Ubuntu cloud image
+      ansible.builtin.get_url:
+        url: "{{ vw_cloud_image_url }}"
+        dest: "/var/lib/vz/template/{{ vw_cloud_image }}"
+        mode: "0644"
+      when: vm_status.rc != 0
+
+    - name: Stage the mgmt-vm public key for cloud-init
+      ansible.builtin.copy:
+        dest: "/tmp/vw-cloudinit.pub"
+        content: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}\n"
+        mode: "0644"
+      when: vm_status.rc != 0
+
+    - name: Create the VM (cloud image disk + cloud-init)
+      ansible.builtin.shell: |
+        set -e
+        qm create {{ vaultwarden_vmid }} --name {{ vaultwarden_hostname }} \
+          --memory {{ vaultwarden_ram_mb }} --cores {{ vaultwarden_cores }} --cpu {{ vaultwarden_cpu }} \
+          --net0 virtio,bridge={{ bridge }} --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
+          --agent enabled=1 --onboot 1 --startup {{ vaultwarden_startup }}
+        qm set {{ vaultwarden_vmid }} --scsi0 {{ rootfs_storage }}:0,import-from=/var/lib/vz/template/{{ vw_cloud_image }}
+        qm set {{ vaultwarden_vmid }} --ide2 {{ rootfs_storage }}:cloudinit --boot order=scsi0
+        qm disk resize {{ vaultwarden_vmid }} scsi0 {{ vaultwarden_disk_gb }}G
+        qm set {{ vaultwarden_vmid }} --ciuser {{ vaultwarden_ci_user | default('simon') }} \
+          --sshkeys /tmp/vw-cloudinit.pub \
+          --ipconfig0 ip={{ vaultwarden_ip }},gw={{ gateway }} --nameserver {{ gateway }}
+        rm -f /tmp/vw-cloudinit.pub
+        qm start {{ vaultwarden_vmid }}
+      when: vm_status.rc != 0
+
+    - name: Wait for the VM's SSH to come up (cloud-init first boot)
+      ansible.builtin.wait_for:
+        host: "{{ vw_ip_bare }}"
+        port: 22
+        timeout: 180
+      delegate_to: localhost
+
+    - name: Hand the VM to play 2 (carry the prompted secrets in memory, no_log)
+      ansible.builtin.add_host:
+        name: "vaultwarden-vm"
+        ansible_host: "{{ vw_ip_bare }}"
+        ansible_user: "{{ vaultwarden_ci_user | default('simon') }}"
+        ansible_python_interpreter: /usr/bin/python3
+        groups: _vw_target
+        vw_ts_authkey: "{{ ts_authkey }}"
+        vw_admin_token_plain: "{{ vw_admin_token }}"
+      no_log: true
+      changed_when: false
+
+- name: Configure Vaultwarden on the VM (Docker + Tailscale + container)
+  hosts: _vw_target
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Base packages (guest agent, argon2, prereqs)
+      ansible.builtin.apt:
+        name: [qemu-guest-agent, argon2, ca-certificates, curl]
+        update_cache: true
+      register: base_pkgs
+      retries: 3
+      delay: 5
+      until: base_pkgs is succeeded
+
+    - name: Docker apt repo (official)
+      ansible.builtin.shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args: { creates: /etc/apt/sources.list.d/docker.list }
+
+    - name: Install Docker engine + compose plugin
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        update_cache: true
+
+    - name: Install Tailscale
+      ansible.builtin.shell: "curl -fsSL https://tailscale.com/install.sh | sh"
+      args: { creates: /usr/bin/tailscale }
+
+    - name: Current Tailscale backend state
+      ansible.builtin.command: "tailscale status --json"
+      register: ts_state
+      changed_when: false
+
+    - name: Bring Tailscale up (only if not already Running)
+      ansible.builtin.command: >
+        tailscale up --authkey={{ hostvars['vaultwarden-vm'].vw_ts_authkey }}
+        --hostname={{ vaultwarden_hostname }} --ssh=false
+      no_log: true
+      when: (ts_state.stdout | from_json).BackendState != 'Running'
+
+    - name: Resolve the tailnet DNSName -> DOMAIN
+      ansible.builtin.shell: |
+        tailscale status --json | python3 -c 'import json,sys;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'
+      register: ts_dnsname
+      changed_when: false
+      until: ts_dnsname.stdout | length > 0
+      retries: 10
+      delay: 3
+
+    - name: Hash the admin token (Argon2id) — plaintext never written
+      ansible.builtin.shell: >
+        printf '%s' "{{ hostvars['vaultwarden-vm'].vw_admin_token_plain }}"
+        | argon2 "$(openssl rand -base64 12)" -id -t 3 -m 16 -p 4 -l 32 -e
+      register: vw_admin_hash
+      no_log: true
+      changed_when: false
+
+    - name: Project dir + data
+      ansible.builtin.file:
+        path: /opt/vaultwarden/data
+        state: directory
+        mode: "0750"
+
+    - name: Env file (named vaultwarden.env, NOT .env; $ doubled so compose interpolation keeps the literal hash)
+      ansible.builtin.copy:
+        dest: /opt/vaultwarden/vaultwarden.env
+        mode: "0600"
+        content: |
+          DOMAIN=https://{{ ts_dnsname.stdout }}
+          ROCKET_ADDRESS=0.0.0.0
+          ROCKET_PORT=8080
+          SIGNUPS_ALLOWED={{ vaultwarden_signups_allowed | default(false) | string | lower }}
+          INVITATIONS_ALLOWED=false
+          SHOW_PASSWORD_HINT=false
+          PASSWORD_HINTS_ALLOWED=false
+          LOGIN_RATELIMIT_SECONDS=60
+          LOGIN_RATELIMIT_MAX_BURST=5
+          ADMIN_TOKEN={{ vw_admin_hash.stdout | replace('$', '$$') }}
+      no_log: true
+      register: vw_env
+
+    - name: Hardened compose file
+      ansible.builtin.copy:
+        dest: /opt/vaultwarden/docker-compose.yml
+        mode: "0644"
+        content: |
+          services:
+            vaultwarden:
+              image: {{ vaultwarden_image }}
+              container_name: vaultwarden
+              restart: unless-stopped
+              env_file: vaultwarden.env
+              volumes:
+                - ./data:/data
+              ports:
+                - "127.0.0.1:8080:8080"
+              security_opt:
+                - no-new-privileges:true
+              cap_drop:
+                - ALL
+      register: vw_compose
+
+    - name: Deploy / update the container
+      ansible.builtin.command:
+        cmd: docker compose up -d {{ '--force-recreate' if (vw_env.changed or vw_compose.changed) else '' }}
+        chdir: /opt/vaultwarden
+      changed_when: true
+
+    - name: TLS via Tailscale Serve (https:443 -> 127.0.0.1:8080)
+      ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:8080
+      changed_when: true
+
+    - name: Verify localhost-only + alive
+      ansible.builtin.shell: |
+        ss -tlnp | grep -q '127.0.0.1:8080' || { echo "NOT localhost-bound"; exit 1; }
+        curl -fsS --max-time 8 http://127.0.0.1:8080/alive >/dev/null
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Vaultwarden up at https://{{ ts_dnsname.stdout }}  (tailnet-only; set this as the Bitwarden server URL)"
+          - "signups_allowed = {{ vaultwarden_signups_allowed | default(false) }}"
+          - "NEXT: Tailscale admin -> approve node + disable key expiry + ACL to your devices."
+          - "  If first run: re-ran with -e vaultwarden_signups_allowed=true, register, then re-run (default OFF)."
+          - "  Onboarding: pvesr 118-0 -> carter + PBS backup are set up separately (see PLAN/runbook)."
