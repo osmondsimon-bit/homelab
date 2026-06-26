@@ -61,7 +61,7 @@ vaultwarden_ip: YOUR_VAULTWARDEN_IP/24                     # verify free; reserv
 vaultwarden_cpu: Skylake-Client-noTSX-IBRS                 # migratable across the Coffee-Lake pair (x86-64-v2-AES panics Debian cloud images)
 vaultwarden_startup: "order=2,up=10"
 vaultwarden_image: vaultwarden/server:1.36.0              # PINNED container tag — bump deliberately
-# vaultwarden_domain = https://vaultwarden.<tailnet>.ts.net (Tailscale Serve) — tailnet-specific, set at deploy time
+vaultwarden_domain: https://vaultwarden.YOUR_TAILNET.ts.net # Tailscale Serve URL (tailnet-only) — Glance link-tile + Bitwarden server URL
 
 # --- Proxmox Backup Server LXC (backup hub on oneill, ADR-012) ---------------
 # Unprivileged LXC; datastore on a quota'd ZFS dataset bind-mount. Run --limit oneill.
