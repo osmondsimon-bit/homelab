@@ -359,7 +359,7 @@ deliberately not in PBS (the playbooks rebuild them). **mgmt-vm, the HA VM, and 
 are the exceptions — none is fully recreatable from code:** mgmt-vm relies on its PBS image; HA
 relies on manually creating a HAOS VM then restoring the native partial; Vaultwarden's playbook
 rebuilds the VM+container but its vault data comes from the PBS image (or carter replica). VM 118's
-restore path is **untested** until its PBS restore drill runs (pending). The playbook rebuild path is unproven
+PBS restore path is **proven ✅ 2026-06-26** (restore drill — see Restore drills table). The playbook rebuild path is unproven
 until the **CT 111 reprovision drill** (pending) actually runs it.
 
 **Restore by scenario:**
@@ -443,6 +443,7 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 | 2026-06-17 | PBS mgmt-vm (VM 100) | ✅ PASS — restored 24 s, booted, `group_vars/all.yml` + git repo present |
 | 2026-06-18 | HA native partial → fresh HAOS (isolated VLAN 5) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
 | 2026-06-25 | **VM 200 `pvesr` failover (apophis→carter)** | ✅ PASS — disabled job 200-0, `zfs clone` of the latest `__replicate__` snapshot → **no-network** test VM 299 on carter; HAOS **booted off the replicated copy** (~1 GB read / 119 MB written, CPU climbing). Procedure validated (clone→create→start). Live HA untouched; clones+VM destroyed; replication re-enabled + re-synced OK. *Bootability proven non-destructively; full app-on-network is the real failover's job (uses VM 200's own config/IP).* |
+| 2026-06-26 | **PBS image of VM 118 (Vaultwarden)** | ✅ PASS — `qmrestore` of the 02:01Z image → throwaway VM 119 (NIC stripped, never on the tailnet), restored in 11 s. Guest agent up; `/opt/vaultwarden/data/db.sqlite3` present (272 KB, non-zero) + `rsa_key.pem` intact. 119 destroyed; live 118 untouched. **Vault recovery is now proven, not a hypothesis.** |
 | _pending_ | CT 111 / CT 117 Ansible reprovision | untested — records the real RTO |
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
@@ -549,6 +550,61 @@ window**, one step at a time, honouring every VERIFY gate.
 > - **Live-migration tunnel dropped intermittently** (`mirror-<disk>: Input/output error (io-status: ok)` then `writing to tunnel failed: broken pipe`) when running at near-line-rate on the shared **1 Gb** NIC — network itself was clean (0 % ping loss, corosync stable). **Fix:** cap with `qm migrate <vmid> apophis --online --with-local-disks --bwlimit 100000` (~80 MB/s ≈ 80 % of 1 Gb, leaving corosync headroom). First uncapped attempt failed ~24 %; capped retry completed. Apply the same `--bwlimit` to every cross-node migration on this single-NIC pair.
 > - **CTs can't live-migrate** — CT 110 used `pct migrate 110 <node> --restart` (brief stop). zfspool→zfspool works fine now both nodes are ZFS (the old lvmthin→zfspool block is gone).
 > - **Step 3 (rebuild Tailscale CT 110 on oneill) was skipped** — CT 110 was instead migrated to carter then back to apophis. **Keeping Tailscale on apophis is the accepted placement (decided 2026-06-25)** — the earlier "Tailscale → oneill" intent is superseded.
+
+## Rebuild carter (the failover target) — DR runbook
+
+carter is the `pvesr` replication + manual-failover target for **VM 200 (HA)** and **VM 118
+(Vaultwarden)**, and hosts **CT 117 `technitium2`** (the 2nd DNS resolver). Production runs on
+**apophis**, so a carter loss is *not* a production outage — but while carter is down/rebuilding
+there is **no failover target** for VM 200/118 and DNS rides on CT 111 (oneill) alone. Do this in a
+maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
+
+> **Key fact — `/etc/pve` is cluster-shared.** Reinstalling carter wipes only its *node-local*
+> state. On `pvecm add`, carter pulls the cluster filesystem from apophis, so **users, 2FA, ACLs,
+> the monitoring PVE token, the PBS key, storage.cfg, and VM configs return automatically.**
+> Node-local to redo: SSH host key, mgmt-vm's root authorized_key, no-sub repos, node_exporter,
+> the `local-zfs` node list, the replication jobs, and CT 117.
+
+> **Prereq:** carter's BIOS **AC power-recovery = Power On** (PLAN backlog) — so an unattended power
+> blip brings the failover target back by itself.
+
+1. **Keep apophis writable.** A 2-node cluster minus carter is 1/2 → apophis goes **read-only**. On
+   apophis: `pvecm expected 1`. **VERIFY:** `pvecm status` = Quorate, Expected 1; VMs 100/110/118/200
+   still running on apophis.
+2. **Remove carter from the cluster** (do this *before* wiping it). On apophis:
+   `pvecm delnode carter`, then if the node dir lingers `rm -rf /etc/pve/nodes/carter`. **VERIFY:**
+   carter gone from `pvecm status` and the GUI.
+3. **Reinstall carter** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on its SSD, hostname `carter`. Then
+   set no-subscription repos, `apt update && dist-upgrade`, restore root `authorized_keys`.
+   **VERIFY:** boots, `pveversion`, `zpool list` shows rpool.
+4. **Rejoin — mind the 2FA join blocker.** apophis's `root@pam` has cluster-wide 2FA; the `pvecm add`
+   OTP prompt **will likely fail `401`** (this bit us on the apophis join). Pre-empt it: from mgmt-vm
+   (key auth bypasses 2FA) on **apophis** `cp -a /etc/pve/priv/tfa.cfg /root/tfa.cfg.bak.$(date +%s)`
+   then `pveum user tfa delete root@pam --id <id>`. From mgmt-vm `ssh-keygen -R YOUR_CARTER_IP` +
+   `ssh-copy-id root@YOUR_CARTER_IP`. On **carter's TTY**: `pvecm add YOUR_PROXMOX_IP` — now needs only
+   apophis's root **password**. **VERIFY:** `pvecm status` = 2 nodes, Quorate, Expected 2. Then
+   **re-enroll TOTP** for `root@pam` (and check `simon@pve`) via Datacenter → Permissions → Two Factor,
+   and `pvecm expected 2`.
+5. **Fix storage:** `pvesm set local-zfs --nodes apophis,carter`. **VERIFY:** local-zfs active on both.
+6. **node_exporter** (node-local): `ansible-playbook playbooks/install-node-exporter.yml --limit carter`.
+   The PVE monitoring token is cluster-shared → carter's pve-exporter re-auths automatically.
+   **VERIFY:** carter node + pve targets up in Prometheus.
+7. **Recreate replication (apophis → carter)** for both critical VMs:
+   `pvesr create-local-job 200-0 carter --schedule '*/15'` and
+   `pvesr create-local-job 118-0 carter --schedule '*/15'`, then `pvesr run --id 200-0 && pvesr run --id 118-0`
+   (first full sends). **VERIFY:** `pvesr status` both jobs State OK, FailCount 0; `zfs list -t snapshot`
+   on carter shows `__replicate__` snapshots for 200 and 118.
+8. **Reprovision CT 117 `technitium2`** (reproducible from code; admin password pasted from Vaultwarden
+   at the prompt): `ansible-playbook playbooks/provision-technitium.yml --limit carter`. **VERIFY:**
+   `dig @YOUR_TECHNITIUM2_IP example.com +short` resolves and a blocked domain returns NXDOMAIN.
+9. **Restore freshness/quorum baseline:** confirm 0 firing alerts, `pvecm status` Expected 2, and
+   that VM 200/118 failover to carter is available again (replication snapshots present).
+
+> **Lessons carried from the apophis 4b rebuild (2026-06-25):** do the `delnode` *before* wiping
+> (else the survivor goes read-only — recover with `pvecm expected 1`); treat 2FA as a **join
+> blocker** and have the SSH `pveum user tfa delete` path ready; cap any cross-node migration on the
+> 1 Gb NIC with `--bwlimit 100000`. The live carter-rebuild drill itself is deferred — this runbook
+> is the tested-on-paper plan; the apophis execution proved the symmetric procedure.
 
 ## Manual failover (VM 200, when apophis is truly dead) — ADR-009
 
