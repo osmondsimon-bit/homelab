@@ -27,7 +27,7 @@ Two requirements shape the design:
 | Tier | What lives here | Where |
 |------|-----------------|--------|
 | 1. Personal + admin passwords | Browser logins, personal accounts, human-operated infra admin logins (Grafana, PBS, HA, UniFi, Proxmox root, Technitium) | **Vaultwarden** (self-hosted, ADR-010). During interim: Bitwarden cloud. |
-| 2. Bootstrapping anchors | `ansible-vault` master password; PBS encryption key; HA backup encryption key | **Google/iCloud Keychain** — kept *outside the lab on purpose*. Never moved to Vaultwarden. |
+| 2. Bootstrapping anchors | ~~`ansible-vault` master password~~ (dropped — see 2026-06-25 revision); PBS encryption key; HA backup encryption key; 2FA/TOTP recovery codes | **Google/iCloud Keychain** — kept *outside the lab on purpose*. Never moved to Vaultwarden. |
 | 3. Agent-accessible tokens | API tokens for read-only or scoped machine access (UniFi RO, PVE API tokens, Prometheus scrape tokens) | **Scoped gitignored env files on mgmt-vm** (`~/.*.env`, `chmod 600`). One file per service, never committed (ADR-006). |
 | 4. Short-lived playbook secrets | Passwords prompted at provisioning time (new service admin passwords, one-time setup) | **`vars_prompt` at runtime** — never stored, never committed. |
 | 5. 2FA / TOTP | App-based second factors | **Google Authenticator + iCloud Keychain** (no change). |
@@ -101,6 +101,8 @@ tailnet; the app's offline cache still lets you *read* passwords when off-tailne
 
 Updated Tier 2 anchors (outside the lab, in Keychain): **PBS encryption key · HA backup
 encryption key · 2FA/TOTP recovery codes**. (No ansible-vault password — removed.)
+*2FA recovery keys saved to Keychain 2026-06-26* — Proxmox Recovery Keys for `root@pam` (cluster),
+`simon@pve`, and oneill's standalone `root@pam`.
 
 The live, value-free inventory of every credential and its tier is maintained at
 [`docs/operations/secrets-register.md`](../docs/operations/secrets-register.md) (first populated

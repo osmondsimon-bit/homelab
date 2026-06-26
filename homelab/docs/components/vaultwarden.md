@@ -14,7 +14,7 @@ LAN or the internet.**
 | TLS / access | **Tailscale Serve** terminates TLS → `https://vaultwarden.<tailnet>.ts.net`; tailnet ACL restricts it to `group:operators` (node tagged `tag:vaultwarden`, default-deny) |
 | Hardening | container `cap_drop: ALL` + `no-new-privileges`; **signups OFF**; **Argon2id `ADMIN_TOKEN`** (hash only on the VM) |
 | Redundancy | `pvesr` job `118-0` → carter (15 min); manual failover (no HA manager) |
-| Backup | PBS daily job on apophis (with vm/100); data volume `/opt/vaultwarden/data`. **Restore drill: pending.** |
+| Backup | PBS daily job on apophis (with vm/100); data volume `/opt/vaultwarden/data`. **Restore drill ✅ PASS 2026-06-26** (`qmrestore` → throwaway VM 119; `db.sqlite3` + `rsa_key.pem` intact — see runbooks restore-drills table). |
 
 ## Why a VM running Docker (not a native LXC)
 
