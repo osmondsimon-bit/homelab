@@ -62,3 +62,16 @@ infrastructure being built anyway.
   including the previously-homeless playbook admin passwords (operator pastes them at the
   prompt). The bootstrapping anchors (PBS/HA keys, 2FA recovery codes) stay in Keychain,
   **never** in Vaultwarden, so recovery is non-circular.
+
+## As-built — 2026-06-26 (delivery changed: Docker-in-VM, not native LXC)
+
+The "native binary in an LXC" delivery (revision above) **was abandoned** — building Vaultwarden
+from source needs multi-GB transient RAM (OOM-killed in a small CT), and there is no official
+native binary. **As-built: the official `vaultwarden/server:1.36.0` Docker container in a dedicated
+VM (118)** — ADR-014 Docker exception, confined to that VM. Ubuntu 24.04 cloud image (a Debian cloud
+image kernel-panicked on emulated CPU models — `x86-64-v2-AES` etc.), CPU `Skylake-Client-noTSX-IBRS`
+(migratable). Container bound to `127.0.0.1:8080`; **Tailscale Serve** terminates TLS to
+`https://vaultwarden.<tailnet>.ts.net` — tailnet-only, never on the LAN. Hardened (cap-drop ALL,
+no-new-privileges, signups off, Argon2id `ADMIN_TOKEN`). Replicated apophis→carter (`pvesr` 118-0) +
+PBS backup. The security posture (zero-knowledge, Tailscale-only, hardened, replicated+backed-up) is
+unchanged from the plan; only the packaging differs. Build recipe: `docs/operations/runbooks.md`.

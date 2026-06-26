@@ -4,7 +4,7 @@
 # See decisions/005-activate-ansible.md.
 
 # --- Proxmox / LXC general ---------------------------------------------------
-rootfs_storage: local-lvm                                   # rootfs pool for new LXCs
+rootfs_storage: local-zfs                                   # rootfs pool for new LXCs (all nodes are ZFS)
 template_store: local                                       # where LXC templates live
 lxc_template: debian-12-standard_12.12-1_amd64.tar.zst       # base template
 bridge: vmbr0
@@ -46,6 +46,22 @@ technitium_blocking_type: NxDomain                          # AnyAddress | NxDom
 technitium_blocklist_update_hours: 24
 technitium_blocklist_urls:                                  # ads/trackers/malware
   - https://big.oisd.nl/domainswild2
+
+# --- Vaultwarden VM (self-hosted password manager — ADR-010/018; Phase 5) -----
+# As-built 2026-06-26: official vaultwarden DOCKER container in a DEDICATED VM (Docker confined
+# here — ADR-014 exception). Ubuntu 24.04 cloud image; container binds 127.0.0.1; Tailscale Serve
+# does TLS (tailnet-only, NOT on the LAN). Replicated apophis->carter + PBS backup. Currently
+# HAND-BUILT — codify into provision-vaultwarden.yml (recipe in docs/operations/runbooks.md).
+vaultwarden_vmid: 118
+vaultwarden_hostname: vaultwarden
+vaultwarden_ram_mb: 2048
+vaultwarden_cores: 1
+vaultwarden_disk_gb: 10
+vaultwarden_ip: YOUR_VAULTWARDEN_IP/24                     # verify free; reserve in UniFi
+vaultwarden_cpu: Skylake-Client-noTSX-IBRS                 # migratable across the Coffee-Lake pair (x86-64-v2-AES panics Debian cloud images)
+vaultwarden_startup: "order=2,up=10"
+vaultwarden_image: vaultwarden/server:1.36.0              # PINNED container tag — bump deliberately
+# vaultwarden_domain = https://vaultwarden.<tailnet>.ts.net (Tailscale Serve) — tailnet-specific, set at deploy time
 
 # --- Proxmox Backup Server LXC (backup hub on oneill, ADR-012) ---------------
 # Unprivileged LXC; datastore on a quota'd ZFS dataset bind-mount. Run --limit oneill.
