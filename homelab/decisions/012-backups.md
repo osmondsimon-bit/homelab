@@ -4,6 +4,8 @@
 **Status:** Accepted
 
 > **Update 2026-06-18:** All Phase 3 backup carry-forwards closed. PBS encryption enabled. HA native backup confirmed landing on CT 113 share. mgmt-vm restore drill ✅ PASS. HA native restore drill ✅ PASS (encrypted backup proven restorable on isolated test VLAN; `vzdump-qemu-200` retired). Backup-freshness monitoring live (ADR-017).
+>
+> **Update 2026-06-26 (Phase 5):** PBS job now images **vm/100 + vm/118 (Vaultwarden)** — the two stateful VMs. The Phase-3 build-test **CT 110 (Tailscale) smoke-test snapshot was pruned**; CT 110 stays classified reproducible/not-backed-up (rebuilds via `provision-tailscale.yml`). HA remains on its native partial. VM 118's restore drill is still **pending**.
 
 ## Context
 
