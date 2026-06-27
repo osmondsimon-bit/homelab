@@ -274,10 +274,12 @@ radarr_port: 7878
 # Jellyseerr = Docker VM (VMID 125, Ubuntu 24.04 — like Vaultwarden)
 jellyseerr_vmid: 125
 jellyseerr_hostname: jellyseerr
-jellyseerr_ram_mb: 1024
+jellyseerr_ram_mb: 2048                                     # 2 GB: Jellyseerr + FlareSolverr's headless Chrome
 jellyseerr_cores: 2
 jellyseerr_disk_gb: 8
 jellyseerr_ip: YOUR_JELLYSEERR_IP/24
 jellyseerr_cpu: Skylake-Client-noTSX-IBRS
 jellyseerr_port: 5055
 jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — verify/bump to a current release tag
+flaresolverr_image: "ghcr.io/flaresolverr/flaresolverr:latest"   # Cloudflare-challenge solver for Prowlarr (co-located on the Jellyseerr VM)
+flaresolverr_port: 8191
