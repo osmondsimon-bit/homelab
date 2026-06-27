@@ -159,6 +159,10 @@ glance_services:
   - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
   - { title: "Jellyfin", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
   - { title: "qBittorrent", url: "http://{{ qbittorrent_ip | regex_replace('/.*$','') }}:{{ qbittorrent_webui_port }}", icon: "di:qbittorrent" }
+  - { title: "Prowlarr", url: "http://{{ prowlarr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ prowlarr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
+  - { title: "Sonarr", url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}", check_url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}/ping", icon: "di:sonarr" }
+  - { title: "Radarr", url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}", check_url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}/ping", icon: "di:radarr" }
+  - { title: "Jellyseerr", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:jellyseerr" }
   - { title: "Technitium DNS", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Technitium DNS 2", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Grafana", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
@@ -183,6 +187,10 @@ glance_release_repos:
   - dani-garcia/vaultwarden
   - jellyfin/jellyfin
   - qbittorrent/qBittorrent
+  - Prowlarr/Prowlarr
+  - Sonarr/Sonarr
+  - Radarr/Radarr
+  - fallenbagel/jellyseerr
 
 # --- Infra Portal (CT 116, oneill — ADR-020) ---------------------
 portal_ctid: 116

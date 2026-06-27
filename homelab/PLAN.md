@@ -15,6 +15,10 @@
 | vaultwarden | 118 | VM (Ubuntu 24.04) | YOUR_VAULTWARDEN_IP | Running — password manager (Docker container, ADR-014 exception); Tailscale-Serve TLS, tailnet-only; `pvesr`-replicated to carter (118-0) + PBS daily (ADR-010/018). |
 | jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | Running — media server, iGPU (UHD 630) QuickSync via `/dev/dri` passthrough; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). LAN/Tailscale only (ADR-021, Phase 6a). |
 | qbittorrent | 121 | LXC (Debian 12, unpriv) | YOUR_QBITTORRENT_IP | Running — torrent client, **all egress via ProtonVPN WireGuard + nftables killswitch** (leak-test ✅ 2026-06-27); NAT-PMP port forward; downloads shared with Jellyfin (ADR-021, Phase 6b). |
+| prowlarr | 122 | LXC (Debian 12, unpriv) | YOUR_PROWLARR_IP | Running — indexer manager; syncs torrent indexers to Sonarr/Radarr (ADR-022, Phase 7). LAN/Tailscale only. |
+| sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | Running — TV automation → qBittorrent → hardlink-imports into `/media/library/tv` (ADR-022). In the media group. |
+| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | Running — movie automation → `/media/library/movies` (ADR-022). In the media group. |
+| jellyseerr | 125 | VM (Ubuntu 24.04) | YOUR_JELLYSEERR_IP | Running — request UI (Docker container, ADR-014 exception #2); auths via Jellyfin, feeds Sonarr/Radarr (ADR-022). |
 
 ### oneill (Intel NUC, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
