@@ -1,0 +1,301 @@
+---
+# Provision qBittorrent (CT 121) on apophis — Phase 6b, ADR-021.
+# Unprivileged Debian LXC whose ENTIRE egress is forced through a ProtonVPN WireGuard
+# tunnel with an nftables KILLSWITCH (default-drop output; only lo / established / wg0 /
+# the WG handshake to the Proton endpoint are allowed — no LAN or clearnet DNS, so a
+# tunnel drop = zero leak). qBittorrent also binds torrents to wg0 (second layer).
+# NAT-PMP keeps a forwarded port alive. LAN reaches only the Web-UI + SSH.
+#
+# PREREQUISITES (operator, in the gitignored inventory/group_vars/all.yml):
+#   - qbittorrent_ip          : a real IP, reserved in UniFi (not the YOUR_ placeholder)
+#   - qbittorrent_wg_config   : the ProtonVPN WireGuard config (P2P server, NAT-PMP ON)
+#
+# Run from the mgmt-vm:  cd homelab/ansible && ansible-playbook playbooks/provision-qbittorrent.yml --limit apophis
+# AFTER the run: complete the leak-test in docs/operations/runbooks.md before trusting it,
+# and set the qBittorrent Web-UI password (first-run temp password is in the CT journal).
+
+- name: Provision qBittorrent LXC behind a WireGuard killswitch
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    # --- Preflight: refuse to run with placeholder / empty secrets ---
+    - name: Assert the operator has supplied the IP + WG config
+      ansible.builtin.assert:
+        that:
+          - "'YOUR_' not in qbittorrent_ip"
+          - (qbittorrent_wg_config | trim | length) > 0
+        fail_msg: >-
+          Set qbittorrent_ip (reserved in UniFi) and qbittorrent_wg_config (ProtonVPN WireGuard,
+          P2P server with NAT-PMP) in the gitignored inventory/group_vars/all.yml first.
+
+    - name: Parse the WireGuard endpoint (must be IP:port — Proton configs are)
+      ansible.builtin.set_fact:
+        wg_endpoint_ip: "{{ qbittorrent_wg_config | regex_search('Endpoint\\s*=\\s*([0-9.]+):[0-9]+', '\\1') | first }}"
+        wg_endpoint_port: "{{ qbittorrent_wg_config | regex_search('Endpoint\\s*=\\s*[0-9.]+:([0-9]+)', '\\1') | first }}"
+        ct_lan_ip: "{{ qbittorrent_ip | regex_replace('/.*$', '') }}"
+
+    - name: Assert the endpoint parsed
+      ansible.builtin.assert:
+        that:
+          - (wg_endpoint_ip | length) > 0
+          - (wg_endpoint_port | length) > 0
+        fail_msg: "Could not parse 'Endpoint = IP:port' from qbittorrent_wg_config."
+
+    # --- Host: WireGuard + tun modules (needed for the tunnel inside the CT) ---
+    - name: Ensure wireguard + tun kernel modules are loaded on apophis
+      ansible.builtin.command: "modprobe {{ item }}"
+      loop: [wireguard, tun]
+      changed_when: false
+
+    - name: Persist the modules across reboots
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/qbittorrent-wg.conf
+        content: "wireguard\ntun\n"
+        mode: "0644"
+
+    # --- The LXC (create stopped: tun passthrough + mounts before first boot) ---
+    - name: Check whether CT {{ qbittorrent_ctid }} already exists
+      ansible.builtin.command: "pct status {{ qbittorrent_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged qBittorrent LXC (not started yet)
+      ansible.builtin.command: >
+        pct create {{ qbittorrent_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ qbittorrent_hostname }}
+        --cores {{ qbittorrent_cores }}
+        --memory {{ qbittorrent_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ qbittorrent_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ qbittorrent_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+        --startup order=6,up=10
+      register: ct_create
+      when: ct_status.rc != 0
+      changed_when: ct_create.rc == 0
+
+    - name: Pass /dev/net/tun into the CT (WireGuard) — idempotent raw lines
+      ansible.builtin.lineinfile:
+        path: "/etc/pve/lxc/{{ qbittorrent_ctid }}.conf"
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "lxc.cgroup2.devices.allow: c 10:200 rwm"
+        - "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
+      register: conf_block
+
+    - name: Bind-mount the shared downloads dir into the CT
+      ansible.builtin.command: >
+        pct set {{ qbittorrent_ctid }}
+        -mp0 {{ media_host_root }}/downloads,mp=/media/downloads
+      register: mp_set
+      changed_when: mp_set.rc == 0
+
+    - name: Restart CT to apply tun/mounts (only when changed on an existing CT)
+      ansible.builtin.command: "pct reboot {{ qbittorrent_ctid }}"
+      when:
+        - ct_status.rc == 0
+        - conf_block.changed
+      changed_when: true
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ qbittorrent_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ qbittorrent_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    # --- Packages (install BEFORE the killswitch is active — uses normal LAN egress) ---
+    - name: Install WireGuard + nftables + qBittorrent + NAT-PMP client + openresolv
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq wireguard-tools nftables qbittorrent-nox natpmpc openresolv curl >/dev/null
+        '
+      changed_when: true
+
+    # --- WireGuard config (the secret) ---
+    - name: Install the WireGuard config (wg0)
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          mkdir -p /etc/wireguard
+          umask 077
+          cat > /etc/wireguard/wg0.conf <<"WGEOF"
+        {{ qbittorrent_wg_config }}
+        WGEOF
+          chmod 600 /etc/wireguard/wg0.conf
+        '
+      no_log: true
+      changed_when: true
+
+    # --- nftables killswitch (default-drop egress; only handshake + wg0 leave) ---
+    - name: Install the nftables killswitch ruleset
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c 'cat > /etc/nftables.conf' <<'NFTEOF'
+        #!/usr/sbin/nft -f
+        flush ruleset
+
+        table inet killswitch {
+          chain input {
+            type filter hook input priority 0; policy drop;
+            iif "lo" accept
+            ct state established,related accept
+            ct state invalid drop
+            iifname "eth0" ip saddr {{ lan_cidr }} tcp dport { 22, {{ qbittorrent_webui_port }} } accept
+            iifname "wg0" accept
+          }
+          chain forward {
+            type filter hook forward priority 0; policy drop;
+          }
+          chain output {
+            type filter hook output priority 0; policy drop;
+            oif "lo" accept
+            ct state established,related accept
+            oifname "wg0" accept
+            oifname "eth0" ip daddr {{ wg_endpoint_ip }} udp dport {{ wg_endpoint_port }} accept
+          }
+        }
+        NFTEOF
+      changed_when: true
+
+    - name: Enable nftables (killswitch) + WireGuard, ordered so the killswitch comes first
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          systemctl enable nftables >/dev/null 2>&1
+          systemctl restart nftables
+          systemctl enable wg-quick@wg0 >/dev/null 2>&1
+          systemctl restart wg-quick@wg0
+        '
+      changed_when: true
+
+    # --- qBittorrent: bind torrents to wg0, Web-UI to the LAN IP (runs as root in the
+    #     unprivileged CT so it can write the shared /media/downloads owned by host 100000) ---
+    - name: Pre-seed qBittorrent.conf (interface bind + Web-UI address)
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          mkdir -p /root/.config/qBittorrent
+          CONF=/root/.config/qBittorrent/qBittorrent.conf
+          if [ ! -f "$CONF" ]; then
+            cat > "$CONF" <<'QBEOF'
+        [BitTorrent]
+        Session\InterfaceName=wg0
+        Session\DefaultSavePath=/media/downloads
+
+        [Preferences]
+        WebUI\Address={{ ct_lan_ip }}
+        WebUI\Port={{ qbittorrent_webui_port }}
+        QBEOF
+          fi
+        '
+      register: qb_conf
+      changed_when: "'no_change' not in qb_conf.stdout"
+
+    - name: Install the qBittorrent systemd unit
+      ansible.builtin.shell: >
+        echo '{{ qb_unit | b64encode }}' | base64 -d |
+        pct exec {{ qbittorrent_ctid }} -- bash -c 'cat > /etc/systemd/system/qbittorrent.service'
+      vars:
+        qb_unit: |
+          [Unit]
+          Description=qBittorrent-nox (torrents bound to wg0)
+          After=network-online.target wg-quick@wg0.service nftables.service
+          Wants=network-online.target
+          Requires=wg-quick@wg0.service
+          [Service]
+          Environment=HOME=/root
+          ExecStart=/usr/bin/qbittorrent-nox --webui-port={{ qbittorrent_webui_port }}
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    - name: Enable + start qBittorrent
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          systemctl daemon-reload
+          systemctl enable --now qbittorrent >/dev/null 2>&1
+          systemctl restart qbittorrent
+        '
+      changed_when: true
+
+    # --- NAT-PMP: keep a forwarded port alive (Proton gateway 10.2.0.1), renew < 60s lease ---  # scan-allow
+    - name: Install the NAT-PMP renewal script + timer
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          cat > /usr/local/bin/natpmp-renew.sh <<"PMEOF"
+        #!/usr/bin/env bash
+        # Renew the ProtonVPN NAT-PMP TCP+UDP port mappings; log the forwarded public port.
+        set -u
+        GW=10.2.0.1  # ProtonVPN NAT-PMP gateway (universal constant)  # scan-allow
+        natpmpc -a 1 0 udp 60 -g "$GW" >/dev/null 2>&1 || true
+        out=$(natpmpc -a 1 0 tcp 60 -g "$GW" 2>/dev/null) || exit 0
+        port=$(printf "%s" "$out" | sed -n "s/.*Mapped public port \([0-9]*\).*/\1/p" | tail -1)
+        [ -n "$port" ] && echo "natpmp forwarded port: $port" || true
+        PMEOF
+          chmod +x /usr/local/bin/natpmp-renew.sh
+          cat > /etc/systemd/system/natpmp-renew.service <<"SVCEOF"
+        [Unit]
+        Description=ProtonVPN NAT-PMP port renewal
+        After=wg-quick@wg0.service
+        Requires=wg-quick@wg0.service
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/natpmp-renew.sh
+        SVCEOF
+          cat > /etc/systemd/system/natpmp-renew.timer <<"TMREOF"
+        [Unit]
+        Description=Renew ProtonVPN NAT-PMP every 45s
+        [Timer]
+        OnBootSec=30
+        OnUnitActiveSec=45
+        AccuracySec=5
+        [Install]
+        WantedBy=timers.target
+        TMREOF
+          systemctl daemon-reload
+          systemctl enable --now natpmp-renew.timer >/dev/null 2>&1
+        '
+      changed_when: true
+
+    # --- Verification (safe without traffic; full leak-test is operator-run, see runbook) ---
+    - name: Check WireGuard handshake + killswitch + qBittorrent socket
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          echo "--- wg ---"; wg show wg0 2>&1 | grep -E "interface|endpoint|latest handshake|transfer" || echo "wg0 not up"
+          echo "--- nft (output policy must be drop) ---"; nft list chain inet killswitch output 2>&1 | grep -E "policy|wg0|udp dport"
+          echo "--- qbittorrent socket ---"; ss -tlnp 2>/dev/null | grep ":{{ qbittorrent_webui_port }}" || echo "webui not listening yet"
+        '
+      register: verify
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "qBittorrent CT {{ qbittorrent_ctid }} provisioned; Web-UI on {{ ct_lan_ip }}:{{ qbittorrent_webui_port }} (LAN/Tailscale only)."
+          - "{{ verify.stdout_lines }}"
+          - "MUST DO before trusting: (1) run the killswitch LEAK-TEST (runbooks: qBittorrent) —"
+          - "  tunnel-up egress IP = Proton; `ip link set wg0 down` -> curl/dig time out; dnsleak = Proton."
+          - "(2) set the Web-UI password — first-run temp password: pct exec {{ qbittorrent_ctid }} -- journalctl -u qbittorrent | grep -i password"
+          - "(3) set qBittorrent's listen port to the NAT-PMP forwarded port (journalctl -u natpmp-renew)."
+          - "Onboarding TODO (ADR-017): glance_services tile + GuestDown id-map for lxc/{{ qbittorrent_ctid }}; not backed up by design."
