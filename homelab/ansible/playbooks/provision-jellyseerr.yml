@@ -126,6 +126,17 @@
                 - "{{ jellyseerr_port }}:5055"
               security_opt:
                 - no-new-privileges:true
+            flaresolverr:
+              image: {{ flaresolverr_image }}
+              container_name: flaresolverr
+              restart: unless-stopped
+              environment:
+                - LOG_LEVEL=info
+                - TZ={{ patching_timezone | default('Etc/UTC') }}
+              ports:
+                - "{{ flaresolverr_port | default(8191) }}:8191"
+              security_opt:
+                - no-new-privileges:true
       register: js_compose
 
     - name: Deploy / update the container
@@ -134,15 +145,17 @@
         chdir: /opt/jellyseerr
       changed_when: true
 
-    - name: Verify Jellyseerr is serving
+    - name: Verify Jellyseerr + FlareSolverr are serving
       ansible.builtin.shell: |
-        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ jellyseerr_port }}/api/v1/status && break || sleep 3; done
+        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ jellyseerr_port }}/api/v1/status && break || sleep 3; done; echo
+        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "fs:%{http_code}" http://127.0.0.1:{{ flaresolverr_port | default(8191) }}/ && break || sleep 3; done
       register: js_http
       changed_when: false
 
     - name: Report
       ansible.builtin.debug:
         msg:
-          - "Jellyseerr up at http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ jellyseerr_port }} (status {{ js_http.stdout }})."
-          - "NEXT: open the web UI -> sign in with Jellyfin -> add Sonarr + Radarr (API keys + root folders /media/library/{tv,movies})."
-          - "Onboarding TODO (ADR-017): glance tile + GuestDown qemu/{{ jellyseerr_vmid }}; small config (could PBS-image later)."
+          - "Jellyseerr + FlareSolverr on VM {{ jellyseerr_vmid }} ({{ hostvars['jellyseerr-vm'].ansible_host }}) — {{ js_http.stdout }}."
+          - "Jellyseerr UI: http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ jellyseerr_port }} -> sign in with Jellyfin -> add Sonarr + Radarr."
+          - "Prowlarr: Settings -> Indexers -> Indexer Proxies -> Add FlareSolverr, host http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ flaresolverr_port | default(8191) }}, tag it, tag the Cloudflare indexers with that tag."
+          - "Onboarding (ADR-017): glance tile + GuestDown qemu/{{ jellyseerr_vmid }}; small config (could PBS-image later)."
