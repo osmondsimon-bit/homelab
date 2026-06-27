@@ -236,3 +236,40 @@ lan_cidr: YOUR_LAN_CIDR                                     # your LAN /24 — h
 #     AllowedIPs = 0.0.0.0/0
 #     Endpoint = 1.2.3.4:51820
 qbittorrent_wg_config: ""
+
+# --- Media automation (Phase 7, ADR-022) — apophis; LAN/Tailscale only ----------
+# Reserve 4 IPs in UniFi (CT 122/123/124 + VM 125) before provisioning.
+prowlarr_ctid: 122
+prowlarr_hostname: prowlarr
+prowlarr_ram_mb: 512
+prowlarr_cores: 1
+prowlarr_disk_gb: 6
+prowlarr_ip: YOUR_PROWLARR_IP/24
+prowlarr_port: 9696
+
+sonarr_ctid: 123
+sonarr_hostname: sonarr
+sonarr_ram_mb: 1024
+sonarr_cores: 1
+sonarr_disk_gb: 8
+sonarr_ip: YOUR_SONARR_IP/24
+sonarr_port: 8989
+
+radarr_ctid: 124
+radarr_hostname: radarr
+radarr_ram_mb: 1024
+radarr_cores: 1
+radarr_disk_gb: 8
+radarr_ip: YOUR_RADARR_IP/24
+radarr_port: 7878
+
+# Jellyseerr = Docker VM (VMID 125, Ubuntu 24.04 — like Vaultwarden)
+jellyseerr_vmid: 125
+jellyseerr_hostname: jellyseerr
+jellyseerr_ram_mb: 1024
+jellyseerr_cores: 2
+jellyseerr_disk_gb: 8
+jellyseerr_ip: YOUR_JELLYSEERR_IP/24
+jellyseerr_cpu: Skylake-Client-noTSX-IBRS
+jellyseerr_port: 5055
+jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — verify/bump to a current release tag
