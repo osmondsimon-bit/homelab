@@ -4,6 +4,40 @@ Common operational procedures for Simon's homelab. Keep entries short — what t
 
 ---
 
+## Disaster recovery — scenario index (start here in an outage)
+
+**Pick what's broken, read the recovery model, jump to the steps.** This is a front
+door only — the detailed commands live in the sections it links to, never duplicated
+here. Logical facts (VMIDs, which node owns what) are owned by [PLAN.md](../../PLAN.md);
+real addresses/secrets are **not** in this repo (ADR-006) — they live in the gitignored
+Ansible config and your password manager. The credentials these procedures reference
+(PBS encryption key, Technitium admin password, HA backup key, 2FA recovery codes) are
+Tier-1/2 anchors in Keychain/Google Password Manager — **not** in Vaultwarden, so
+recovery stays non-circular.
+
+**Drill status legend:** ✅ proven by a real restore drill · ⚠️ procedure written but
+**never drilled** (a hypothesis until run) · ❌ known gap, no recovery path yet.
+
+| What's down | Recovery model (one line) | Drill | Jump to |
+|---|---|---|---|
+| **apophis** (primary node) dies | carter survives read-only → `pvecm expected 1`, manual-failover VM 200 (+ 118) from the latest replica → rebuild apophis on ZFS → rejoin → failback | ✅ failover 2026-06-25 · ✅ rebuild executed 2026-06-25 | [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) · [Rebuild apophis on ZFS](#phase-4b-rebuild-apophis-on-zfs-one-time--infra-designer-reviewed-2026-06-22) |
+| **carter** (failover target) dies | production continues on apophis (VM 200 has no failover target until carter returns) → rebuild + rejoin → recreate replication jobs 200-0 + 118-0 → reprovision CT 117 | ⚠️ runbook written; live drill deferred (apophis 4b is the symmetric proof) | [Rebuild carter — DR runbook](#rebuild-carter-the-failover-target--dr-runbook) |
+| **oneill** (standalone services hub) dies | DNS/monitoring/backup outage only — CT 117 covers DNS; production unaffected if apophis is up → fresh PVE+ZFS → no-sub repo → re-run the oneill playbooks | ⚠️ not drilled | [Recovery model → "oneill dies"](#recovery-model--what-recovers-what-avoid-doubling-up) |
+| **mgmt-vm** (VM 100) dies | not recreatable from code → `qmrestore` its PBS image to a new VMID | ✅ 2026-06-17 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
+| **Home Assistant** (VM 200) dies | restore the native partial backup onto a fresh HAOS, **or** fail over to carter's replica | ✅ HA restore 2026-06-18 · ✅ failover 2026-06-25 | [HA native partial backup](#home-assistant--native-partial-backup-primary-for-ha) · [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) |
+| **Vaultwarden** (VM 118) dies | playbook rebuilds VM+container; vault **data** comes from the PBS image (or carter replica) → `qmrestore` | ✅ 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
+| **Technitium DNS** (CT 111 oneill / CT 117 carter) | reproducible from code → re-run `provision-technitium.yml --limit <node>`; the other resolver covers DNS during the rebuild. **Needs the admin/API password at the prompt** | ⚠️ not drilled (reprovision drill pending) | [Recover CT 111](#recover-ct-111-lost--corrupted-or-oneill-rebuilt) |
+| **Tailscale** (CT 110) / **Glance** (CT 115) / **Monitoring** (CT 114) / **infra-portal** (CT 116) / **HA share** (CT 113) / **PBS** down | all reproducible from code → re-run the matching `provision-*.yml` / `install-node-exporter.yml` | ⚠️ not drilled | [Recovery model](#recovery-model--what-recovers-what-avoid-doubling-up) |
+| **PBS datastore / oneill SSD lost** (backup data, not production) | single local copy today → loses restore history, not production. **Off-site copy is the real fix and is still deferred** | ❌ off-site GAP (ADR-012) | [Recovery model → "Backing up the hub"](#recovery-model--what-recovers-what-avoid-doubling-up) |
+| **Both nodes / site disaster** | infra rebuilds from git (Ansible + private repo); VM **data** is lost until the off-site copy exists | ❌ off-site GAP | [Recovery model → "Both / site disaster"](#recovery-model--what-recovers-what-avoid-doubling-up) |
+
+> **Two soft spots to know before you need them:** (1) backup **data** on oneill is a
+> single copy — the off-site leg (ADR-012) is unresolved, so a site disaster loses VM
+> data; (2) the CT 111/117 reprovision and oneill-rebuild paths are **documented but
+> not yet drilled** — treat their RTO as an estimate, not a fact, until run.
+
+---
+
 ## Proxmox host (apophis)
 
 ### Check host health
