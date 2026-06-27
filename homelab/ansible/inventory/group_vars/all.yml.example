@@ -210,3 +210,25 @@ jellyfin_port: 8096
 jellyfin_render_gid: 993                                   # host 'render' group GID (verify: getent group render)
 jellyfin_card_devno: "226:0"                               # /dev/dri/card0 (video)      — verify: ls -l /dev/dri
 jellyfin_render_devno: "226:128"                           # /dev/dri/renderD128 (render)
+
+# qBittorrent (CT 121, apophis — ADR-021, Phase 6b): native WireGuard egress + nftables killswitch
+qbittorrent_ctid: 121
+qbittorrent_hostname: qbittorrent
+qbittorrent_ram_mb: 2048
+qbittorrent_cores: 2
+qbittorrent_disk_gb: 8
+qbittorrent_ip: YOUR_QBITTORRENT_IP/24                     # reserve in UniFi before running provision-qbittorrent.yml
+qbittorrent_webui_port: 8080
+lan_cidr: YOUR_LAN_CIDR                                     # your LAN /24 — hosts allowed to reach Web-UI / SSH
+# Paste the ProtonVPN WireGuard config (P2P server, NAT-PMP ON) as a block scalar in the REAL all.yml.
+# SECRET — never commit. Endpoint must be IP:port (Proton configs are). Example shape:
+#   qbittorrent_wg_config: |
+#     [Interface]
+#     PrivateKey = <client-private-key>
+#     Address = 10.0.0.2/32  (ProtonVPN tunnel addr, not a homelab address)  # scan-allow
+#     DNS = 10.0.0.1  (ProtonVPN tunnel DNS)  # scan-allow
+#     [Peer]
+#     PublicKey = <server-public-key>
+#     AllowedIPs = 0.0.0.0/0
+#     Endpoint = 1.2.3.4:51820
+qbittorrent_wg_config: ""
