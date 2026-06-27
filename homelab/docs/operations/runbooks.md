@@ -699,6 +699,46 @@ Storage Pools cover it automatically; if it's a new backup datastore, extend
 
 ---
 
+## qBittorrent + WireGuard killswitch (CT 121) — ADR-021, Phase 6b
+
+Provisioned by `provision-qbittorrent.yml`. All egress is forced through a ProtonVPN
+WireGuard tunnel; an nftables killswitch (default-drop output — only `lo`, established,
+`wg0`, and the WG handshake to the Proton endpoint are allowed) means a tunnel drop = **zero
+leak**. qBittorrent also binds torrents to `wg0`. LAN reaches only the Web-UI + SSH.
+
+### Leak-test — MUST pass before trusting it (run after provisioning)
+```bash
+CT=121
+# 1) Tunnel up + egress is a Proton IP (NOT your home WAN IP):
+pct exec $CT -- wg show wg0 | grep -E 'latest handshake|transfer'   # a recent handshake
+pct exec $CT -- curl -s --max-time 8 https://api.ipify.org; echo    # must be a ProtonVPN exit IP
+# 2) Killswitch holds when the tunnel drops — bring wg0 down and confirm egress STOPS:
+pct exec $CT -- ip link set wg0 down
+pct exec $CT -- bash -c 'curl -s --max-time 5 https://api.ipify.org; echo "exit:$?"'  # must TIME OUT (non-zero)
+pct exec $CT -- bash -c 'dig +time=3 +tries=1 example.com >/dev/null; echo "dns:$?"'  # must FAIL (no DNS leak)
+# 3) Restore:
+pct exec $CT -- systemctl restart wg-quick@wg0
+pct exec $CT -- wg show wg0 | grep handshake
+```
+If step 2 returns an IP or resolves DNS, **stop** — the killswitch is leaking; do not torrent
+until fixed (check the nftables `output` policy is `drop` and the only accepts are lo/established/
+wg0/handshake).
+
+### First-run + port forwarding
+- **Web-UI password (set immediately):** the first-run temp password is logged —
+  `pct exec 121 -- journalctl -u qbittorrent | grep -i 'temporary password'`. Log in at
+  `http://<qbittorrent_ip>:{{ webui_port }}` (LAN/Tailscale), set a real password.
+- **NAT-PMP forwarded port:** `pct exec 121 -- journalctl -u natpmp-renew | tail` shows the
+  forwarded public port; set qBittorrent's listen port to match (Options → Connection).
+- **Save path:** completed downloads land in `/media/downloads` (shared with Jellyfin); move/
+  hardlink into `/media/library/{movies,tv}` for Jellyfin to index.
+
+### Recovery
+Reproducible from code → re-run `provision-qbittorrent.yml` (needs `qbittorrent_wg_config` +
+`qbittorrent_ip` in the gitignored `all.yml`). Not imaged; downloads on the USB SSD persist.
+
+---
+
 ## Git / repo
 
 ### Push latest changes
