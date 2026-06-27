@@ -1,0 +1,208 @@
+---
+# Provision Jellyfin (CT 120) on apophis — Phase 6a, ADR-021.
+# Unprivileged Debian LXC with the Intel iGPU (/dev/dri) passed through for QuickSync
+# hardware transcode, and the media bind-mounted from the 500 GB USB-C SSD
+# (/mnt/usb-media, ext4, by-id, nofail). LAN + Tailscale only — no inbound (ADR-003).
+#
+# Run from the mgmt-vm, inside homelab/ansible/, targeting apophis:
+#   ansible-playbook playbooks/provision-jellyfin.yml --limit apophis
+#
+# As-built iGPU facts (apophis, 2026-06-27): UHD 630, render GID 993, renderD128 = 226:128.
+# Media is NOT backed up (replaceable). Jellyfin config lives on the CT rootfs (internal SSD).
+# After first run: complete the setup wizard over LAN/Tailscale to create the admin account,
+# then run the QuickSync smoke-test in docs/operations/runbooks.md.
+
+- name: Provision Jellyfin media-server LXC (iGPU QuickSync)
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    # --- The LXC (create stopped: idmap + devices + mounts must be set before first boot) ---
+    - name: Check whether CT {{ jellyfin_ctid }} already exists
+      ansible.builtin.command: "pct status {{ jellyfin_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Jellyfin LXC (not started yet)
+      ansible.builtin.command: >
+        pct create {{ jellyfin_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ jellyfin_hostname }}
+        --cores {{ jellyfin_cores }}
+        --memory {{ jellyfin_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ jellyfin_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ jellyfin_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+        --startup order=5,up=10
+      register: ct_create
+      when: ct_status.rc != 0
+      changed_when: ct_create.rc == 0
+
+    # --- Host-side prep for the unprivileged CT to reach the iGPU + media ---
+    - name: Allow root to map the host render GID into the CT (/etc/subgid)
+      ansible.builtin.lineinfile:
+        path: /etc/subgid
+        line: "root:{{ jellyfin_render_gid }}:1"
+        state: present
+
+    - name: Own the media dirs as the CT-root host mapping (shared with CT 121 later)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ media_owner_uid }}"
+        group: "{{ media_owner_gid }}"
+        mode: "0775"
+      loop:
+        - "{{ media_host_root }}/library"
+        - "{{ media_host_root }}/downloads"
+
+    # pct strips unrecognized comment lines from the CT conf, so blockinfile markers don't
+    # survive — use idempotent raw lineinfile entries (pct preserves valid lxc.* lines).
+    - name: Add iGPU passthrough + GID idmap to the CT config (idempotent raw lines)
+      ansible.builtin.lineinfile:
+        path: "/etc/pve/lxc/{{ jellyfin_ctid }}.conf"
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "lxc.cgroup2.devices.allow: c {{ jellyfin_card_devno }} rwm"
+        - "lxc.cgroup2.devices.allow: c {{ jellyfin_render_devno }} rwm"
+        - "lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir"
+        - "lxc.idmap: u 0 100000 65536"
+        - "lxc.idmap: g 0 100000 {{ jellyfin_render_gid }}"
+        - "lxc.idmap: g {{ jellyfin_render_gid }} {{ jellyfin_render_gid }} 1"
+        - "lxc.idmap: g {{ (jellyfin_render_gid | int) + 1 }} {{ 100000 + (jellyfin_render_gid | int) + 1 }} {{ 65536 - (jellyfin_render_gid | int) - 1 }}"
+      register: conf_block
+
+    - name: Ensure systemd nesting is enabled on the CT (features nesting=1)
+      ansible.builtin.shell: |
+        CONF=/etc/pve/lxc/{{ jellyfin_ctid }}.conf
+        if ! grep -q 'features:.*nesting=1' "$CONF"; then
+          pct set {{ jellyfin_ctid }} --features nesting=1
+          echo CHANGED
+        fi
+      register: feat_set
+      changed_when: "'CHANGED' in feat_set.stdout"
+
+    - name: Bind-mount the media into the CT (library + downloads)
+      ansible.builtin.command: >
+        pct set {{ jellyfin_ctid }}
+        -mp0 {{ media_host_root }}/library,mp=/media/library
+        -mp1 {{ media_host_root }}/downloads,mp=/media/downloads
+      register: mp_set
+      changed_when: mp_set.rc == 0
+
+    # --- Apply config: (re)start the CT if it was just built or its passthrough changed ---
+    - name: Restart CT to apply idmap/devices/mounts (only when changed)
+      ansible.builtin.command: "pct reboot {{ jellyfin_ctid }}"
+      when:
+        - ct_status.rc == 0
+        - conf_block.changed or feat_set.changed
+      changed_when: true
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ jellyfin_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ jellyfin_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    - name: Confirm the render device is visible inside the CT (passthrough sanity)
+      ansible.builtin.command: "pct exec {{ jellyfin_ctid }} -- test -c /dev/dri/renderD128"
+      changed_when: false
+
+    # --- Jellyfin (official repo, deb822; metapackage pulls server + web + jellyfin-ffmpeg) ---
+    - name: Install prerequisites + the Jellyfin apt repo inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq curl gnupg ca-certificates >/dev/null
+          mkdir -p /etc/apt/keyrings
+          if [ ! -f /etc/apt/keyrings/jellyfin.gpg ]; then
+            curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg
+          fi
+          cat > /etc/apt/sources.list.d/jellyfin.sources <<EOF
+        Types: deb
+        URIs: https://repo.jellyfin.org/debian
+        Suites: bookworm
+        Components: main
+        Architectures: amd64
+        Signed-By: /etc/apt/keyrings/jellyfin.gpg
+        EOF
+        '
+      changed_when: true
+
+    - name: Read installed Jellyfin version (if any)
+      ansible.builtin.command: "pct exec {{ jellyfin_ctid }} -- dpkg-query -W -f=${Version} jellyfin-server"
+      register: jf_have
+      changed_when: false
+      failed_when: false
+
+    - name: Install Jellyfin
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq jellyfin >/dev/null
+        '
+      when: jf_have.rc != 0 or (jf_have.stdout | trim) == ""
+      changed_when: true
+
+    - name: Put the jellyfin user in the host-render GID group (maps to the iGPU device)
+      # Debian already has a 'render' group at a different GID, so create the host-render
+      # GID under a non-conflicting name and add jellyfin by resolved group name.
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          getent group {{ jellyfin_render_gid }} >/dev/null || groupadd -g {{ jellyfin_render_gid }} hostrender
+          GRP=$(getent group {{ jellyfin_render_gid }} | cut -d: -f1)
+          if id -nG jellyfin | tr " " "\n" | grep -qx "$GRP"; then echo nochange; else usermod -aG "$GRP" jellyfin; echo added; fi
+        '
+      register: jf_group
+      changed_when: "'added' in jf_group.stdout"
+
+    - name: Enable + (re)start Jellyfin
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          systemctl enable --now jellyfin >/dev/null 2>&1
+          systemctl restart jellyfin
+        '
+      changed_when: true
+
+    - name: Confirm Jellyfin is serving
+      ansible.builtin.command: >
+        pct exec {{ jellyfin_ctid }} -- bash -c
+        'curl -fsS -o /dev/null -w "%{http_code}" http://localhost:{{ jellyfin_port }}/System/Info/Public'
+      register: jf_http
+      retries: 10
+      delay: 3
+      until: jf_http.stdout == "200"
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Jellyfin CT {{ jellyfin_ctid }} up at {{ jellyfin_ip | regex_replace('/.*$', '') }}:{{ jellyfin_port }} (HTTP {{ jf_http.stdout }})."
+          - "iGPU: render device present in-CT; jellyfin user in render group (GID {{ jellyfin_render_gid }})."
+          - "NEXT: open http://{{ jellyfin_ip | regex_replace('/.*$', '') }}:{{ jellyfin_port }} over LAN/Tailscale -> setup wizard -> create admin."
+          - "Then enable HW transcode (VAAPI/QSV, /dev/dri/renderD128) + run the QuickSync smoke-test (h264_qsv, intel_gpu_top)."
+          - "Onboarding TODO (ADR-017): add lxc/{{ jellyfin_ctid }} to glance_services + GuestDown id-map comment; media is NOT backed up by design."

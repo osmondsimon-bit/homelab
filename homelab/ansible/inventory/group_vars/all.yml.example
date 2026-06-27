@@ -191,3 +191,20 @@ d2_version: v0.6.9                                         # PINNED — bump del
 
 # --- Patching (ADR-015) — set to YOUR local tz so guest security upgrades fire at LOCAL noon ---
 patching_timezone: "Etc/UTC"                                # set your IANA Region/City tz; blank/UTC = 12:00 UTC
+
+# --- Media stack (Phase 6, ADR-021) — apophis; USB-C SSD at /mnt/usb-media ---
+media_host_root: /mnt/usb-media                            # ext4 USB SSD on apophis (by-id, nofail); NOT backed up
+media_owner_uid: 100000                                    # unprivileged-CT root host mapping (shared by CT 120/121)
+media_owner_gid: 100000
+
+# Jellyfin (CT 120, apophis — ADR-021): unprivileged LXC, iGPU /dev/dri passthrough (QuickSync)
+jellyfin_ctid: 120
+jellyfin_hostname: jellyfin
+jellyfin_ram_mb: 2048
+jellyfin_cores: 2
+jellyfin_disk_gb: 8
+jellyfin_ip: YOUR_JELLYFIN_IP/24                            # reserve in UniFi before running provision-jellyfin.yml
+jellyfin_port: 8096
+jellyfin_render_gid: 993                                   # host 'render' group GID (verify: getent group render)
+jellyfin_card_devno: "226:0"                               # /dev/dri/card0 (video)      — verify: ls -l /dev/dri
+jellyfin_render_devno: "226:128"                           # /dev/dri/renderD128 (render)
