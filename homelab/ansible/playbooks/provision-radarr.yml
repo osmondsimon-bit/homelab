@@ -1,0 +1,160 @@
+---
+# Provision Radarr (CT 124) on apophis — Phase 7, ADR-022.
+# Movie automation: grabs via Prowlarr's indexers -> qBittorrent -> imports (hardlinked) into
+# /media/library/movies. Native Servarr install (no Docker). Unprivileged LXC, LAN/Tailscale only.
+# Mounts the whole media root (/mnt/usb-media -> /media) so downloads + library are one fs
+# (hardlinks). Radarr joins the media group (umask 002).
+#
+# Run: cd homelab/ansible && ansible-playbook playbooks/provision-radarr.yml --limit apophis
+# Needs radarr_ip set (reserved in UniFi) in the gitignored all.yml.
+
+- name: Provision Radarr movie-automation LXC
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    - name: Assert the IP is set (not a placeholder)
+      ansible.builtin.assert:
+        that: "'YOUR_' not in radarr_ip"
+        fail_msg: "Set radarr_ip (reserved in UniFi) in the gitignored all.yml first."
+
+    - name: Check whether CT {{ radarr_ctid }} already exists
+      ansible.builtin.command: "pct status {{ radarr_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Radarr LXC (not started yet)
+      ansible.builtin.command: >
+        pct create {{ radarr_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ radarr_hostname }}
+        --cores {{ radarr_cores }}
+        --memory {{ radarr_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ radarr_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ radarr_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+        --startup order=7,up=10
+      register: ct_create
+      when: ct_status.rc != 0
+      changed_when: ct_create.rc == 0
+
+    - name: Bind-mount the whole media root (so downloads + library are one fs for hardlinks)
+      ansible.builtin.command: >
+        pct set {{ radarr_ctid }} -mp0 {{ media_host_root }},mp=/media
+      register: mp_set
+      changed_when: mp_set.rc == 0
+
+    - name: Restart CT to apply the mount (only when it already existed)
+      ansible.builtin.command: "pct reboot {{ radarr_ctid }}"
+      when:
+        - ct_status.rc == 0
+        - mp_set.changed
+      changed_when: true
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ radarr_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ radarr_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    - name: Install runtime deps (libicu + sqlite3 + curl)
+      ansible.builtin.shell: |
+        pct exec {{ radarr_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq curl ca-certificates sqlite3 libicu72 >/dev/null
+        '
+      changed_when: true
+
+    - name: Check whether Radarr is already installed
+      ansible.builtin.command: "pct exec {{ radarr_ctid }} -- test -x /opt/Radarr/Radarr"
+      register: radarr_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Download + install Radarr (Servarr self-contained build) + service user
+      ansible.builtin.shell: |
+        pct exec {{ radarr_ctid }} -- bash -c '
+          set -e
+          cd /tmp
+          curl -fsSL "https://radarr.servarr.com/v1/update/master/updatefile?os=linux&runtime=netcore&arch=x64" -o radarr.tar.gz
+          tar -xzf radarr.tar.gz -C /opt
+          rm -f radarr.tar.gz
+          id radarr >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin radarr
+          mkdir -p /var/lib/radarr
+          chown -R radarr:radarr /var/lib/radarr /opt/Radarr
+        '
+      when: radarr_installed.rc != 0
+      changed_when: true
+
+    - name: Put the radarr user in the media group + umask (shared-media write/hardlink)
+      ansible.builtin.shell: |
+        pct exec {{ radarr_ctid }} -- bash -c '
+          getent group {{ media_group_gid_ct }} >/dev/null || groupadd -g {{ media_group_gid_ct }} media
+          G=$(getent group {{ media_group_gid_ct }} | cut -d: -f1)
+          id -nG radarr | tr " " "\n" | grep -qx "$G" || usermod -aG "$G" radarr
+        '
+      changed_when: true
+
+    - name: Install the Radarr systemd unit
+      ansible.builtin.shell: >
+        echo '{{ radarr_unit | b64encode }}' | base64 -d |
+        pct exec {{ radarr_ctid }} -- bash -c 'cat > /etc/systemd/system/radarr.service'
+      vars:
+        radarr_unit: |
+          [Unit]
+          Description=Radarr
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          User=radarr
+          Group=radarr
+          UMask=0002
+          ExecStart=/opt/Radarr/Radarr -nobrowser -data=/var/lib/radarr
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    - name: Enable + (re)start Radarr
+      ansible.builtin.shell: |
+        pct exec {{ radarr_ctid }} -- bash -c '
+          systemctl daemon-reload
+          systemctl enable --now radarr >/dev/null 2>&1
+          systemctl restart radarr
+        '
+      changed_when: true
+
+    - name: Confirm Radarr is serving
+      ansible.builtin.command: >
+        pct exec {{ radarr_ctid }} -- bash -c
+        'for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://localhost:{{ radarr_port }}/ping && break || sleep 2; done'
+      register: radarr_http
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Radarr CT {{ radarr_ctid }} up at {{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }} (ping {{ radarr_http.stdout }})."
+          - "NEXT: Web-UI -> set auth; add root folder /media/library/movies; add qBittorrent as download client; Settings>Media Management ENABLE 'Use Hardlinks'."
+          - "Onboarding TODO (ADR-017): glance tile + GuestDown lxc/{{ radarr_ctid }}; not backed up by design."

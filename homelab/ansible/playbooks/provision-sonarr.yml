@@ -1,0 +1,162 @@
+---
+# Provision Sonarr (CT 123) on apophis — Phase 7, ADR-022.
+# TV automation: grabs via Prowlarr's indexers -> qBittorrent -> imports (hardlinked) into
+# /media/library/tv. Native Servarr install (no Docker). Unprivileged LXC, LAN/Tailscale only.
+# Mounts the WHOLE media root (/mnt/usb-media -> /media) so /media/downloads and
+# /media/library/tv are one filesystem (hardlinks). Sonarr joins the media group (umask 002).
+#
+# Run: cd homelab/ansible && ansible-playbook playbooks/provision-sonarr.yml --limit apophis
+# Needs sonarr_ip set (reserved in UniFi) in the gitignored all.yml.
+
+- name: Provision Sonarr TV-automation LXC
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    - name: Assert the IP is set (not a placeholder)
+      ansible.builtin.assert:
+        that: "'YOUR_' not in sonarr_ip"
+        fail_msg: "Set sonarr_ip (reserved in UniFi) in the gitignored all.yml first."
+
+    - name: Check whether CT {{ sonarr_ctid }} already exists
+      ansible.builtin.command: "pct status {{ sonarr_ctid }}"
+      register: ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Debian template is downloaded
+      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+      when: ct_status.rc != 0
+
+    - name: Create unprivileged Sonarr LXC (not started yet)
+      ansible.builtin.command: >
+        pct create {{ sonarr_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        --hostname {{ sonarr_hostname }}
+        --cores {{ sonarr_cores }}
+        --memory {{ sonarr_ram_mb }}
+        --swap 0
+        --rootfs {{ rootfs_storage }}:{{ sonarr_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip={{ sonarr_ip }},gw={{ gateway }}
+        --unprivileged 1
+        --features nesting=1
+        --onboot 1
+        --startup order=7,up=10
+      register: ct_create
+      when: ct_status.rc != 0
+      changed_when: ct_create.rc == 0
+
+    - name: Bind-mount the whole media root (so downloads + library are one fs for hardlinks)
+      ansible.builtin.command: >
+        pct set {{ sonarr_ctid }} -mp0 {{ media_host_root }},mp=/media
+      register: mp_set
+      changed_when: mp_set.rc == 0
+
+    - name: Restart CT to apply the mount (only when it already existed)
+      ansible.builtin.command: "pct reboot {{ sonarr_ctid }}"
+      when:
+        - ct_status.rc == 0
+        - mp_set.changed
+      changed_when: true
+
+    - name: Ensure CT is running
+      ansible.builtin.command: "pct start {{ sonarr_ctid }}"
+      register: ct_start
+      changed_when: "'already running' not in (ct_start.stderr | default(''))"
+      failed_when:
+        - ct_start.rc != 0
+        - "'already running' not in (ct_start.stderr | default(''))"
+
+    - name: Wait for the CT to be responsive
+      ansible.builtin.command: "pct exec {{ sonarr_ctid }} -- true"
+      register: ct_ready
+      until: ct_ready.rc == 0
+      retries: 15
+      delay: 3
+      changed_when: false
+
+    - name: Install runtime deps (libicu + sqlite3 + curl)
+      ansible.builtin.shell: |
+        pct exec {{ sonarr_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq curl ca-certificates sqlite3 libicu72 >/dev/null
+        '
+      changed_when: true
+
+    - name: Check whether Sonarr is already installed
+      ansible.builtin.command: "pct exec {{ sonarr_ctid }} -- test -x /opt/Sonarr/Sonarr"
+      register: sonarr_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Download + install Sonarr (Servarr self-contained build) + service user
+      ansible.builtin.shell: |
+        pct exec {{ sonarr_ctid }} -- bash -c '
+          set -e
+          cd /tmp
+          URL=$(curl -fsSL "https://api.github.com/repos/Sonarr/Sonarr/releases/latest" | grep -oE "https://[^\"]*linux-x64\.tar\.gz" | head -1)
+          [ -n "$URL" ] || { echo "no linux-x64 asset found"; exit 1; }
+          curl -fsSL "$URL" -o sonarr.tar.gz
+          tar -xzf sonarr.tar.gz -C /opt
+          rm -f sonarr.tar.gz
+          id sonarr >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin sonarr
+          mkdir -p /var/lib/sonarr
+          chown -R sonarr:sonarr /var/lib/sonarr /opt/Sonarr
+        '
+      when: sonarr_installed.rc != 0
+      changed_when: true
+
+    - name: Put the sonarr user in the media group + umask (shared-media write/hardlink)
+      ansible.builtin.shell: |
+        pct exec {{ sonarr_ctid }} -- bash -c '
+          getent group {{ media_group_gid_ct }} >/dev/null || groupadd -g {{ media_group_gid_ct }} media
+          G=$(getent group {{ media_group_gid_ct }} | cut -d: -f1)
+          id -nG sonarr | tr " " "\n" | grep -qx "$G" || usermod -aG "$G" sonarr
+        '
+      changed_when: true
+
+    - name: Install the Sonarr systemd unit
+      ansible.builtin.shell: >
+        echo '{{ sonarr_unit | b64encode }}' | base64 -d |
+        pct exec {{ sonarr_ctid }} -- bash -c 'cat > /etc/systemd/system/sonarr.service'
+      vars:
+        sonarr_unit: |
+          [Unit]
+          Description=Sonarr
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          User=sonarr
+          Group=sonarr
+          UMask=0002
+          ExecStart=/opt/Sonarr/Sonarr -nobrowser -data=/var/lib/sonarr
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+      changed_when: true
+
+    - name: Enable + (re)start Sonarr
+      ansible.builtin.shell: |
+        pct exec {{ sonarr_ctid }} -- bash -c '
+          systemctl daemon-reload
+          systemctl enable --now sonarr >/dev/null 2>&1
+          systemctl restart sonarr
+        '
+      changed_when: true
+
+    - name: Confirm Sonarr is serving
+      ansible.builtin.command: >
+        pct exec {{ sonarr_ctid }} -- bash -c
+        'for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://localhost:{{ sonarr_port }}/ping && break || sleep 2; done'
+      register: sonarr_http
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Sonarr CT {{ sonarr_ctid }} up at {{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }} (ping {{ sonarr_http.stdout }})."
+          - "NEXT: Web-UI -> set auth; add root folder /media/library/tv; add qBittorrent as download client; Settings>Media Management ENABLE 'Use Hardlinks'."
+          - "Onboarding TODO (ADR-017): glance tile + GuestDown lxc/{{ sonarr_ctid }}; not backed up by design."
