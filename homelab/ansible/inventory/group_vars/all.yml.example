@@ -158,6 +158,7 @@ glance_hosts:                                               # Proxmox nodes — 
 glance_services:
   - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
   - { title: "Jellyfin", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
+  - { title: "qBittorrent", url: "http://{{ qbittorrent_ip | regex_replace('/.*$','') }}:{{ qbittorrent_webui_port }}", icon: "di:qbittorrent" }
   - { title: "Technitium DNS", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Technitium DNS 2", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Grafana", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
@@ -181,6 +182,7 @@ glance_release_repos:
   - terrastruct/d2
   - dani-garcia/vaultwarden
   - jellyfin/jellyfin
+  - qbittorrent/qBittorrent
 
 # --- Infra Portal (CT 116, oneill — ADR-020) ---------------------
 portal_ctid: 116
