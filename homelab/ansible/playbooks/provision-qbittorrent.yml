@@ -230,6 +230,15 @@
           WantedBy=multi-user.target
       changed_when: true
 
+    - name: Ensure the media group exists + qBittorrent writes group-writable (shared-media umask)
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          getent group {{ media_group_gid_ct }} >/dev/null || groupadd -g {{ media_group_gid_ct }} media
+          mkdir -p /etc/systemd/system/qbittorrent.service.d
+          printf "[Service]\nUMask=0002\n" > /etc/systemd/system/qbittorrent.service.d/umask.conf
+        '
+      changed_when: true
+
     - name: Enable + start qBittorrent
       ansible.builtin.shell: |
         pct exec {{ qbittorrent_ctid }} -- bash -c '

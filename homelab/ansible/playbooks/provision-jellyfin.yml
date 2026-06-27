@@ -54,13 +54,13 @@
         line: "root:{{ jellyfin_render_gid }}:1"
         state: present
 
-    - name: Own the media dirs as the CT-root host mapping (shared with CT 121 later)
+    - name: Own the media dirs by the media group (setgid 2775 so new files inherit it; shared by CT 120/121/123/124)
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         owner: "{{ media_owner_uid }}"
-        group: "{{ media_owner_gid }}"
-        mode: "0775"
+        group: "{{ media_group_gid_host }}"
+        mode: "02775"
       loop:
         - "{{ media_host_root }}/library"
         - "{{ media_host_root }}/downloads"
@@ -179,6 +179,18 @@
         '
       register: jf_group
       changed_when: "'added' in jf_group.stdout"
+
+    - name: Put the jellyfin user in the media group + set umask (shared-media read/write)
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          getent group {{ media_group_gid_ct }} >/dev/null || groupadd -g {{ media_group_gid_ct }} media
+          G=$(getent group {{ media_group_gid_ct }} | cut -d: -f1)
+          id -nG jellyfin | tr " " "\n" | grep -qx "$G" || usermod -aG "$G" jellyfin
+          mkdir -p /etc/systemd/system/jellyfin.service.d
+          printf "[Service]\nUMask=0002\n" > /etc/systemd/system/jellyfin.service.d/umask.conf
+          systemctl daemon-reload
+        '
+      changed_when: true
 
     - name: Enable + (re)start Jellyfin
       ansible.builtin.shell: |
