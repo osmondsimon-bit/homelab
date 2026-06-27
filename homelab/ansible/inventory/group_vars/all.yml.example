@@ -198,8 +198,10 @@ patching_timezone: "Etc/UTC"                                # set your IANA Regi
 
 # --- Media stack (Phase 6, ADR-021) — apophis; USB-C SSD at /mnt/usb-media ---
 media_host_root: /mnt/usb-media                            # ext4 USB SSD on apophis (by-id, nofail); NOT backed up
-media_owner_uid: 100000                                    # unprivileged-CT root host mapping (shared by CT 120/121)
+media_owner_uid: 100000                                    # unprivileged-CT root host mapping (shared by CT 120/121/123/124)
 media_owner_gid: 100000
+media_group_gid_host: 101000                               # media group HOST gid (= in-CT gid 1000 via default unpriv map); owns the media tree (setgid 2775)
+media_group_gid_ct: 1000                                   # media group in-container gid — jellyfin/qbit/sonarr/radarr users join it (umask 002)
 
 # Jellyfin (CT 120, apophis — ADR-021): unprivileged LXC, iGPU /dev/dri passthrough (QuickSync)
 jellyfin_ctid: 120
