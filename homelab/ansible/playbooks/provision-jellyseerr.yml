@@ -1,0 +1,148 @@
+---
+# Provision Jellyseerr (VM 125) on apophis — Phase 7, ADR-022.
+# Request UI for the *arr stack (Jellyfin-aware Overseerr fork). Docker-first app, so it runs
+# the official container in a DEDICATED Ubuntu 24.04 VM (2nd ADR-014 Docker exception, same
+# pattern as Vaultwarden VM 118 — keeps Docker confined to single-purpose VMs). LAN/Tailscale
+# only, no inbound. Needs NO media mount (it only calls Jellyfin/Sonarr/Radarr APIs).
+#
+# Run: cd homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml --limit apophis
+# Needs jellyseerr_ip set (reserved in UniFi) in the gitignored all.yml.
+# First-run setup is in the web UI: sign in with Jellyfin, then add Sonarr + Radarr.
+
+- name: Create the Jellyseerr VM on apophis (Ubuntu cloud image + cloud-init)
+  hosts: apophis
+  gather_facts: false
+  vars:
+    js_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    js_cloud_image: "noble-server-cloudimg-amd64.img"
+    js_ip_bare: "{{ jellyseerr_ip | regex_replace('/.*$', '') }}"
+  tasks:
+    - name: Assert the IP is set (not a placeholder)
+      ansible.builtin.assert:
+        that: "'YOUR_' not in jellyseerr_ip"
+        fail_msg: "Set jellyseerr_ip (reserved in UniFi) in the gitignored all.yml first."
+
+    - name: Check whether VM {{ jellyseerr_vmid }} already exists
+      ansible.builtin.command: "qm status {{ jellyseerr_vmid }}"
+      register: vm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Download the Ubuntu cloud image
+      ansible.builtin.get_url:
+        url: "{{ js_cloud_image_url }}"
+        dest: "/var/lib/vz/template/{{ js_cloud_image }}"
+        mode: "0644"
+      when: vm_status.rc != 0
+
+    - name: Stage the mgmt-vm public key for cloud-init
+      ansible.builtin.copy:
+        dest: "/tmp/js-cloudinit.pub"
+        content: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}\n"
+        mode: "0644"
+      when: vm_status.rc != 0
+
+    - name: Create the VM (cloud image disk + cloud-init)
+      ansible.builtin.shell: |
+        set -e
+        qm create {{ jellyseerr_vmid }} --name {{ jellyseerr_hostname }} \
+          --memory {{ jellyseerr_ram_mb }} --cores {{ jellyseerr_cores }} --cpu {{ jellyseerr_cpu }} \
+          --net0 virtio,bridge={{ bridge }} --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
+          --agent enabled=1 --onboot 1 --startup order=8,up=10
+        qm set {{ jellyseerr_vmid }} --scsi0 {{ rootfs_storage }}:0,import-from=/var/lib/vz/template/{{ js_cloud_image }}
+        qm set {{ jellyseerr_vmid }} --ide2 {{ rootfs_storage }}:cloudinit --boot order=scsi0
+        qm disk resize {{ jellyseerr_vmid }} scsi0 {{ jellyseerr_disk_gb }}G
+        qm set {{ jellyseerr_vmid }} --ciuser {{ jellyseerr_ci_user | default('simon') }} \
+          --sshkeys /tmp/js-cloudinit.pub \
+          --ipconfig0 ip={{ jellyseerr_ip }},gw={{ gateway }} --nameserver {{ gateway }}
+        rm -f /tmp/js-cloudinit.pub
+        qm start {{ jellyseerr_vmid }}
+      when: vm_status.rc != 0
+
+    - name: Wait for the VM's SSH (cloud-init first boot)
+      ansible.builtin.wait_for:
+        host: "{{ js_ip_bare }}"
+        port: 22
+        timeout: 180
+      delegate_to: localhost
+
+    - name: Hand the VM to play 2
+      ansible.builtin.add_host:
+        name: "jellyseerr-vm"
+        ansible_host: "{{ js_ip_bare }}"
+        ansible_user: "{{ jellyseerr_ci_user | default('simon') }}"
+        ansible_python_interpreter: /usr/bin/python3
+        groups: _js_target
+      changed_when: false
+
+- name: Configure Jellyseerr on the VM (Docker + container)
+  hosts: _js_target
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Base packages (guest agent, prereqs)
+      ansible.builtin.apt:
+        name: [qemu-guest-agent, ca-certificates, curl]
+        update_cache: true
+      register: base_pkgs
+      retries: 3
+      delay: 5
+      until: base_pkgs is succeeded
+
+    - name: Docker apt repo (official)
+      ansible.builtin.shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args: { creates: /etc/apt/sources.list.d/docker.list }
+
+    - name: Install Docker engine + compose plugin
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        update_cache: true
+
+    - name: Project dir + config
+      ansible.builtin.file:
+        path: /opt/jellyseerr/config
+        state: directory
+        mode: "0750"
+
+    - name: Compose file (LAN-bound on :{{ jellyseerr_port }}; Jellyseerr auths via Jellyfin)
+      ansible.builtin.copy:
+        dest: /opt/jellyseerr/docker-compose.yml
+        mode: "0644"
+        content: |
+          services:
+            jellyseerr:
+              image: {{ jellyseerr_image }}
+              container_name: jellyseerr
+              restart: unless-stopped
+              environment:
+                - TZ={{ patching_timezone | default('Etc/UTC') }}
+              volumes:
+                - ./config:/app/config
+              ports:
+                - "{{ jellyseerr_port }}:5055"
+              security_opt:
+                - no-new-privileges:true
+      register: js_compose
+
+    - name: Deploy / update the container
+      ansible.builtin.command:
+        cmd: docker compose up -d {{ '--force-recreate' if js_compose.changed else '' }}
+        chdir: /opt/jellyseerr
+      changed_when: true
+
+    - name: Verify Jellyseerr is serving
+      ansible.builtin.shell: |
+        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ jellyseerr_port }}/api/v1/status && break || sleep 3; done
+      register: js_http
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Jellyseerr up at http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ jellyseerr_port }} (status {{ js_http.stdout }})."
+          - "NEXT: open the web UI -> sign in with Jellyfin -> add Sonarr + Radarr (API keys + root folders /media/library/{tv,movies})."
+          - "Onboarding TODO (ADR-017): glance tile + GuestDown qemu/{{ jellyseerr_vmid }}; small config (could PBS-image later)."
