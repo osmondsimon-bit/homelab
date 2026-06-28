@@ -118,7 +118,17 @@ egress via a VPN** — which also keeps a consistent exit IP for any Cloudflare 
 VM already runs Docker), `network_mode: service:gluetun`, on a **2nd ProtonVPN WireGuard exit** (no
 port-forwarding). Its WebUI is published on the VM IP `:9696`; Gluetun's `FIREWALL_OUTBOUND_SUBNETS`
 lets it still reach Sonarr/Radarr on the LAN. **The native Prowlarr CT 122 is retired** (`.21` freed).
-Egress verified = ProtonVPN exit, not the home WAN. **ByParr/FlareSolverr dropped** — the VPN alone
-fixes the blocking; a CF solver is only added back (behind the same Gluetun) if a specific indexer
-demands it. This supersedes the "Prowlarr native LXC, LAN-only" parts of the decision above. The
+Egress verified = ProtonVPN exit, not the home WAN. The native Prowlarr CT 122 is retired (`.21` freed).
 `provision-prowlarr.yml` native playbook is removed; VM 125 is built by `provision-jellyseerr.yml`.
+This supersedes the "Prowlarr native LXC, LAN-only" parts of the decision above.
+
+## Revision 2 — 2026-06-28 (ByParr CF solver added for 1337x)
+
+1337x gates on Cloudflare (Pirate Bay/LimeTorrents don't). **ByParr** (a maintained fork of
+FlareSolverr) is added as a **4th container on VM 125** (`network_mode: service:gluetun`), sharing
+Prowlarr's VPN exit IP — essential because the `cf_clearance` cookie is bound to the IP that solved
+the challenge, so the solver and Prowlarr must egress identically. ByParr listens on
+`localhost:8191` inside the Gluetun network namespace (no published port). Prowlarr: add a
+FlareSolverr proxy → `http://localhost:8191` and tag 1337x indexers to use it. VM RAM bumped to
+3 GB to accommodate ByParr's headless browser. Tested and working for 1337x (slow to solve, ~30 s,
+but successful). The "ByParr/FlareSolverr dropped" sentence in Revision 1 is superseded by this.

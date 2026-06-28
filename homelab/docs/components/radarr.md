@@ -31,7 +31,7 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-radarr.yml --limit 
 ## Health / recovery
 - **Health:** `http://<ip>:7878/ping` (200). **Logs:** `pct exec 124 -- journalctl -u radarr`.
 - **Hardlink check:** after an import, `stat` the file in downloads + library — same inode, link count ≥ 2.
-- **Recovery:** reproducible from code → re-run `provision-radarr.yml`, then re-link the download client + indexers. Media persists on the USB SSD.
+- **Recovery:** reproducible from code → re-run `provision-radarr.yml`, then re-link the download client + indexers. Media persists on the USB SSD. **Note:** the monitored-movies list and quality profiles live only in Radarr's SQLite DB inside the CT; a reprovision loses them — re-add from memory or a Radarr backup export (Settings → System → Backup).
 
 ## Related
 ADR-022 (media automation) · ADR-017 · [sonarr.md](sonarr.md) · [prowlarr.md](prowlarr.md) · [jellyfin.md](jellyfin.md) · [qbittorrent.md](qbittorrent.md).
