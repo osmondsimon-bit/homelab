@@ -32,7 +32,7 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-sonarr.yml --limit 
 ## Health / recovery
 - **Health:** `http://<ip>:8989/ping` (200). **Logs:** `pct exec 123 -- journalctl -u sonarr`.
 - **Hardlink check:** after an import, `stat` the file in downloads + library — same inode, link count ≥ 2.
-- **Recovery:** reproducible from code → re-run `provision-sonarr.yml`, then re-link the download client + indexers. Media persists on the USB SSD.
+- **Recovery:** reproducible from code → re-run `provision-sonarr.yml`, then re-link the download client + indexers. Media persists on the USB SSD. **Note:** the monitored-series list and quality profiles live only in Sonarr's SQLite DB inside the CT; a reprovision loses them — re-add from memory or a Sonarr backup export (Settings → System → Backup).
 
 ## Related
 ADR-022 (media automation) · ADR-017 · [radarr.md](radarr.md) · [prowlarr.md](prowlarr.md) · [jellyfin.md](jellyfin.md) · [qbittorrent.md](qbittorrent.md).

@@ -40,7 +40,7 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 ## Health / verify
 - **Health:** `http://<vm-ip>:9696/ping` (200).
 - **VPN egress (the whole point):** `ssh simon@<vm> 'sudo docker exec gluetun wget -qO- https://api.ipify.org'` → a ProtonVPN IP, **not** the home WAN.
-- **Recovery:** reproducible → re-run `provision-jellyseerr.yml`; re-add indexers + the FlareSolverr proxy.
+- **Recovery:** reproducible → re-run `provision-jellyseerr.yml`; re-add indexers + the FlareSolverr proxy (`http://localhost:8191`); re-add Sonarr/Radarr under Apps. Any indexer credentials (registered-site logins) must be re-entered from **Vaultwarden** — they live only in Prowlarr's SQLite DB and are lost on reprovision. Verify VPN egress after rebuild.
 
 ## Related
 ADR-022 (+ 2026-06-27 revision) · ADR-014 (Docker exception) · [jellyseerr.md](jellyseerr.md) · [sonarr.md](sonarr.md) · [radarr.md](radarr.md) · [qbittorrent.md](qbittorrent.md).
