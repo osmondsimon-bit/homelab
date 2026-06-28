@@ -29,7 +29,7 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 
 ## Health / recovery
 - **Health:** `http://<ip>:5055/api/v1/status` (200).
-- **Recovery:** reproducible → re-run `provision-jellyseerr.yml` (needs `jellyseerr_ip` + `prowlarr_vpn_wg_config` in gitignored `all.yml`). Redo the Jellyfin sign-in + service links.
+- **Recovery:** reproducible → re-run `provision-jellyseerr.yml` (needs `jellyseerr_ip` + `prowlarr_vpn_wg_config` in gitignored `all.yml`). Redo the Jellyfin sign-in; re-add Sonarr/Radarr using their **new auto-generated API keys** (Settings → General in each app after reprovision); re-add the ByParr FlareSolverr proxy in Prowlarr (`http://localhost:8191`). Any registered-site indexer credentials must be re-entered from Vaultwarden.
 
 ## Related
 ADR-022 · ADR-014 (Docker exception #2) · [prowlarr.md](prowlarr.md) · [jellyfin.md](jellyfin.md).

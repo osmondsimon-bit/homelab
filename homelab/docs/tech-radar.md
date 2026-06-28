@@ -23,8 +23,9 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
 | Service dashboard | **Glance** (was Homepage) | Phase 3 ✓ — front-door live on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 5 HA-expansion) |
 | VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
-| Media server | Jellyfin (was Plex) | Phase 6 — apophis, QuickSync passthrough (swapped after Vaultwarden 2026-06-25) |
-| Torrent client + VPN | qBittorrent + Gluetun + ProtonVPN Plus | Phase 6 — apophis |
+| Media server | Jellyfin (was Plex) | **Phase 6 ✓ 2026-06-27** — CT 120 on **apophis**, unprivileged LXC, iGPU QuickSync (`/dev/dri` passthrough) proven; media on 500 GB USB-C SSD. ADR-021. |
+| Torrent client + VPN | qBittorrent + **native WireGuard + nftables killswitch** + ProtonVPN Plus | **Phase 6 ✓ 2026-06-27** — CT 121 on **apophis**; leak-test ✅ (Gluetun/Docker rejected — native WG keeps service LXCs Docker-free). ADR-021. |
+| Media automation | Sonarr + Radarr + Prowlarr + Jellyseerr + ByParr | **Phase 7 ✓ 2026-06-28** — Sonarr CT 123 + Radarr CT 124 (native Servarr, hardlinks via shared media-group); Prowlarr + ByParr (CF solver for 1337x) behind Gluetun on VM 125 (2nd ProtonVPN exit — bypasses AU ISP blocks + keeps consistent CF egress IP); Jellyseerr request UI on VM 125. ADR-022. |
 | Password manager | Vaultwarden (self-hosted) | **Phase 5 ✓ 2026-06-26** — VM 118 on apophis, Ubuntu 24.04 + Docker container (native-LXC plan OOMed), Tailscale-Serve TLS, tailnet-only; `pvesr` to carter + PBS daily; tailnet ACL locks it to operator devices. ADR-010/014/018. |
 | Secret handling | Tier 3 env files + Vaultwarden (Tier 1) | ADR-018 (revised 2026-06-25): **ansible-vault dropped** as never-wired-in. Machine tokens → gitignored `~/.*.env` on mgmt-vm; human-typed admin passwords → Vaultwarden. Tier 2 anchors (PBS/HA keys, 2FA recovery codes) → Keychain, outside the lab. |
 | Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
@@ -74,7 +75,7 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 |------------|--------|
 | HashiCorp Vault | Vaultwarden is sufficient at this scale |
 | PM2 process manager | Docker-centric; not applicable to Proxmox VM/LXC model |
-| Docker Compose stacks | Services run as native packages/binaries on LXC service nodes (oneill stays Docker-free). **Contained exceptions, each isolated to its own VM:** Vaultwarden (VM 118, Phase 5 — container-only upstream; ADR-014 revised 2026-06-26) and the Phase 6 Gluetun/media stack on apophis. The no-Docker principle for the LXC service nodes is intact. |
+| Docker Compose stacks | Services run as native packages/binaries on LXC service nodes (oneill stays Docker-free). **Contained exceptions, each isolated to its own VM:** Vaultwarden (VM 118, Phase 5 — container-only upstream; ADR-014 revised 2026-06-26) and the Gluetun/media-automation stack on apophis (VM 125, Phase 7 — Jellyseerr + Prowlarr + ByParr). The no-Docker principle for the LXC service nodes is intact. |
 | Btrfs snapshots (btrbk) | Proxmox uses ZFS/ext4; use Proxmox Backup Server instead |
 
 ---
@@ -92,5 +93,7 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 | 2026-06-19 | Phase 3 ✓ CLOSED | Phase 3 fully complete. Backups tested (PBS + HA native, restore drill ✅). Patching adopted (ADR-015). Infra portal live (ADR-020). MCP rows parked. Plex renamed Jellyfin. |
 | 2026-06-25 | Phase 4 ✓ CLOSED | 2-node cluster `homelab` (apophis + carter) live; apophis rebuilt on ZFS; `pvesr` replication + **manual failover** for VM 200 (no HA manager); 2nd Technitium (CT 117 on carter) removes the DNS SPOF; corosync 10s ride-out; monitoring deduped for clustered `pve_*` + replication-health alerts. Radar updated: Multi-node cluster, Technitium, Tailscale, Infra-agent-tool-access rows. Carry-forward: VM 200 failover drill + carter-rebuild runbook + off-site backup. |
 | 2026-06-26 | Phase 5 Secrets ✓ CLOSED | Vaultwarden deployed (VM 118, Ubuntu 24.04 + Docker — native-LXC plan OOMed) → moved to Adopted; **Docker exception** moved Phase 6 → Phase 5 (each in its own VM; ADR-014 revised); **ansible-vault dropped** as never-wired-in (ADR-018) → Secret-handling row corrected; tailnet ACL + secrets-register added. VM 200 manual-failover drill ✅ PASS, VM 118 restore drill ✅ PASS, carter-rebuild runbook ✅ written, 2FA recovery codes → Keychain ✅ (carry-forwards cleared). Outstanding: off-site backup; CT 111/117 reprovision drills; node-down alert drill. |
+| 2026-06-27 | Phase 6 ✓ CLOSED | Jellyfin (CT 120, iGPU QuickSync proven) + qBittorrent (CT 121, native WireGuard killswitch → ProtonVPN Plus, leak-test ✅) live on apophis; 500 GB USB-C SSD as shared media store. ADR-021 accepted. Media-server + Torrent-client rows updated to live. |
+| 2026-06-28 | Phase 7 ✓ CLOSED | Sonarr CT 123 + Radarr CT 124 (native Servarr, hardlinks via shared media-group) + Jellyseerr + Prowlarr + ByParr on VM 125 (Prowlarr behind Gluetun / 2nd ProtonVPN exit to bypass AU ISP blocking; ByParr CF solver for 1337x). ADR-022 accepted + revised ×2. Media-automation row added. |
 
 *Add a row each time this radar is reviewed at a phase boundary.*

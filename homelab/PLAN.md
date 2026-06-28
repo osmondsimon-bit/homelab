@@ -17,7 +17,7 @@
 | qbittorrent | 121 | LXC (Debian 12, unpriv) | YOUR_QBITTORRENT_IP | Running — torrent client, **all egress via ProtonVPN WireGuard + nftables killswitch** (leak-test ✅ 2026-06-27); NAT-PMP port forward; downloads shared with Jellyfin (ADR-021, Phase 6b). |
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | Running — TV automation → qBittorrent → hardlink-imports into `/media/library/tv` (ADR-022). In the media group. |
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | Running — movie automation → `/media/library/movies` (ADR-022). In the media group. |
-| jellyseerr (+ prowlarr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | Running — Jellyseerr request UI (LAN, auths via Jellyfin) **+ Prowlarr behind a Gluetun VPN** (indexer egress via a 2nd ProtonVPN exit to bypass AU ISP blocks + keep a consistent IP) + the VPN container (ADR-022; ADR-014 exception #2). Prowlarr WebUI on `:9696`. |
+| jellyseerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | Running — Jellyseerr request UI (LAN, auths via Jellyfin) **+ Prowlarr + ByParr (CF solver) behind a Gluetun VPN** (indexer egress via a 2nd ProtonVPN exit to bypass AU ISP blocks + keep a consistent IP for CF solving) (ADR-022; ADR-014 exception #2). Prowlarr WebUI on `:9696`. |
 
 ### oneill (Intel NUC, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
@@ -68,9 +68,12 @@ Offloading the simple services to oneill frees apophis's CPU for media transcodi
 | ~~Technitium DNS~~ | LXC | **oneill** | ✅ Live — CT 111 on oneill (see Current infrastructure). DNS-only, OISD blocklist + DoH (ADR-011). UniFi keeps DHCP; serves the **home VLAN** (IoT/guest use the gateway — ADR-011 DNS-by-VLAN-role). |
 | ~~Monitoring (Prometheus + Grafana + Alertmanager)~~ | LXC | oneill (CT 114) | ✅ Live — scrapes Proxmox/UniFi/HA, Alertmanager → am-ntfy bridge → ntfy with starter rules, apophis dead-man's-switch (ADR-013). Dashboards/alerts as code. |
 | ~~Homepage~~ → **Glance** | LXC | **oneill** (CT 115) | ✅ Live — front-door dashboard. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (deferred HA-expansion project). |
-| ~~Plex~~ → **Jellyfin** | LXC (CT 120) | apophis | ✅ Live (Phase 6a) — QuickSync via `/dev/dri` in an unprivileged LXC (ADR-021, not a VM); HW transcode proven. See apophis current-infra table. |
-| qBittorrent | LXC (CT 121) | apophis | ✅ Live (Phase 6b) — **native WireGuard + nftables killswitch** → ProtonVPN Plus (Gluetun/Docker rejected as default); **leak-test ✅ 2026-06-27**. See apophis current-infra table. |
 | ~~Vaultwarden~~ | ~~LXC~~ → **VM** | **apophis** (VM 118) | ✅ Live 2026-06-26 — see apophis current-infrastructure table. Ubuntu 24.04 + Docker container (native-LXC plan OOMed; ADR-014 exception), Tailscale-only, replicated to carter + PBS (ADR-010/018). |
+| ~~Plex~~ → **Jellyfin** | LXC (CT 120) | apophis | ✅ Live (Phase 6a) — QuickSync via `/dev/dri` in an unprivileged LXC (ADR-021, not a VM); HW transcode proven. See apophis current-infra table. |
+| ~~qBittorrent~~ | LXC (CT 121) | apophis | ✅ Live (Phase 6b) — **native WireGuard + nftables killswitch** → ProtonVPN Plus; **leak-test ✅ 2026-06-27**. See apophis current-infra table. |
+| ~~Sonarr~~ | LXC (CT 123) | apophis | ✅ Live (Phase 7) — TV automation; native Servarr install; bind-mounted to the USB-SSD media share; hands grabs to qBittorrent via Prowlarr (ADR-022). |
+| ~~Radarr~~ | LXC (CT 124) | apophis | ✅ Live (Phase 7) — movie automation; native Servarr install; same media share + hardlinks (ADR-022). |
+| ~~Jellyseerr + Prowlarr + ByParr~~ | VM (VM 125) | apophis | ✅ Live (Phase 7) — request UI (Jellyseerr) + indexer stack (Prowlarr + ByParr) **behind a 2nd ProtonVPN Gluetun container** to bypass AU ISP blocks + satisfy CF egress-IP consistency (ADR-022, ADR-014 exception #2). |
 | Minecraft server | VM/LXC | TBD | Game server for future use — low priority, size/placement TBD |
 
 Per-service RAM/disk sizing is set when each is built; with services spread across three nodes the old single-16 GB-host budget no longer binds. Jellyfin stays on apophis for the iGPU.
@@ -105,7 +108,8 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 4. **Multi-node + HA — ✅ CLOSED 2026-06-25 (`/phase-gate`):** apophis + carter form the 2-node cluster `homelab` (oneill stays standalone); local storage on ZFS; `pvesr` replication of VM 200 + **manual failover** (no HA manager/fencing — single-NIC network isn't HA-grade); 2nd Technitium (CT 117 on carter) removes the DNS SPOF; corosync ride-out + cluster-aware monitoring. Tailscale stays on apophis. Record: `docs/phases/4-multinode-ha.md`.
 5. **Secrets + HA expansion** _(swapped ahead of Media 2026-06-25)_ — **split at the gate 2026-06-26:** the **Secrets track ✅ CLOSED** (see `docs/phases/5-secrets-track.md`); the **HA-expansion sub-track is DEFERRED to a standalone project** (HACS done; Node-RED/ESPHome/HA → Grafana/wall-tablet carried there).
    - **Secrets track:** self-host Vaultwarden (**VM 118 on apophis** — Ubuntu 24.04 + Docker container, `pvesr`-replicated to carter, **Tailscale-only** — ADR-010/014/018, as-built 2026-06-26; native-LXC plan OOMed) + SSH access audit + tiered secrets model + restore drill + 2FA anchors.
-6. **Media (ADR-021) — ✅ 6a + 6b LIVE 2026-06-27** (not yet `/phase-gate`-closed): Jellyfin (CT 120, unprivileged LXC, QuickSync proven) + qBittorrent (CT 121, native WireGuard killswitch → ProtonVPN Plus, leak-test ✅) on apophis, on a 500 GB USB-C SSD. Minecraft server still TBD. Remaining to close: operator hardening (qBit password) + `/phase-gate`.
+6. **Media (ADR-021) — ✅ CLOSED 2026-06-28 (`/phase-gate`):** Jellyfin (CT 120, unprivileged LXC, QuickSync proven) + qBittorrent (CT 121, native WireGuard killswitch → ProtonVPN Plus, leak-test ✅) on apophis, 500 GB USB-C SSD. Record: `docs/phases/6-media.md`.
+7. **Media automation (ADR-022) — ✅ CLOSED 2026-06-28 (`/phase-gate`):** Sonarr (CT 123) + Radarr (CT 124) native Servarr installs; Jellyseerr + Prowlarr + ByParr (CF solver) behind Gluetun on VM 125 (2nd ProtonVPN exit — bypasses AU ISP site-blocking + consistent CF egress IP). Minecraft server TBD (deferred). Record: `docs/phases/7-media-automation.md`.
 - Cross-cutting (designed early, not deferred to the end): VM-level backups, a patching approach
 - Deferred to the new house: NAS / shared storage, cameras, Frigate
 
