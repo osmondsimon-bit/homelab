@@ -278,8 +278,8 @@ jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — verify/bum
 # Indexer VPN stack on VM 125 (Gluetun + Prowlarr behind it) — bypasses ISP blocks + consistent exit IP.
 # Prowlarr WebUI published on the VM IP :{{ prowlarr_port }}. (ByParr/FlareSolverr added behind the same
 # Gluetun later only if an indexer needs Cloudflare-solving.)
-gluetun_image: "qmcgaw/gluetun:latest"                      # PIN — bump deliberately
-prowlarr_docker_image: "lscr.io/linuxserver/prowlarr:latest"   # PIN — bump deliberately
-byparr_image: "ghcr.io/thephaseless/byparr:latest"         # CF-challenge solver, behind Gluetun (Prowlarr -> localhost:8191)
+gluetun_image: "qmcgaw/gluetun@sha256:d180743987bb24da1d749a1d7f3a78026e64ba2d09d2e08cc34b0acee7f7321b"   # PINNED by digest (was :latest; build 2026-06-24) — bump deliberately
+prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:3950b5e48cf4ba9dab78fe14038dd7f062e66b7b4ab368b02c94a13f6a3dae9f"   # PINNED by digest (LSIO 2.4.0.5397)
+byparr_image: "ghcr.io/thephaseless/byparr@sha256:01a46a2865d9a6db5eb8ead04ec0dd33b8fbe233e8565ae70b50d4cc0af4cfb0"   # PINNED by digest — CF solver behind Gluetun (Prowlarr -> localhost:8191)
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
 prowlarr_vpn_wg_config: ""
