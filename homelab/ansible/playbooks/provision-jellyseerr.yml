@@ -181,6 +181,18 @@
                 - ./prowlarr:/config
               security_opt:
                 - no-new-privileges:true
+
+            byparr:
+              image: {{ byparr_image }}
+              container_name: byparr
+              restart: unless-stopped
+              network_mode: "service:gluetun"
+              depends_on:
+                - gluetun
+              environment:
+                - TZ={{ patching_timezone | default('Etc/UTC') }}
+              security_opt:
+                - no-new-privileges:true
       no_log: true
       register: js_compose
 
@@ -206,4 +218,5 @@
           - "CHECK: prowlarr_egress_ip MUST be the ProtonVPN exit, NOT your home WAN — that's the whole point."
           - "Jellyseerr UI: http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ jellyseerr_port }} -> sign in with Jellyfin -> add Sonarr + Radarr."
           - "Prowlarr UI: http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ prowlarr_port }} (behind the VPN) -> add indexers + link Sonarr/Radarr."
+          - "ByParr (CF solver) shares Gluetun's netns -> Prowlarr: Settings > Indexers > Indexer Proxies > FlareSolverr, host http://localhost:8191, tag it, tag 1337x + other CF indexers."
           - "Onboarding (ADR-017): Glance/GuestDown cover VM {{ jellyseerr_vmid }}; not imaged (configs small + reproducible)."
