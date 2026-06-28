@@ -75,8 +75,8 @@ groups:
       # Confirm next time a node is down and tighten (e.g. join to the guest's home node) if noisy.
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · 117 technitium2 · 120 jellyfin · 121 qbittorrent
-      #         · 122 prowlarr · 123 sonarr · 124 radarr
-      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 jellyseerr · 200 home-assistant.
+      #         · 123 sonarr · 124 radarr
+      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 jellyseerr+prowlarr+gluetun · 200 home-assistant.
       - alert: GuestDown
         expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*"}) == 0
         for: 5m

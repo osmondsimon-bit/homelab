@@ -1,13 +1,15 @@
 ---
-# Provision Jellyseerr (VM 125) on apophis — Phase 7, ADR-022.
-# Request UI for the *arr stack (Jellyfin-aware Overseerr fork). Docker-first app, so it runs
-# the official container in a DEDICATED Ubuntu 24.04 VM (2nd ADR-014 Docker exception, same
-# pattern as Vaultwarden VM 118 — keeps Docker confined to single-purpose VMs). LAN/Tailscale
-# only, no inbound. Needs NO media mount (it only calls Jellyfin/Sonarr/Radarr APIs).
+# Provision the media-automation VM (VMID 125) on apophis — Phase 7, ADR-022.
+# A DEDICATED Ubuntu 24.04 Docker VM (ADR-014 Docker exception, like Vaultwarden VM 118) running:
+#   - jellyseerr : request UI (LAN-direct; auths via Jellyfin)
+#   - gluetun    : ProtonVPN WireGuard egress for the indexer side
+#   - prowlarr   : indexer manager, behind Gluetun (network_mode: service:gluetun) so it bypasses
+#                  the ISP block AND shares one VPN exit IP. WebUI published on the VM IP :9696.
+# (ByParr/FlareSolverr dropped — add behind the same Gluetun only if an indexer needs CF-solving.)
 #
-# Run: cd homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml --limit apophis
-# Needs jellyseerr_ip set (reserved in UniFi) in the gitignored all.yml.
-# First-run setup is in the web UI: sign in with Jellyfin, then add Sonarr + Radarr.
+# Run from the mgmt-vm:  cd homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
+#   (NO --limit — play 1 is scoped to apophis; play 2 targets the VM.)
+# Needs jellyseerr_ip + prowlarr_vpn_wg_config set in the gitignored all.yml.
 
 - name: Create the Jellyseerr VM on apophis (Ubuntu cloud image + cloud-init)
   hosts: apophis
@@ -17,10 +19,12 @@
     js_cloud_image: "noble-server-cloudimg-amd64.img"
     js_ip_bare: "{{ jellyseerr_ip | regex_replace('/.*$', '') }}"
   tasks:
-    - name: Assert the IP is set (not a placeholder)
+    - name: Assert the IP + VPN config are set (not placeholders)
       ansible.builtin.assert:
-        that: "'YOUR_' not in jellyseerr_ip"
-        fail_msg: "Set jellyseerr_ip (reserved in UniFi) in the gitignored all.yml first."
+        that:
+          - "'YOUR_' not in jellyseerr_ip"
+          - "(prowlarr_vpn_wg_config | trim | length) > 0"
+        fail_msg: "Set jellyseerr_ip (reserved in UniFi) + prowlarr_vpn_wg_config (2nd ProtonVPN WireGuard config) in the gitignored all.yml first."
 
     - name: Check whether VM {{ jellyseerr_vmid }} already exists
       ansible.builtin.command: "qm status {{ jellyseerr_vmid }}"
@@ -102,16 +106,28 @@
         name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
         update_cache: true
 
-    - name: Project dir + config
+    - name: Parse the Prowlarr VPN WireGuard config for Gluetun
+      ansible.builtin.set_fact:
+        vpn_priv_key: "{{ prowlarr_vpn_wg_config | regex_search('PrivateKey\\s*=\\s*(\\S+)', '\\1') | first }}"
+        vpn_address: "{{ prowlarr_vpn_wg_config | regex_search('Address\\s*=\\s*([0-9./]+)', '\\1') | first }}"
+        vpn_pub_key: "{{ prowlarr_vpn_wg_config | regex_search('PublicKey\\s*=\\s*(\\S+)', '\\1') | first }}"
+        vpn_endpoint_ip: "{{ prowlarr_vpn_wg_config | regex_search('Endpoint\\s*=\\s*([0-9.]+):[0-9]+', '\\1') | first }}"
+        vpn_endpoint_port: "{{ prowlarr_vpn_wg_config | regex_search('Endpoint\\s*=\\s*[0-9.]+:([0-9]+)', '\\1') | first }}"
+      no_log: true
+
+    - name: Project dirs (jellyseerr + prowlarr config)
       ansible.builtin.file:
-        path: /opt/jellyseerr/config
+        path: "{{ item }}"
         state: directory
         mode: "0750"
+      loop:
+        - /opt/jellyseerr/config
+        - /opt/jellyseerr/prowlarr
 
-    - name: Compose file (LAN-bound on :{{ jellyseerr_port }}; Jellyseerr auths via Jellyfin)
+    - name: Compose file (jellyseerr LAN-direct; prowlarr behind gluetun's VPN)
       ansible.builtin.copy:
         dest: /opt/jellyseerr/docker-compose.yml
-        mode: "0644"
+        mode: "0600"
         content: |
           services:
             jellyseerr:
@@ -126,36 +142,68 @@
                 - "{{ jellyseerr_port }}:5055"
               security_opt:
                 - no-new-privileges:true
-            flaresolverr:
-              image: {{ flaresolverr_image }}
-              container_name: flaresolverr
+
+            gluetun:
+              image: {{ gluetun_image }}
+              container_name: gluetun
               restart: unless-stopped
+              cap_add:
+                - NET_ADMIN
+              devices:
+                - /dev/net/tun:/dev/net/tun
               environment:
-                - LOG_LEVEL=info
+                - VPN_SERVICE_PROVIDER=custom
+                - VPN_TYPE=wireguard
+                - WIREGUARD_PRIVATE_KEY={{ vpn_priv_key }}
+                - WIREGUARD_ADDRESSES={{ vpn_address }}
+                - WIREGUARD_PUBLIC_KEY={{ vpn_pub_key }}
+                - VPN_ENDPOINT_IP={{ vpn_endpoint_ip }}
+                - VPN_ENDPOINT_PORT={{ vpn_endpoint_port }}
+                - FIREWALL_OUTBOUND_SUBNETS={{ lan_cidr }}
                 - TZ={{ patching_timezone | default('Etc/UTC') }}
               ports:
-                - "{{ flaresolverr_port | default(8191) }}:8191"
+                - "{{ prowlarr_port }}:9696"
               security_opt:
                 - no-new-privileges:true
+
+            prowlarr:
+              image: {{ prowlarr_docker_image }}
+              container_name: prowlarr
+              restart: unless-stopped
+              network_mode: "service:gluetun"
+              depends_on:
+                - gluetun
+              environment:
+                - PUID=1000
+                - PGID=1000
+                - TZ={{ patching_timezone | default('Etc/UTC') }}
+              volumes:
+                - ./prowlarr:/config
+              security_opt:
+                - no-new-privileges:true
+      no_log: true
       register: js_compose
 
-    - name: Deploy / update the container
+    - name: Deploy / update the containers (remove the old solver container if the image changed)
       ansible.builtin.command:
-        cmd: docker compose up -d {{ '--force-recreate' if js_compose.changed else '' }}
+        cmd: docker compose up -d --remove-orphans {{ '--force-recreate' if js_compose.changed else '' }}
         chdir: /opt/jellyseerr
       changed_when: true
 
-    - name: Verify Jellyseerr + FlareSolverr are serving
+    - name: Verify Jellyseerr + Prowlarr-via-VPN; confirm the indexer egress is the VPN exit
       ansible.builtin.shell: |
-        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ jellyseerr_port }}/api/v1/status && break || sleep 3; done; echo
-        for i in $(seq 1 20); do curl -fsS -o /dev/null -w "fs:%{http_code}" http://127.0.0.1:{{ flaresolverr_port | default(8191) }}/ && break || sleep 3; done
+        for i in $(seq 1 20); do c=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ jellyseerr_port }}/api/v1/status); [ "$c" = "200" ] && break; sleep 3; done; echo "jellyseerr:$c"
+        for i in $(seq 1 40); do c=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:{{ prowlarr_port }}/ping); [ "$c" = "200" ] && break; sleep 3; done; echo "prowlarr:$c"
+        echo -n "prowlarr_egress_ip:"; docker exec gluetun wget -qO- --timeout=10 https://api.ipify.org 2>/dev/null || echo "(gluetun not ready)"
+        echo
       register: js_http
       changed_when: false
 
     - name: Report
       ansible.builtin.debug:
         msg:
-          - "Jellyseerr + FlareSolverr on VM {{ jellyseerr_vmid }} ({{ hostvars['jellyseerr-vm'].ansible_host }}) — {{ js_http.stdout }}."
+          - "VM {{ jellyseerr_vmid }} ({{ hostvars['jellyseerr-vm'].ansible_host }}) — {{ js_http.stdout_lines }}"
+          - "CHECK: prowlarr_egress_ip MUST be the ProtonVPN exit, NOT your home WAN — that's the whole point."
           - "Jellyseerr UI: http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ jellyseerr_port }} -> sign in with Jellyfin -> add Sonarr + Radarr."
-          - "Prowlarr: Settings -> Indexers -> Indexer Proxies -> Add FlareSolverr, host http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ flaresolverr_port | default(8191) }}, tag it, tag the Cloudflare indexers with that tag."
-          - "Onboarding (ADR-017): glance tile + GuestDown qemu/{{ jellyseerr_vmid }}; small config (could PBS-image later)."
+          - "Prowlarr UI: http://{{ hostvars['jellyseerr-vm'].ansible_host }}:{{ prowlarr_port }} (behind the VPN) -> add indexers + link Sonarr/Radarr."
+          - "Onboarding (ADR-017): Glance/GuestDown cover VM {{ jellyseerr_vmid }}; not imaged (configs small + reproducible)."

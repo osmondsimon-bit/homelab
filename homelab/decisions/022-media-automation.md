@@ -105,3 +105,20 @@ first. FlareSolverr deferred (own CT if an indexer needs it).
 
 **Recorded risk:** Prowlarr indexer queries egress the **home WAN IP** (not the VPN) — logged by the
 indexers, separate from torrent traffic. Accepted; route Prowlarr via the VPN CT later if wanted.
+*(Superseded by the revision below — Prowlarr was moved behind a VPN.)*
+
+## Revision — 2026-06-27 (Prowlarr moved behind a VPN — AU ISP site-blocking)
+
+As-built, the native-LXC Prowlarr (CT 122, LAN-only) **could not reach many indexers**: Australian
+ISPs site-block the indexer domains, so queries from the home WAN IP fail *before* Cloudflare even
+applies. The fix (per Servarr/TRaSH guidance + the `cf_clearance` cookie-IP rule): **Prowlarr must
+egress via a VPN** — which also keeps a consistent exit IP for any Cloudflare solver.
+
+**As-built change:** Prowlarr is now a **Docker container behind Gluetun on VM 125** (the Jellyseerr
+VM already runs Docker), `network_mode: service:gluetun`, on a **2nd ProtonVPN WireGuard exit** (no
+port-forwarding). Its WebUI is published on the VM IP `:9696`; Gluetun's `FIREWALL_OUTBOUND_SUBNETS`
+lets it still reach Sonarr/Radarr on the LAN. **The native Prowlarr CT 122 is retired** (`.21` freed).
+Egress verified = ProtonVPN exit, not the home WAN. **ByParr/FlareSolverr dropped** — the VPN alone
+fixes the blocking; a CF solver is only added back (behind the same Gluetun) if a specific indexer
+demands it. This supersedes the "Prowlarr native LXC, LAN-only" parts of the decision above. The
+`provision-prowlarr.yml` native playbook is removed; VM 125 is built by `provision-jellyseerr.yml`.

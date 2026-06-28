@@ -159,7 +159,7 @@ glance_services:
   - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
   - { title: "Jellyfin", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
   - { title: "qBittorrent", url: "http://{{ qbittorrent_ip | regex_replace('/.*$','') }}:{{ qbittorrent_webui_port }}", icon: "di:qbittorrent" }
-  - { title: "Prowlarr", url: "http://{{ prowlarr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ prowlarr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
+  - { title: "Prowlarr", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
   - { title: "Sonarr", url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}", check_url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}/ping", icon: "di:sonarr" }
   - { title: "Radarr", url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}", check_url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}/ping", icon: "di:radarr" }
   - { title: "Jellyseerr", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:jellyseerr" }
@@ -245,15 +245,9 @@ lan_cidr: YOUR_LAN_CIDR                                     # your LAN /24 — h
 #     Endpoint = 1.2.3.4:51820
 qbittorrent_wg_config: ""
 
-# --- Media automation (Phase 7, ADR-022) — apophis; LAN/Tailscale only ----------
-# Reserve 4 IPs in UniFi (CT 122/123/124 + VM 125) before provisioning.
-prowlarr_ctid: 122
-prowlarr_hostname: prowlarr
-prowlarr_ram_mb: 512
-prowlarr_cores: 1
-prowlarr_disk_gb: 6
-prowlarr_ip: YOUR_PROWLARR_IP/24
-prowlarr_port: 9696
+# --- Media automation (Phase 7, ADR-022) — apophis ------------------------------
+# Prowlarr now runs behind a VPN on VM 125 (see the jellyseerr block); only its port remains here.
+prowlarr_port: 9696                                         # Prowlarr WebUI — published on the VM 125 IP via Gluetun
 
 sonarr_ctid: 123
 sonarr_hostname: sonarr
@@ -276,10 +270,15 @@ jellyseerr_vmid: 125
 jellyseerr_hostname: jellyseerr
 jellyseerr_ram_mb: 2048                                     # 2 GB: Jellyseerr + FlareSolverr's headless Chrome
 jellyseerr_cores: 2
-jellyseerr_disk_gb: 8
+jellyseerr_disk_gb: 20                                      # ByParr's browser-bundled image is large
 jellyseerr_ip: YOUR_JELLYSEERR_IP/24
 jellyseerr_cpu: Skylake-Client-noTSX-IBRS
 jellyseerr_port: 5055
 jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — verify/bump to a current release tag
-flaresolverr_image: "ghcr.io/flaresolverr/flaresolverr:latest"   # Cloudflare-challenge solver for Prowlarr (co-located on the Jellyseerr VM)
-flaresolverr_port: 8191
+# Indexer VPN stack on VM 125 (Gluetun + Prowlarr behind it) — bypasses ISP blocks + consistent exit IP.
+# Prowlarr WebUI published on the VM IP :{{ prowlarr_port }}. (ByParr/FlareSolverr added behind the same
+# Gluetun later only if an indexer needs Cloudflare-solving.)
+gluetun_image: "qmcgaw/gluetun:latest"                      # PIN — bump deliberately
+prowlarr_docker_image: "lscr.io/linuxserver/prowlarr:latest"   # PIN — bump deliberately
+# Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
+prowlarr_vpn_wg_config: ""
