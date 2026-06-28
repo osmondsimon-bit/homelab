@@ -268,7 +268,7 @@ radarr_port: 7878
 # Jellyseerr = Docker VM (VMID 125, Ubuntu 24.04 — like Vaultwarden)
 jellyseerr_vmid: 125
 jellyseerr_hostname: jellyseerr
-jellyseerr_ram_mb: 2048                                     # 2 GB: Jellyseerr + FlareSolverr's headless Chrome
+jellyseerr_ram_mb: 3072                                     # 3 GB: jellyseerr + gluetun + prowlarr + ByParr's headless browser
 jellyseerr_cores: 2
 jellyseerr_disk_gb: 20                                      # ByParr's browser-bundled image is large
 jellyseerr_ip: YOUR_JELLYSEERR_IP/24
@@ -280,5 +280,6 @@ jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — verify/bum
 # Gluetun later only if an indexer needs Cloudflare-solving.)
 gluetun_image: "qmcgaw/gluetun:latest"                      # PIN — bump deliberately
 prowlarr_docker_image: "lscr.io/linuxserver/prowlarr:latest"   # PIN — bump deliberately
+byparr_image: "ghcr.io/thephaseless/byparr:latest"         # CF-challenge solver, behind Gluetun (Prowlarr -> localhost:8191)
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
 prowlarr_vpn_wg_config: ""
