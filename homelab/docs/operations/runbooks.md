@@ -667,6 +667,11 @@ top-to-bottom; most monitoring is automatic, so the list is short.
 - [ ] Reserve the static IP in UniFi *before* provisioning (DHCP collisions bite — see Glance `.12`).
 - [ ] Add the `<svc>_*` block to `group_vars/all.yml` (+ placeholder in `all.yml.example`).
 - [ ] Write/run `provision-<svc>.yml` (Terraform creates / Ansible configures per ADR-008).
+- [ ] **Enrol in auto-patching (ADR-015):** for a new **CT**, re-run `provision-patching.yml`
+      (it discovers running CTs via `pct list`, so a new one is only covered after a re-run) —
+      otherwise the CT **never security-patches**. Confirm with
+      `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer`. For a new **Docker/OS
+      VM**, it's not CT-auto-patched — add it to the monthly manual host window instead.
 
 **2. Monitoring — mostly automatic, confirm + register**
 - Automatic (no action): `GuestDown` (`pve_up`), Glance VM/LXC CPU/RAM/Disk (`pve_guest_info` +
