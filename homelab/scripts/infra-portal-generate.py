@@ -135,37 +135,6 @@ def network_d2(data: dict) -> str:
     return "\n".join(lines)
 
 
-def rack_d2(data: dict) -> str:
-    units = data.get("rack", {}).get("units", [])
-    FILL = {
-        "UPS":    "#fef3c7",
-        "Switch": "#dbeafe",
-        "Patch":  "#e0e7ff",
-        "UCG":    "#d1fae5",
-        "CGF":    "#d1fae5",
-    }
-
-    lines = ["direction: down", ""]
-    ids   = []
-    for unit in units:
-        u  = str(unit.get("u", "?")).replace("-", "_to_").replace(" ", "_")
-        eq = unit.get("equipment", "Empty")
-        uid = f"U{u}"
-        ids.append(uid)
-        fill = next((v for k, v in FILL.items() if k.lower() in eq.lower()), "#f8fafc")
-        note = unit.get("notes", "")
-        label = f"U{unit.get('u','?')}: {eq}"
-        if note:
-            label += f"\\n{note[:60]}"
-        lines.append(f'{uid}: {label} {{style.fill: "{fill}"}}')
-
-    lines.append("")
-    for i in range(len(ids) - 1):
-        lines.append(f'{ids[i]} -> {ids[i+1]}: {{style.opacity: 0}}')
-
-    return "\n".join(lines)
-
-
 def render_d2(source: str) -> str:
     with tempfile.NamedTemporaryFile(suffix=".d2", mode="w", delete=False) as f:
         f.write(source)
@@ -268,6 +237,19 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
 .sw-zones{display:flex;gap:5px;align-items:stretch}
 .sw-zone{display:flex;flex-direction:column;min-width:0}
 .sw-zone-sep{width:3px;background:rgba(255,255,255,.15);border-radius:2px;flex-shrink:0}
+.sw-faceplate{display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+              flex:0 0 auto;min-width:52px;padding:5px 6px;margin-right:5px;
+              background:#020617;border:1px solid #334155;border-radius:5px}
+.sw-faceplate .sw-lcd{width:38px;height:38px;border-radius:5px;
+              background:linear-gradient(150deg,#0ea5e9 0%,#1e3a8a 70%,#0f172a 100%);
+              border:1px solid #0b1220;box-shadow:inset 0 0 5px rgba(0,0,0,.55);
+              display:flex;align-items:center;justify-content:center;text-align:center;
+              font-size:7px;font-weight:700;color:rgba(255,255,255,.92);line-height:1.15;letter-spacing:.2px}
+.sw-faceplate .sw-dpad{width:24px;height:24px;border-radius:50%;margin:6px 0;
+              background:radial-gradient(circle at 50% 45%,#475569 0 38%,#1e293b 40% 100%);
+              border:1px solid #475569;box-shadow:inset 0 1px 2px rgba(255,255,255,.12)}
+.sw-faceplate .sw-brand{font-size:7px;font-weight:700;color:#64748b;
+              text-align:center;line-height:1.2;letter-spacing:.2px}
 .sw-zone-label{font-size:8px;font-weight:700;color:#64748b;text-align:center;
                margin-top:4px;letter-spacing:.3px;white-space:nowrap;overflow:hidden}
 .sw-grid{display:grid;gap:3px;margin-bottom:3px}
@@ -328,6 +310,45 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
 .pp-intentional .pnum{color:#374151!important}
 .pp-intentional .pdev{color:#1f2937!important}
 .pp-intentional .psw{color:#374151!important}
+.rack-wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.rack-col{flex:1;min-width:360px}
+.rack-col-cab{flex:0 0 auto;max-width:580px}
+.rack-cabinet{background:#020617;border:3px solid #1e293b;border-radius:8px;padding:8px}
+.rack-vent{height:9px;margin:2px 0;border-radius:3px;
+           background:repeating-linear-gradient(90deg,#1e293b 0 6px,#0b1220 6px 11px)}
+.rack-rows{display:flex;flex-direction:column;gap:2px}
+.rack-unit{display:flex;align-items:center;gap:8px;border-radius:4px;padding:0 8px;
+           color:#fff;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+.rack-ulabel{flex:0 0 50px;font-size:9px;font-weight:700;color:rgba(255,255,255,.85);
+             text-align:center;letter-spacing:.2px;white-space:nowrap}
+.rack-body{flex:1;min-width:0}
+.rack-body .ru-name{font-size:11px;font-weight:700;line-height:1.15;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rack-body .ru-note{font-size:8px;opacity:.82;line-height:1.2;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rack-unit .ru-tag{flex:0 0 auto;font-size:8px;font-weight:700;background:rgba(0,0,0,.3);
+                   padding:2px 6px;border-radius:8px;letter-spacing:.3px}
+.rack-empty{background:#0b1220;border:1px dashed #1e293b}
+.rack-empty .rack-ulabel{color:#475569}
+.rack-empty .ru-name{color:#475569;font-weight:500;font-style:italic;font-size:9px}
+.rack-reserved{opacity:.72;border:1.5px dashed rgba(255,255,255,.55)}
+.rk-meta{width:100%;border-collapse:collapse;font-size:12px}
+.rk-meta td{padding:4px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.rk-meta .rk-k{color:var(--muted);font-weight:600;white-space:nowrap;width:118px}
+.rack-side h3{font-size:12px;font-weight:600;margin:14px 0 6px;color:var(--muted)}
+.rack-side h3:first-child{margin-top:0}
+.rack-ext{background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:9px 11px;margin-bottom:8px}
+.rack-ext .re-d{font-weight:700;font-size:12px}
+.rack-ext .re-l{font-size:11px;color:#b45309;margin:1px 0}
+.rack-ext .re-n{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.rack-pc{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:9px 11px;font-size:11px;line-height:1.5}
+.rack-pc .pc-d{font-weight:700;font-size:12px;margin-bottom:3px}
+.rack-toadd{font-size:12px;padding-left:18px;line-height:1.6}
+.rack-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-bottom:14px;align-items:center}
+.rack-legend span{display:flex;align-items:center;gap:5px}
+.rack-legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.rack-legend .dot-res{background:#f59e0b;border:1.5px dashed #fff}
+.rack-legend .dot-spare{background:#0b1220;border:1px dashed #475569}
 """
 
 JS = """
@@ -593,6 +614,15 @@ def switch_section_html(data: dict) -> str:
 
     sep = '<div class="sw-zone-sep"></div>'
 
+    # USW Pro Max 48's left-edge control faceplate: 1.3" LCM touchscreen + nav button.
+    faceplate = (
+        '<div class="sw-faceplate" title="USW Pro Max 48 PoE — 1.3&quot; LCM touchscreen + navigation button">'
+        '<div class="sw-lcd">1.3&Prime;<br>LCM</div>'
+        '<div class="sw-dpad"></div>'
+        '<div class="sw-brand">USW Pro&nbsp;Max<br>48 PoE</div>'
+        '</div>'
+    )
+
     def sfp_html(sfp: dict) -> str:
         port = sfp.get("port", "SFP+?")
         conn = sfp.get("connection") or "spare"
@@ -739,6 +769,7 @@ def switch_section_html(data: dict) -> str:
     <div class="sw-panel-sep"></div>
     <div class="pp-strip-label" style="margin-bottom:5px;color:#6b7280">{model} &mdash; Switch face</div>
     <div class="sw-zones">
+      {faceplate}
       {zone_html(1,  24)}{sep}
       {zone_html(25, 32)}{sep}
       {zone_html(33, 40)}{sep}
@@ -782,7 +813,160 @@ def switch_section_html(data: dict) -> str:
 </div>"""
 
 
-def generate_html(data: dict, net_svg: str, rack_svg: str, ts: str) -> str:
+RACK_FILL = [
+    (("patch panel", "pp-a", "pp-b"),                                   "#6366f1"),  # indigo
+    (("usw", "switch"),                                                 "#3b82f6"),  # blue
+    (("ucg", "fibre", "fiber", "gateway"),                              "#22c55e"),  # green
+    (("unvr", "nvr"),                                                   "#ef4444"),  # red
+    (("unas", "nas", "storage"),                                        "#06b6d4"),  # cyan
+    (("thinkcentre", "nuc", "apophis", "carter", "oneill", "proxmox"), "#8b5cf6"),  # violet
+    (("ups",),                                                          "#f59e0b"),  # amber
+    (("shelf", "ntd"),                                                  "#64748b"),  # slate
+]
+RACK_LEGEND = [
+    ("Patch panel", "#6366f1"), ("Switch", "#3b82f6"), ("Gateway", "#22c55e"),
+    ("NVR", "#ef4444"), ("NAS", "#06b6d4"), ("Compute", "#8b5cf6"), ("Shelf/NTD", "#64748b"),
+]
+RACK_SPARE_KW = ("spare", "airflow", "floor clearance", "future")
+RACK_U_PX = 30
+
+
+def _rack_parse_u(u) -> tuple:
+    s = str(u)
+    if "-" in s:
+        lo, hi = (int(x) for x in s.split("-"))
+        return lo, hi
+    return int(s), int(s)
+
+
+def rack_section_html(data: dict) -> str:
+    rack = data.get("rack", {})
+    cab  = rack.get("cabinet", {})
+    units = rack.get("units", [])
+    external = rack.get("external", [])
+    pc = rack.get("power_continuity", {})
+
+    def fill_for(eq: str):
+        e = eq.lower()
+        for keys, colour in RACK_FILL:
+            if any(k in e for k in keys):
+                return colour
+        return None
+
+    def collapse(v) -> str:
+        return " ".join(str(v).split()) if v else ""
+
+    # ── Cabinet elevation (top-down; units already listed U18→U1) ──
+    rows = []
+    for unit in units:
+        u = unit.get("u")
+        lo, hi = _rack_parse_u(u)
+        count  = hi - lo + 1
+        h      = count * RACK_U_PX
+        eq     = unit.get("equipment", "")
+        note   = collapse(unit.get("notes"))
+        ulabel = f"U{u}"
+        if any(k in eq.lower() for k in RACK_SPARE_KW):
+            rows.append(
+                f'<div class="rack-unit rack-empty" style="height:{h}px">'
+                f'<div class="rack-ulabel">{ulabel}</div>'
+                f'<div class="rack-body"><div class="ru-name">{eq}</div></div></div>'
+            )
+            continue
+        reserved = "reserved" in eq.lower()
+        colour   = fill_for(eq) or "#475569"
+        cls      = "rack-unit rack-reserved" if reserved else "rack-unit"
+        tag = ('<div class="ru-tag">RESERVED</div>' if reserved
+               else (f'<div class="ru-tag">{count}U</div>' if count > 1 else ""))
+        note_html = f'<div class="ru-note">{note[:96]}</div>' if note else ""
+        rows.append(
+            f'<div class="{cls}" style="height:{h}px;background:{colour}">'
+            f'<div class="rack-ulabel">{ulabel}</div>'
+            f'<div class="rack-body"><div class="ru-name">{eq}</div>{note_html}</div>'
+            f'{tag}</div>'
+        )
+    elevation = (
+        '<div class="rack-cabinet"><div class="rack-vent"></div>'
+        f'<div class="rack-rows">{"".join(rows)}</div>'
+        '<div class="rack-vent"></div></div>'
+    )
+
+    legend = "".join(
+        f'<span><span class="dot" style="background:{c}"></span>{name}</span>'
+        for name, c in RACK_LEGEND
+    ) + ('<span><span class="dot dot-res"></span>UPS (reserved)</span>'
+         '<span><span class="dot dot-spare"></span>spare/gap</span>')
+
+    # ── Metadata table ──
+    def kv(label, val):
+        v = collapse(val)
+        return f'<tr><td class="rk-k">{label}</td><td>{v}</td></tr>' if v else ""
+
+    dims = ""
+    if cab.get("width_mm") and cab.get("depth_mm"):
+        dims = f'{cab["rack_u"]}U · {cab["width_mm"]}W × {cab["depth_mm"]}D mm'
+    meta = "".join([
+        kv("Product",  cab.get("product")),
+        kv("SKU",      cab.get("sku")),
+        kv("Location", cab.get("location")),
+        kv("Size",     dims),
+        kv("Load",     f'{cab["load_kg"]} kg rated' if cab.get("load_kg") else ""),
+        kv("Doors",    cab.get("doors")),
+        kv("Cooling",  cab.get("cooling")),
+        kv("Power",    cab.get("power")),
+        kv("Standards", cab.get("standards")),
+    ])
+
+    ext_html = ""
+    for e in external:
+        ext_html += (
+            '<div class="rack-ext">'
+            f'<div class="re-d">{e.get("device","")}</div>'
+            f'<div class="re-l">📍 {collapse(e.get("location"))}</div>'
+            + (f'<div class="re-l">{collapse(e.get("logical_port"))}</div>' if e.get("logical_port") else "")
+            + f'<div class="re-n">{collapse(e.get("notes"))}</div></div>'
+        )
+
+    pc_html = ""
+    if pc:
+        pc_html = (
+            '<div class="rack-pc">'
+            f'<div class="pc-d">{collapse(pc.get("decision"))}</div>'
+            f'{collapse(pc.get("rationale"))}'
+            + (f'<div style="margin-top:5px"><strong>Outcome:</strong> {collapse(pc.get("outcome"))}</div>'
+               if pc.get("outcome") else "")
+            + '</div>'
+        )
+
+    toadd = cab.get("to_add") or []
+    toadd_html = ("<ul class='rack-toadd'>" + "".join(f"<li>{collapse(i)}</li>" for i in toadd) + "</ul>") if toadd else ""
+
+    title = cab.get("name", "Rack Layout")
+    sub   = f' &mdash; {cab.get("location")}' if cab.get("location") else ""
+
+    side = '<div class="rack-side">'
+    if meta:
+        side += f'<h3>Cabinet</h3><table class="rk-meta">{meta}</table>'
+    if ext_html:
+        side += f'<h3>Outside the cabinet</h3>{ext_html}'
+    if pc_html:
+        side += f'<h3>Power continuity</h3>{pc_html}'
+    if toadd_html:
+        side += f'<h3>To add</h3>{toadd_html}'
+    side += '</div>'
+
+    return (
+        '<div class="card">'
+        f'<h2>{title}{sub}</h2>'
+        f'<div class="rack-legend">{legend}</div>'
+        '<div class="rack-wrap">'
+        f'<div class="rack-col rack-col-cab">{elevation}</div>'
+        f'<div class="rack-col">{side}</div>'
+        '</div></div>'
+    )
+
+
+def generate_html(data: dict, net_svg: str, ts: str) -> str:
     ports     = get_ports(data)
     tbds      = find_tbds(data)
     levels    = data.get("rooms", {}).get("house", {}).get("levels", [])
@@ -872,10 +1056,7 @@ def generate_html(data: dict, net_svg: str, rack_svg: str, ts: str) -> str:
 </section>
 
 <section id="rack">
-  <div class="card">
-    <h2>Rack Layout &mdash; Garage (12U Wall-Mount)</h2>
-    <div class="svg-wrap">{rack_svg}</div>
-  </div>
+  {rack_section_html(data)}
 </section>
 
 <section id="lighting">
@@ -927,12 +1108,11 @@ def main():
     print(f"Loading data from {args.data_dir} ...")
     data = load_data(args.data_dir)
 
-    print("Rendering D2 diagrams ...")
+    print("Rendering network diagram ...")
     net_svg  = render_d2(network_d2(data))
-    rack_svg = render_d2(rack_d2(data))
 
     ts   = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-    html = generate_html(data, net_svg, rack_svg, ts)
+    html = generate_html(data, net_svg, ts)
 
     index = out / "index.html"
     index.write_text(html)
