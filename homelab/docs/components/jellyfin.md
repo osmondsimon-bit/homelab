@@ -8,10 +8,11 @@ no inbound from the internet** (ADR-003).
 |---|---|
 | Host / CTID | **apophis** / CT 120 (unprivileged Debian 12 LXC — **not** a VM; `nesting=1`) |
 | IP | `YOUR_JELLYFIN_IP` (static; reserved in UniFi) — UI on `:8096` |
-| Shape | 2 GB / 2 cores / 8 GB rootfs |
+| Shape | 2 GB / 2 cores / **16 GB rootfs** (grown from 8 GB 2026-06-29 — transcode temp lives here) |
 | iGPU | UHD 630 passed through: `/dev/dri` bind + cgroup allow `c 226:0` / `c 226:128`; host **render GID 993** mapped 1:1 into the CT; `jellyfin` user in that group |
 | Storage | media bind-mounted from the USB SSD — `/mnt/usb-media/library` → `/media/library`, `/mnt/usb-media/downloads` → `/media/downloads` (ext4, by-id, `nofail`) |
 | Service config | on the CT **rootfs** (internal SSD), `/var/lib/jellyfin` — deliberately **not** on the USB disk |
+| Transcode temp | default path `/var/cache/jellyfin/transcodes` (on rootfs). **Throttling + segment-deletion enabled** (`encoding.xml`) so a session can't fill the disk — see Health/operations |
 | Backup | **NONE by design** — media is replaceable; Jellyfin config is small + semi-reproducible. Not PBS-imaged (so invisible to `BackupAbsent`/`BackupStale`). |
 
 ## Why an unprivileged LXC (not a VM)
@@ -47,6 +48,11 @@ otherwise duplicate the idmap and break boot.
   `intel_gpu_top` shows the render engine active.
 - **Glance:** monitor tile (`http://…:8096/System/Info/Public`). **GuestDown** covers `lxc/120`.
 - **Logs / restart:** `pct exec 120 -- journalctl -u jellyfin` / `… systemctl restart jellyfin`.
+- **Rootfs full / playback breaks (seen 2026-06-29):** orphaned transcode segments filled the 8 GB
+  rootfs to 100%. Check `pct exec 120 -- df -h /`; if full, clear temp safely (it regenerates):
+  `pct exec 120 -- bash -c 'systemctl stop jellyfin; rm -rf /var/cache/jellyfin/transcodes/*; systemctl start jellyfin'`.
+  Now mitigated by the 16 GB rootfs + `EnableThrottling`/`EnableSegmentDeletion` in `encoding.xml`
+  (set by the playbook). The **USB media disk was never implicated** — that fault is always rootfs.
 
 ## Recovery
 

@@ -210,6 +210,34 @@
       until: jf_http.stdout == "200"
       changed_when: false
 
+    # encoding.xml only exists after Jellyfin's first start (above), so this runs last.
+    # Bounds transcode temp size so it can't fill the rootfs: throttling stops buffering
+    # >180s ahead; segment-deletion removes already-played HLS segments. Jellyfin rewrites
+    # encoding.xml from memory on shutdown, so it MUST be stopped before the edit.
+    - name: Bound transcode temp — enable throttling + segment deletion (rootfs-fill guard)
+      ansible.builtin.shell: |
+        pct exec {{ jellyfin_ctid }} -- bash -c '
+          XML=/etc/jellyfin/encoding.xml
+          [ -f "$XML" ] || { echo "noxml"; exit 0; }
+          if grep -q "<EnableThrottling>true</EnableThrottling>" "$XML" \
+             && grep -q "<EnableSegmentDeletion>true</EnableSegmentDeletion>" "$XML"; then
+            echo "ok"; exit 0
+          fi
+          systemctl stop jellyfin
+          sed -i \
+            -e "s|<EnableThrottling>false</EnableThrottling>|<EnableThrottling>true</EnableThrottling>|" \
+            -e "s|<EnableSegmentDeletion>false</EnableSegmentDeletion>|<EnableSegmentDeletion>true</EnableSegmentDeletion>|" \
+            "$XML"
+          systemctl start jellyfin
+          for i in $(seq 1 10); do
+            curl -fsS -o /dev/null http://localhost:{{ jellyfin_port }}/System/Info/Public && break
+            sleep 3
+          done
+          echo "changed"
+        '
+      register: jf_throttle
+      changed_when: "'changed' in jf_throttle.stdout"
+
     - name: Report
       ansible.builtin.debug:
         msg:
