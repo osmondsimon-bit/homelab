@@ -36,11 +36,12 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 - **Settings → Apps →** add Sonarr (`:8989`) + Radarr (`:7878`) with their API keys → indexers sync to them.
 - **Settings → Indexers → Indexer Proxies →** add **FlareSolverr**, host `http://localhost:8191`, give it a tag; tag the Cloudflare indexers (1337x) with that tag. (CF solves are slow — first hit ~15–40 s; the cookie is then cached.)
 - Leave non-Cloudflare indexers (Pirate Bay, LimeTorrents) **untagged** so they stay fast + direct.
+- **Settings → Download Clients →** add **qBittorrent** (`YOUR_QBITTORRENT_IP:8080`, category `prowlarr`) so the search-UI **grab** button pushes torrents straight to qBit. Without it, grabbing only yields a magnet to copy by hand. Prowlarr reaches qBit over the LAN via Gluetun's `FIREWALL_OUTBOUND_SUBNETS`. (Catalogued TV/movies should still be grabbed from Sonarr/Radarr, not here.)
 
 ## Health / verify
 - **Health:** `http://<vm-ip>:9696/ping` (200).
 - **VPN egress (the whole point):** `ssh simon@<vm> 'sudo docker exec gluetun wget -qO- https://api.ipify.org'` → a ProtonVPN IP, **not** the home WAN.
-- **Recovery:** reproducible → re-run `provision-jellyseerr.yml`; re-add indexers + the FlareSolverr proxy (`http://localhost:8191`); re-add Sonarr/Radarr under Apps. Any indexer credentials (registered-site logins) must be re-entered from **Vaultwarden** — they live only in Prowlarr's SQLite DB and are lost on reprovision. Verify VPN egress after rebuild.
+- **Recovery:** reproducible → re-run `provision-jellyseerr.yml`; re-add indexers + the FlareSolverr proxy (`http://localhost:8191`); re-add Sonarr/Radarr under Apps; **re-add the qBittorrent download client** (`YOUR_QBITTORRENT_IP:8080`). Any indexer credentials (registered-site logins) + the qBit Web-UI password must be re-entered from **Vaultwarden** — they live only in Prowlarr's SQLite DB and are lost on reprovision. Verify VPN egress after rebuild.
 
 ## Related
 ADR-022 (+ 2026-06-27 revision) · ADR-014 (Docker exception) · [jellyseerr.md](jellyseerr.md) · [sonarr.md](sonarr.md) · [radarr.md](radarr.md) · [qbittorrent.md](qbittorrent.md).
