@@ -216,7 +216,7 @@ jellyfin_ctid: 120
 jellyfin_hostname: jellyfin
 jellyfin_ram_mb: 2048
 jellyfin_cores: 2
-jellyfin_disk_gb: 8
+jellyfin_disk_gb: 16                                       # rootfs holds Jellyfin's transcode temp; 8G fills under load — see throttle task in provision-jellyfin.yml
 jellyfin_ip: YOUR_JELLYFIN_IP/24                            # reserve in UniFi before running provision-jellyfin.yml
 jellyfin_port: 8096
 jellyfin_render_gid: 993                                   # host 'render' group GID (verify: getent group render)
