@@ -313,14 +313,66 @@ backlog item.)
     `pct exec <ctid> -- unattended-upgrade --dry-run` (shows allowed origins + candidates).
   - Logs: inside the CT, `/var/log/unattended-upgrades/`. A failure pushes an ntfy alert.
 - **Hosts + mgmt-vm (manual):** deliberate **monthly window — last day of month, 12:00 AEST** (be
-  present for fallout). One node at a time; pre-cluster accept brief downtime, post-cluster (Phase 4)
-  HA-failover the guests off first → `apt update && apt dist-upgrade` → reboot if
-  `node_reboot_required` → next node. Driven by Glance's *Package Updates* / *Reboot required* panes.
+  present for fallout). One node at a time via **`update-pve-host.yml --limit <host>`** (upgrades +
+  reports reboot need; add `-e do_reboot=true` to reboot in-window), order **oneill → carter →
+  apophis** (apophis last — it holds mgmt-vm + the HA VM). mgmt-vm itself patches by hand (`sudo apt`,
+  it's the control node). Driven by Glance's *Package Updates* / *Reboot required* panes.
+- **Docker OS-VMs (118 vaultwarden, 125 jellyseerr) — manual:** their Ubuntu base is **not** covered by
+  the CT auto-patcher (they're VMs, not CTs). `sudo apt full-upgrade` + reboot (they run real kernels)
+  in the monthly window; the *container images* are digest-pinned and bumped separately (see below).
+  After 125 reboots, confirm Gluetun's VPN egress ≠ home WAN.
 - **HAOS:** update via the HA UI on your cadence; take/confirm a partial backup first (ADR-012).
 - **Note (PBS repo):** the PBS CT must stay on `pbs-no-subscription` — `provision-pbs.yml` disables
   the shipped `pbs-enterprise` repo (it 401s and breaks `apt-get update` / unattended-upgrades).
 - **Proxmox host repos:** fresh nodes ship the enterprise repos (401 without a sub) → switch to
   `pve-no-subscription` (done by hand on apophis + oneill; host-prep play still to be codified).
+
+> **Why the hosts always show a pile of updates** (and the guests don't): hosts **batch monthly**
+> while guests **auto-patch daily**, so up to a month of Debian + the fast-moving `pve-no-subscription`
+> channel accumulates on the hosts between windows. Normal — mostly low-risk userspace; kernel/reboot
+> updates are rarer. Patch hosts fortnightly instead if you want a smaller pile.
+
+### Run it yourself — the whole cycle
+
+| Tier | Cadence | Reboot? | Tool |
+|------|---------|---------|------|
+| Guest LXCs | auto, daily 12:00 local | never (share host kernel) | `unattended-upgrades` |
+| PVE hosts (oneill/carter/apophis) | manual, monthly | only if kernel/PVE | `update-pve-host.yml` |
+| mgmt-vm | manual, monthly | if kernel | `sudo apt` |
+| Docker OS-VMs (118, 125) | manual, monthly | usually (Ubuntu kernel) | `sudo apt` + reboot |
+| HAOS (200) | manual, your cadence | yes (appliance) | HA UI |
+| Docker images (pinned) | manual, deliberate | n/a | bump digests |
+
+```bash
+cd ~/homelab/ansible
+
+# 1. GUESTS (LXCs) — automatic; only act after creating a new CT, or to force a run now
+ansible-playbook playbooks/provision-patching.yml                 # (re)enrol ALL running CTs — do this after adding any CT
+pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer  # verify next run = local noon
+pct exec <ctid> -- unattended-upgrade -v                          # force one now
+
+# 2. HOSTS — monthly, ONE at a time: oneill -> carter -> apophis  (apophis LAST: it holds mgmt-vm + HA VM)
+ansible-playbook playbooks/update-pve-host.yml --limit oneill                    # upgrade + report reboot need
+ansible-playbook playbooks/update-pve-host.yml --limit oneill -e do_reboot=true  # reboot too (only in a window)
+#   repeat --limit carter, then --limit apophis. After each cluster node:
+ssh root@apophis 'pvecm status | grep Quorate'                                   # expect: Quorate
+
+# 3. mgmt-vm — manual (control node; no playbook)
+sudo apt update && sudo apt full-upgrade                          # reboot if it asks
+#   If apt.systemd.daily wedges the dpkg lock (D-state unattended-upgr = unkillable), reboot the VM:
+#     sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
+#     last resort (won't reboot): from apophis  ->  qm reset 100
+
+# 4. DOCKER OS-VMs — Ubuntu base only (images are #6). Reboot for the kernel, then verify.
+ssh simon@YOUR_VAULTWARDEN_IP 'sudo apt update && sudo apt full-upgrade -y'      # VM 118
+ssh simon@YOUR_JELLYSEERR_IP  'sudo apt update && sudo apt full-upgrade -y'      # VM 125
+ssh simon@YOUR_JELLYSEERR_IP  'sudo systemctl reboot'
+ssh simon@YOUR_JELLYSEERR_IP  'sudo docker ps; sudo docker exec gluetun wget -qO- https://api.ipify.org'  # egress != home WAN
+
+# 5. HAOS (VM 200): HA UI -> take a partial backup (ADR-012) -> Settings -> Updates
+# 6. DOCKER IMAGES (gluetun/prowlarr/byparr/jellyseerr/vaultwarden): digest-pinned; bump pins in
+#    group_vars + re-run the provision play deliberately — NOT part of an OS round.
+```
 
 ---
 
