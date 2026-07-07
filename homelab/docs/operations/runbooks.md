@@ -315,8 +315,9 @@ backlog item.)
 - **Hosts + mgmt-vm (manual):** deliberate **monthly window — last day of month, 12:00 AEST** (be
   present for fallout). One node at a time via **`update-pve-host.yml --limit <host>`** (upgrades +
   reports reboot need; add `-e do_reboot=true` to reboot in-window), order **oneill → carter →
-  apophis** (apophis last — it holds mgmt-vm + the HA VM). mgmt-vm itself patches by hand (`sudo apt`,
-  it's the control node). Driven by Glance's *Package Updates* / *Reboot required* panes.
+  apophis** (apophis last — it holds mgmt-vm + the HA VM, so **its reboot is out-of-band**; never run
+  it as one block — see the per-host steps + danger box below). mgmt-vm itself patches by hand
+  (`sudo apt`, it's the control node). Driven by Glance's *Package Updates* / *Reboot required* panes.
 - **Docker OS-VMs (118 vaultwarden, 125 jellyseerr) — manual:** their Ubuntu base is **not** covered by
   the CT auto-patcher (they're VMs, not CTs). `sudo apt full-upgrade` + reboot (they run real kernels)
   in the monthly window; the *container images* are digest-pinned and bumped separately (see below).
@@ -332,7 +333,24 @@ backlog item.)
 > channel accumulates on the hosts between windows. Normal — mostly low-risk userspace; kernel/reboot
 > updates are rarer. Patch hosts fortnightly instead if you want a smaller pile.
 
-### Run it yourself — the whole cycle
+### Run it yourself — ONE tier at a time (never as a single block)
+
+> ⚠️ **Do not run the whole cycle as one script.** Two operations below can take the lab down if
+> chained blindly — a real incident on **2026-07-07** did exactly that (rebooting the DNS host broke
+> name resolution lab-wide, then a from-mgmt-vm apophis reboot killed the control node + dropped
+> cluster quorum, forcing a power-cycle). Run each host as its own deliberate step and **verify
+> recovery before moving on.**
+>
+> **The two hard rules:**
+> 1. **apophis reboot is OUT-OF-BAND only.** apophis hosts **mgmt-vm (where you run this) + the HA
+>    VM**, and is half the 2-node cluster. Rebooting it kills your control node *and* drops the
+>    cluster to 1/2 votes → carter's `/etc/pve` goes **read-only** (looks online, won't manage). Do
+>    it from the **Proxmox console/IPMI**, not SSH-from-mgmt-vm, and give carter a temporary
+>    single-vote quorum first (see below).
+> 2. **Never reboot the DNS-hosting node (oneill → CT 111) without checking the secondary first.**
+>    Rebooting oneill drops primary DNS; resolution then leans on CT 117 (carter). If failover isn't
+>    clean, every `ssh root@<host>` starts failing with *"Temporary failure in name resolution".*
+>    (Underlying fix TODO: make resolvers list BOTH Technitium instances so either can reboot cleanly.)
 
 | Tier | Cadence | Reboot? | Tool |
 |------|---------|---------|------|
@@ -343,36 +361,57 @@ backlog item.)
 | HAOS (200) | manual, your cadence | yes (appliance) | HA UI |
 | Docker images (pinned) | manual, deliberate | n/a | bump digests |
 
+**Guest LXCs — automatic.** Only act after creating a new CT, or to force a run:
 ```bash
 cd ~/homelab/ansible
-
-# 1. GUESTS (LXCs) — automatic; only act after creating a new CT, or to force a run now
-ansible-playbook playbooks/provision-patching.yml                 # (re)enrol ALL running CTs — do this after adding any CT
-pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer  # verify next run = local noon
-pct exec <ctid> -- unattended-upgrade -v                          # force one now
-
-# 2. HOSTS — monthly, ONE at a time: oneill -> carter -> apophis  (apophis LAST: it holds mgmt-vm + HA VM)
-ansible-playbook playbooks/update-pve-host.yml --limit oneill                    # upgrade + report reboot need
-ansible-playbook playbooks/update-pve-host.yml --limit oneill -e do_reboot=true  # reboot too (only in a window)
-#   repeat --limit carter, then --limit apophis. After each cluster node:
-ssh root@apophis 'pvecm status | grep Quorate'                                   # expect: Quorate
-
-# 3. mgmt-vm — manual (control node; no playbook)
-sudo apt update && sudo apt full-upgrade                          # reboot if it asks
-#   If apt.systemd.daily wedges the dpkg lock (D-state unattended-upgr = unkillable), reboot the VM:
-#     sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
-#     last resort (won't reboot): from apophis  ->  qm reset 100
-
-# 4. DOCKER OS-VMs — Ubuntu base only (images are #6). Reboot for the kernel, then verify.
-ssh simon@YOUR_VAULTWARDEN_IP 'sudo apt update && sudo apt full-upgrade -y'      # VM 118
-ssh simon@YOUR_JELLYSEERR_IP  'sudo apt update && sudo apt full-upgrade -y'      # VM 125
-ssh simon@YOUR_JELLYSEERR_IP  'sudo systemctl reboot'
-ssh simon@YOUR_JELLYSEERR_IP  'sudo docker ps; sudo docker exec gluetun wget -qO- https://api.ipify.org'  # egress != home WAN
-
-# 5. HAOS (VM 200): HA UI -> take a partial backup (ADR-012) -> Settings -> Updates
-# 6. DOCKER IMAGES (gluetun/prowlarr/byparr/jellyseerr/vaultwarden): digest-pinned; bump pins in
-#    group_vars + re-run the provision play deliberately — NOT part of an OS round.
+ansible-playbook playbooks/provision-patching.yml        # (re)enrol ALL running CTs — do this after adding any CT
+pct exec <ctid> -- unattended-upgrade -v                 # (optional) force one now
 ```
+
+**PVE hosts — one at a time, verify between each.** Upgrade first (safe from mgmt-vm); reboot is a
+separate, in-window decision.
+
+*oneill (standalone; hosts primary DNS CT 111 + PBS/monitoring/glance/portal):*
+```bash
+ansible-playbook playbooks/update-pve-host.yml --limit oneill                    # upgrade only
+dig @<carter-ct117-ip> github.com +short                                         # confirm secondary DNS answers BEFORE reboot
+ansible-playbook playbooks/update-pve-host.yml --limit oneill -e do_reboot=true  # reboot (in-window; drops DNS/PBS ~2-3m)
+ssh root@oneill 'pveversion; pct list'                                           # verify: all 6 CTs (incl. 111) running
+```
+
+*carter (clustered):*
+```bash
+ansible-playbook playbooks/update-pve-host.yml --limit carter
+ansible-playbook playbooks/update-pve-host.yml --limit carter -e do_reboot=true  # in-window
+ssh root@apophis 'pvecm status | grep Quorate'                                   # expect Quorate once carter returns
+```
+
+*apophis (LAST — SPECIAL, out-of-band reboot):*
+```bash
+ansible-playbook playbooks/update-pve-host.yml --limit apophis                   # upgrade packages ONLY (no reboot)
+# If it needs a reboot, do NOT reboot from mgmt-vm. At the Proxmox console/IPMI:
+#   1. keep carter writable while apophis is down:   ssh root@carter 'pvecm expected 1'
+#   2. reboot apophis from its console (mgmt-vm + HA VM drop with it)
+#   3. when it's back:   ssh root@apophis 'pvecm status | grep Quorate'   # auto-restores to 2 votes
+```
+
+**mgmt-vm — manual (control node):**
+```bash
+sudo apt update && sudo apt full-upgrade                 # reboot if it asks (ends any live SSH/agent session)
+# stuck dpkg lock (D-state unattended-upgr = unkillable) → reboot the VM:
+#   sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
+#   last resort: from apophis -> qm reset 100
+```
+
+**Docker OS-VMs (118, 125) — one at a time (real Ubuntu kernels → reboot):**
+```bash
+ssh simon@YOUR_VAULTWARDEN_IP 'sudo apt update && sudo apt full-upgrade -y && sudo systemctl reboot'   # 118
+ssh simon@YOUR_JELLYSEERR_IP  'sudo apt update && sudo apt full-upgrade -y && sudo systemctl reboot'   # 125
+ssh simon@YOUR_JELLYSEERR_IP  'sudo docker ps; sudo docker exec gluetun wget -qO- https://api.ipify.org'  # egress != home WAN
+```
+
+**HAOS (200):** HA UI → partial backup (ADR-012) → Settings → Updates.
+**Docker images (pinned):** bump digests in group_vars + re-run the provision play — deliberate, not an OS round.
 
 ---
 
