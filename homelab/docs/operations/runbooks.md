@@ -369,7 +369,7 @@ pct exec <ctid> -- unattended-upgrade -v                 # (optional) force one 
 ```
 
 **PVE hosts — one at a time, verify between each.** Upgrade first (safe from mgmt-vm); reboot is a
-separate, in-window decision.
+separate, in-window decision. **All `ansible-playbook` commands below run from `~/homelab/ansible`.**
 
 *oneill (standalone; hosts primary DNS CT 111 + PBS/monitoring/glance/portal):*
 ```bash
@@ -390,9 +390,15 @@ ssh root@apophis 'pvecm status | grep Quorate'                                  
 ```bash
 ansible-playbook playbooks/update-pve-host.yml --limit apophis                   # upgrade packages ONLY (no reboot)
 # If it needs a reboot, do NOT reboot from mgmt-vm. At the Proxmox console/IPMI:
-#   1. keep carter writable while apophis is down:   ssh root@carter 'pvecm expected 1'
-#   2. reboot apophis from its console (mgmt-vm + HA VM drop with it)
-#   3. when it's back:   ssh root@apophis 'pvecm status | grep Quorate'   # auto-restores to 2 votes
+#   1. reboot apophis from its console. mgmt-vm + HA VM drop with it; carter goes read-only ~3 min
+#      BUT its running guests (incl. CT 117 DNS) keep serving, and DNS stays up on oneill.
+#   2. when it's back:   ssh root@apophis 'pvecm status | grep Quorate'   # auto-restores to 2 votes
+# NOTE: do NOT run `pvecm expected 1` as a pre-step — corosync rejects lowering expected below the
+#       live vote count (CS_ERR_INVALID_PARAM). It is a RECOVERY step ONLY, valid once apophis is
+#       actually down (carter = 1 live vote): if apophis does not return promptly, run
+#       `ssh root@carter 'pvecm expected 1'` to make carter manageable while you troubleshoot.
+# TODO (durable fix): add a QDevice — corosync-qnetd on oneill (standalone, ideal tiebreaker) — so
+#       either apophis or carter can reboot with quorum intact and no read-only window.
 ```
 
 **mgmt-vm — manual (control node):**
