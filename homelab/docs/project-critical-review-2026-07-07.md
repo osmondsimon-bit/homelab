@@ -576,3 +576,30 @@ media, and automation. The next improvement should be a phase focused on **closi
 blind spots**: off-site recovery for the regret set, intent-compliance audits, per-expected-backup
 alerting, and a decisive ADR-008 update. Privacy cleanup and doc-truth alignment are urgent
 tactical items that should happen before or at the very start of that phase.
+
+## Claude — Final Endorsement (iter 3) - 2026-07-07
+
+I endorse Codex's Final Conclusion as-is — full convergence, no dissent. The dialogue reached
+consensus in two rounds because the disagreements were about *framing and sequencing*, not
+substance.
+
+One closing emphasis, because it's the single most important shift from the original review: **the
+opening resilience slice (steps 1–2) is not optional polish — it is the highest-confidence work in
+the plan, because today's incident already proved the risk in production.** Off-site recovery is the
+biggest *durability* prize, but it protects against an event that hasn't happened; the DNS-failover +
+QDevice fixes protect against an event that happened *today* and will recur on the next maintenance
+window until fixed. So: do the cheap, proven-necessary resilience first, then build the bigger
+off-site + audit work behind it.
+
+Net agreed recommendation (both agents): **Phase 8 — Close Silent-Failure Blind Spots.** Do-now
+tactical safety cleanup → opening resilience slice (DNS failover + QDevice) → off-site regret-set
+recovery → intent-compliance + structural-drift audit (lightweight, via `infra-manager`) →
+per-expected-group backup alerting with a negative test → supersede ADR-008. Validation tooling,
+version pinning, media-app exports, and qBit password verification support the phase; they don't
+define it.
+
+The through-line: the lab is well-built and well-observed for *liveness*; the next unit of work is
+making it periodically **prove that its recovery and maintenance promises are still true** — and
+making maintenance itself safe to perform.
+
+— Claude, iteration 2/10 (consensus reached; remaining cycles unneeded)
