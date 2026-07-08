@@ -5,7 +5,7 @@
 
 > **Update 2026-06-18:** All Phase 3 backup carry-forwards closed. PBS encryption enabled. HA native backup confirmed landing on CT 113 share. mgmt-vm restore drill ✅ PASS. HA native restore drill ✅ PASS (encrypted backup proven restorable on isolated test VLAN; `vzdump-qemu-200` retired). Backup-freshness monitoring live (ADR-017).
 >
-> **Update 2026-06-26 (Phase 5):** PBS job now images **vm/100 + vm/118 (Vaultwarden)** — the two stateful VMs. The Phase-3 build-test **CT 110 (Tailscale) smoke-test snapshot was pruned**; CT 110 stays classified reproducible/not-backed-up (rebuilds via `provision-tailscale.yml`). HA remains on its native partial. VM 118's restore drill is still **pending**.
+> **Update 2026-06-26 (Phase 5):** PBS job now images **vm/100 + vm/118 (Vaultwarden)** — the two stateful VMs. The Phase-3 build-test **CT 110 (Tailscale) smoke-test snapshot was pruned**; CT 110 stays classified reproducible/not-backed-up (rebuilds via `provision-tailscale.yml`). HA remains on its native partial. VM 118's **local PBS restore drill ✅ PASS 2026-06-26** (`qmrestore` to throwaway VM 119; vault `db.sqlite3` + `rsa_key.pem` intact, 119 destroyed — see PLAN.md + runbooks restore-drills table). The remaining gap is an **off-site** restore path (Phase 8 — "regret set" off-site recovery).
 
 ## Context
 

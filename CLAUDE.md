@@ -54,7 +54,7 @@ Run playbooks from the mgmt-vm:
 cd homelab/ansible && ansible-playbook playbooks/<name>.yml
 ```
 
-First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the mgmt-vm on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime or stored with ansible-vault — never committed.
+First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the mgmt-vm on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime, never committed (ADR-018 — the earlier `ansible-vault` approach was dropped as it was never wired in; the tiered secrets model lives in Vaultwarden + gitignored config).
 
 ## Conventions
 
