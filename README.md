@@ -19,6 +19,6 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 
 ## Current phase
 
-Phase 5 — Secrets + HA expansion (Vaultwarden; Media swapped to Phase 6). Phase 4: Multi-node + HA ✓ closed 2026-06-25 (2-node cluster apophis+carter, ZFS replication + manual failover, DNS redundancy). Phase 3: Foundation + observability ✓ closed 2026-06-17.
+**Phases 3–7 complete** — foundation + observability, multi-node cluster + HA, secrets (Vaultwarden), media (Jellyfin/qBittorrent), and media automation (the *arr stack) are all live. **Next: Phase 8 — resilience + off-site recovery** ("close silent-failure blind spots", per the 2026-07-07 critical review: off-site backup, DNS failover + cluster QDevice, intent-compliance auditing).
 
-See [PLAN.md](homelab/PLAN.md) for full phase order and service inventory.
+**[PLAN.md](homelab/PLAN.md) is the single source of truth** for phase/status and the service inventory — this line is a pointer, not a duplicate (keep it that way to avoid drift).
