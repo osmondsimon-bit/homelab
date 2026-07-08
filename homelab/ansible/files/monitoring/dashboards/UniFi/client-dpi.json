@@ -707,13 +707,6 @@
           "renderer": "flot",
           "repeat": "Client",
           "repeatDirection": "v",
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -819,13 +812,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -931,13 +917,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1043,13 +1022,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1155,13 +1127,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1267,13 +1232,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1379,13 +1337,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1491,13 +1442,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1603,13 +1547,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1715,13 +1652,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1827,13 +1757,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -1939,13 +1862,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2051,13 +1967,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2163,13 +2072,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2275,13 +2177,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2387,13 +2282,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2499,13 +2387,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2611,13 +2492,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2723,13 +2597,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2835,13 +2702,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -2947,13 +2807,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3059,13 +2912,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3171,13 +3017,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3283,13 +3122,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3395,13 +3227,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3507,13 +3332,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3619,13 +3437,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3731,13 +3542,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3843,13 +3647,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "8ch-relay",
-              "value": "8ch-relay"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -3955,13 +3752,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "AmandaspleWatch",
-              "value": "AmandaspleWatch"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4067,13 +3857,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "DESKTOP-DMV04J3",
-              "value": "DESKTOP-DMV04J3"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4179,13 +3962,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "Office TV",
-              "value": "Office TV"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4291,13 +4067,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "RMPROPLUS-43-3c-88",
-              "value": "RMPROPLUS-43-3c-88"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4403,13 +4172,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "TOTAL",
-              "value": "TOTAL"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4515,13 +4277,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4627,13 +4382,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4739,13 +4487,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4851,13 +4592,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -4963,13 +4697,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-23c8dcf81",
-              "value": "amazon-23c8dcf81"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5075,13 +4802,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-252693b12",
-              "value": "amazon-252693b12"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5187,13 +4907,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-4c78562d9",
-              "value": "amazon-4c78562d9"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5299,13 +5012,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-5f2257848",
-              "value": "amazon-5f2257848"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5411,13 +5117,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-6f4e7f46d",
-              "value": "amazon-6f4e7f46d"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5523,13 +5222,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-ad9d88695",
-              "value": "amazon-ad9d88695"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5635,13 +5327,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-c6157d4f5",
-              "value": "amazon-c6157d4f5"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5747,13 +5432,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-c6cfc477c",
-              "value": "amazon-c6cfc477c"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5859,13 +5537,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-ccc769152",
-              "value": "amazon-ccc769152"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -5971,13 +5642,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "amazon-e251d20f5",
-              "value": "amazon-e251d20f5"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6083,13 +5747,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "ann-ipp",
-              "value": "ann-ipp"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6195,13 +5852,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "apc",
-              "value": "apc"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6307,13 +5957,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "ats-rtn",
-              "value": "ats-rtn"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6419,13 +6062,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "baby-cam",
-              "value": "baby-cam"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6531,13 +6167,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "bl-outlet",
-              "value": "bl-outlet"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6643,13 +6272,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "camera-garage",
-              "value": "camera-garage"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6755,13 +6377,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "camera-gate",
-              "value": "camera-gate"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6867,13 +6482,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "camera-pool",
-              "value": "camera-pool"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -6979,13 +6587,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "camera-porch",
-              "value": "camera-porch"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7091,13 +6692,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "camera-road",
-              "value": "camera-road"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7203,13 +6797,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7315,13 +6902,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "dns-ipp",
-              "value": "dns-ipp"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7427,13 +7007,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "dns-twt-wired",
-              "value": "dns-twt-wired"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7539,13 +7112,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "ha",
-              "value": "ha"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7651,13 +7217,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "homerun",
-              "value": "homerun"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7763,13 +7322,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "iPad",
-              "value": "iPad"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7875,13 +7427,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "plex",
-              "value": "plex"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -7987,13 +7532,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "sp3-01",
-              "value": "sp3-01"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8099,13 +7637,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "switch",
-              "value": "switch"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8211,13 +7742,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "ubuntu",
-              "value": "ubuntu"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8323,13 +7847,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "wap-lower",
-              "value": "wap-lower"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8435,13 +7952,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "wap-upper",
-              "value": "wap-upper"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8547,13 +8057,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592093129308,
           "repeatPanelId": 2325,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "wap-wall",
-              "value": "wap-wall"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8672,13 +8175,6 @@
           "renderer": "flot",
           "repeat": "Client",
           "repeatDirection": "v",
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8784,13 +8280,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -8896,13 +8385,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9008,13 +8490,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9120,13 +8595,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9232,13 +8700,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9344,13 +8805,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9456,13 +8910,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9568,13 +9015,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9680,13 +9120,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9792,13 +9225,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -9904,13 +9330,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10016,13 +9435,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10128,13 +9540,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10240,13 +9645,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10352,13 +9750,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10464,13 +9855,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10576,13 +9960,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10688,13 +10065,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10800,13 +10170,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -10912,13 +10275,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11024,13 +10380,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11136,13 +10485,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11248,13 +10590,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11360,13 +10695,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11472,13 +10800,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11584,13 +10905,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11696,13 +11010,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11808,13 +11115,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -11920,13 +11220,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12032,13 +11325,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12144,13 +11430,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12256,13 +11535,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12368,13 +11640,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12480,13 +11745,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12592,13 +11850,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12704,13 +11955,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12816,13 +12060,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -12928,13 +12165,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13040,13 +12270,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13152,13 +12375,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13264,13 +12480,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13376,13 +12585,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13488,13 +12690,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13600,13 +12795,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13712,13 +12900,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13824,13 +13005,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -13936,13 +13110,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14048,13 +13215,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14160,13 +13320,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "TOTAL",
-              "value": "TOTAL"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14272,13 +13425,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14384,13 +13530,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14496,13 +13635,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14608,13 +13740,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14720,13 +13845,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14832,13 +13950,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -14944,13 +14055,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15056,13 +14160,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15168,13 +14265,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15280,13 +14370,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15392,13 +14475,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15504,13 +14580,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15616,13 +14685,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 2329,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15741,13 +14803,6 @@
           "renderer": "flot",
           "repeat": "Client",
           "repeatDirection": "v",
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15853,13 +14908,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -15965,13 +15013,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16077,13 +15118,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16189,13 +15223,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16301,13 +15328,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16413,13 +15433,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16525,13 +15538,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16637,13 +15643,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16749,13 +15748,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16861,13 +15853,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -16973,13 +15958,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17085,13 +16063,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17197,13 +16168,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17309,13 +16273,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17421,13 +16378,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17533,13 +16483,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17645,13 +16588,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17757,13 +16693,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17869,13 +16798,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -17981,13 +16903,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18093,13 +17008,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18205,13 +17113,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18317,13 +17218,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18429,13 +17323,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18541,13 +17428,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18653,13 +17533,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18765,13 +17638,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18877,13 +17743,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -18989,13 +17848,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19101,13 +17953,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19213,13 +18058,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19325,13 +18163,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19437,13 +18268,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19549,13 +18373,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19661,13 +18478,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19773,13 +18583,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19885,13 +18688,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -19997,13 +18793,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20109,13 +18898,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20221,13 +19003,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20333,13 +19108,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20445,13 +19213,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20557,13 +19318,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20669,13 +19423,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20781,13 +19528,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -20893,13 +19633,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21005,13 +19738,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21117,13 +19843,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21229,13 +19948,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "TOTAL",
-              "value": "TOTAL"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21341,13 +20053,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21453,13 +20158,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21565,13 +20263,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21677,13 +20368,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21789,13 +20473,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -21901,13 +20578,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22013,13 +20683,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22125,13 +20788,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22237,13 +20893,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22349,13 +20998,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22461,13 +21103,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22573,13 +21208,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22685,13 +21313,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 1035,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22810,13 +21431,6 @@
           "renderer": "flot",
           "repeat": "Client",
           "repeatDirection": "v",
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -22923,13 +21537,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23036,13 +21643,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23149,13 +21749,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23262,13 +21855,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23375,13 +21961,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23488,13 +22067,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23601,13 +22173,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23714,13 +22279,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23827,13 +22385,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -23940,13 +22491,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24053,13 +22597,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24166,13 +22703,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24279,13 +22809,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24392,13 +22915,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24505,13 +23021,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24618,13 +23127,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24731,13 +23233,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24844,13 +23339,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -24957,13 +23445,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25070,13 +23551,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25183,13 +23657,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25296,13 +23763,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25409,13 +23869,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25522,13 +23975,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25635,13 +24081,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25748,13 +24187,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25861,13 +24293,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -25974,13 +24399,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26087,13 +24505,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26200,13 +24611,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26313,13 +24717,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26426,13 +24823,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26539,13 +24929,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26652,13 +25035,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26765,13 +25141,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26878,13 +25247,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -26991,13 +25353,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27104,13 +25459,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27217,13 +25565,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27330,13 +25671,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27443,13 +25777,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27556,13 +25883,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27669,13 +25989,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27782,13 +26095,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -27895,13 +26201,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28008,13 +26307,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28121,13 +26413,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28234,13 +26519,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28347,13 +26625,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "TOTAL",
-              "value": "TOTAL"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28460,13 +26731,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28573,13 +26837,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28686,13 +26943,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28799,13 +27049,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -28912,13 +27155,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29025,13 +27261,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29138,13 +27367,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29251,13 +27473,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29364,13 +27579,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29477,13 +27685,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29590,13 +27791,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29703,13 +27897,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29816,13 +28003,6 @@
           "repeatDirection": "v",
           "repeatIteration": 1592087894861,
           "repeatPanelId": 700,
-          "scopedVars": {
-            "Client": {
-              "selected": false,
-              "text": "REDACTED-MAC",
-              "value": "REDACTED-MAC"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -29941,13 +28121,6 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "scopedVars": {
-            "Category": {
-              "selected": false,
-              "text": "Business Tools",
-              "value": "Business Tools"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -30048,13 +28221,6 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "scopedVars": {
-            "Category": {
-              "selected": false,
-              "text": "Business Tools",
-              "value": "Business Tools"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -30156,13 +28322,6 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "scopedVars": {
-            "Category": {
-              "selected": false,
-              "text": "Business Tools",
-              "value": "Business Tools"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
@@ -30263,13 +28422,6 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "scopedVars": {
-            "Category": {
-              "selected": false,
-              "text": "Business Tools",
-              "value": "Business Tools"
-            }
-          },
           "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
