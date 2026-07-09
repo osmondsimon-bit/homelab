@@ -1,0 +1,59 @@
+---
+# Mitigate the Intel e1000e "Detected Hardware Unit Hang" TX lockup on the ThinkCentre onboard
+# NICs (apophis + carter). On 2026-07-10 apophis's nic0 hung at 03:53 (7683 "Hardware Unit Hang"
+# messages, box powered but off-network for ~4h until a power-cycle). TSO/GSO/GRO offloads + EEE
+# (Energy Efficient Ethernet) are the known triggers; disabling them makes the CPU do segmentation
+# instead of the buggy NIC engine. Installed as a boot-time systemd oneshot so it survives rebuilds.
+#
+# No-op on non-e1000e NICs (e.g. oneill's NUC) — it self-targets by driver.
+# Applying EEE-off renegotiates the link once (~3s flap); harmless, and skipped on re-runs.
+#
+#   cd homelab/ansible && ansible-playbook playbooks/provision-nic-hardening.yml
+#
+# See docs/operations/runbooks.md (2026-07-10 incident) and ADR-... if promoted.
+
+- name: Harden e1000e NICs against TX hardware hangs
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Detect nic0 driver
+      ansible.builtin.command: ethtool -i nic0
+      register: nic_drv
+      changed_when: false
+      failed_when: false
+
+    - name: Install + enable the offload/EEE mitigation (e1000e hosts only)
+      when: "'driver: e1000e' in nic_drv.stdout"
+      block:
+        - name: Install nic-offload-fix.service
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/nic-offload-fix.service
+            mode: "0644"
+            content: |
+              [Unit]
+              Description=Disable e1000e offloads + EEE on nic0 (hardware-hang mitigation)
+              After=network-pre.target
+              Wants=network-pre.target
+              [Service]
+              Type=oneshot
+              RemainAfterExit=yes
+              ExecStart=/sbin/ethtool -K nic0 tso off gso off gro off
+              ExecStart=-/sbin/ethtool --set-eee nic0 eee off
+              [Install]
+              WantedBy=multi-user.target
+
+        # state=started is idempotent: it will NOT restart an already-active oneshot
+        # (RemainAfterExit keeps it active), so re-runs don't re-flap the link.
+        - name: Enable + start it
+          ansible.builtin.systemd:
+            name: nic-offload-fix.service
+            enabled: true
+            state: started
+            daemon_reload: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ 'e1000e — mitigation installed + active' if 'driver: e1000e' in nic_drv.stdout
+             else 'nic0 ' + (nic_drv.stdout | regex_search('driver: \S+') | default('driver unknown')) + ' — skipped (not e1000e)' }}
