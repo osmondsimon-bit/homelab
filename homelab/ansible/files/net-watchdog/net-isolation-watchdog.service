@@ -1,0 +1,5 @@
+[Unit]
+Description=Network-isolation watchdog (self-heal a wedged-NIC node; safe vs gateway/switch outage)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/net-isolation-watchdog.sh

@@ -1,0 +1,57 @@
+---
+# Deploy the network-isolation watchdog to each PVE host (runs on the HOST, not a CT).
+# Self-heals a node whose OWN NIC wedged (2026-07-10 e1000e "Hardware Unit Hang": kernel alive,
+# host powered, NIC dead, off-network ~4h). Designed NOT to reboot on a broader gateway/switch
+# outage — reboot needs sustained isolation from gateway AND every peer, past post-boot grace,
+# not rate-limited, a failed recovery ladder, AND a confirmed e1000e-hang symptom. Non-e1000e
+# NICs (oneill r8169) get isolation ALERTING but never auto-reboot. See the script header + PLAN.md.
+#
+# Per-host config (gateway + peer IPs) is generated from the inventory, so real IPs never enter
+# the repo (ADR-006). Applying is idempotent and does NOT touch the network (no link flap).
+#   cd homelab/ansible && ansible-playbook playbooks/provision-net-watchdog.yml
+
+- name: Deploy the network-isolation watchdog
+  hosts: proxmox
+  gather_facts: false
+  vars:
+    _wd: "{{ playbook_dir }}/../files/net-watchdog"
+    _peers: "{{ groups['proxmox'] | map('extract', hostvars, 'ansible_host') | difference([ansible_host]) | join(' ') }}"
+  tasks:
+    - name: Install the watchdog script
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/net-isolation-watchdog.sh
+        mode: "0755"
+        content: "{{ lookup('file', _wd + '/net-isolation-watchdog.sh') }}"
+
+    - name: Install the systemd units
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+        content: "{{ lookup('file', _wd + '/' + item) }}"
+      loop:
+        - net-isolation-watchdog.service
+        - net-isolation-watchdog.timer
+
+    - name: Write per-host config (gateway + peer IPs — host-local, real IPs never committed)
+      ansible.builtin.copy:
+        dest: /etc/net-watchdog.conf
+        mode: "0644"
+        content: |
+          # Managed by provision-net-watchdog.yml — do not edit by hand.
+          GATEWAY={{ gateway | regex_replace('/.*$','') }}
+          PEERS="{{ _peers }}"
+          NIC=nic0
+
+    - name: Enable + start the watchdog timer
+      ansible.builtin.systemd:
+        name: net-isolation-watchdog.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: watchdog timer active ·
+          gateway={{ gateway | regex_replace('/.*$','') }} · peers=[{{ _peers }}] ·
+          auto-reboot only on a confirmed e1000e hang.
