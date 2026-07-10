@@ -1,0 +1,23 @@
+---
+# Host rebuild orchestrator — the "run this after you reinstall Proxmox" play.
+# Chains the UNIVERSAL, node-agnostic, non-interactive base config every PVE host must have, in
+# order, so a rebuilt node comes back fully configured in one command (nothing silently skipped —
+# this exists to prevent config drift after a reinstall, e.g. the NIC-hardening/watchdog we'd
+# otherwise forget). Idempotent — safe to re-run on a healthy node.
+#
+# Run from the mgmt-vm, inside homelab/ansible/ (re-add the mgmt-vm SSH key first — see
+# provision-host-base.yml header):
+#   ansible-playbook playbooks/provision-host.yml --limit <node>
+#
+# NOT included here (run per-node afterwards — they create specific guests and/or prompt for
+# secrets, so they aren't blanket base config): provision-monitoring (oneill),
+# provision-tailscale (apophis+oneill), provision-technitium (oneill+carter), provision-pbs,
+# provision-vaultwarden, provision-deadmans-switch (apophis), provision-patching, and the media
+# plays. See the "Host rebuild — ordered recipe" section in docs/operations/runbooks.md for the
+# full per-node checklist.
+
+- import_playbook: provision-host-base.yml      # no-subscription apt repos
+- import_playbook: harden-ssh.yml               # key-only root SSH
+- import_playbook: install-node-exporter.yml    # node_exporter (node-local; lost on reinstall)
+- import_playbook: provision-nic-hardening.yml  # e1000e TX-hang mitigation (2026-07-10 incident)
+- import_playbook: provision-net-watchdog.yml   # network-isolation self-heal watchdog

@@ -326,7 +326,8 @@ backlog item.)
 - **Note (PBS repo):** the PBS CT must stay on `pbs-no-subscription` — `provision-pbs.yml` disables
   the shipped `pbs-enterprise` repo (it 401s and breaks `apt-get update` / unattended-upgrades).
 - **Proxmox host repos:** fresh nodes ship the enterprise repos (401 without a sub) → switch to
-  `pve-no-subscription` (done by hand on apophis + oneill; host-prep play still to be codified).
+  `pve-no-subscription`. Now codified: `provision-host-base.yml` (or `provision-host.yml`, which
+  runs it first). See the [Host rebuild — ordered recipe](#host-rebuild--ordered-recipe).
 
 > **Why the hosts always show a pile of updates** (and the guests don't): hosts **batch monthly**
 > while guests **auto-patch daily**, so up to a month of Debian + the fast-moving `pve-no-subscription`
@@ -651,6 +652,40 @@ Suggested order: Technitium/DNS = 1 → Tailscale/PBS/monitoring = 2 → Home As
 
 ---
 
+## Host rebuild — ordered recipe
+
+**What runs, in order, to bring a reinstalled PVE node fully back.** The node-specific sections
+below ([apophis 4b](#phase-4b-rebuild-apophis-on-zfs-one-time--infra-designer-reviewed-2026-06-22),
+[carter DR](#rebuild-carter-the-failover-target--dr-runbook)) carry the cluster-join detail and
+lessons; this is the master checklist so nothing is silently skipped (the NIC-hardening + watchdog
+are easy to forget — that's the whole point of `provision-host.yml`).
+
+**Split: some steps can't be codified (they precede or wrap Ansible), the rest are one command.**
+
+| # | Step | How | Codified? |
+|---|------|-----|-----------|
+| 1 | Install PVE from ISO → **ZFS (RAID0)**, set hostname + network | at the console | ✋ manual (ISO installer) |
+| 2 | Re-add the mgmt-vm root SSH key | `ssh-keygen -R <ip>` then `ssh-copy-id root@<ip>` from mgmt-vm | ✋ manual (bootstrap trust) |
+| 3 | **Base host config** — no-sub repos, key-only SSH, node_exporter, NIC-hardening, net-watchdog | `ansible-playbook playbooks/provision-host.yml --limit <node>` | ✅ `provision-host.yml` |
+| 4 | `apt dist-upgrade` the host | `ansible-playbook playbooks/update-pve-host.yml --limit <node>` | ✅ `update-pve-host.yml` |
+| 5 | **Cluster join** (apophis/carter only — oneill is standalone) | `pvecm add …` on the node's TTY — **mind the 2FA join blocker** | ✋ manual — see per-node section |
+| 6 | Storage + replication (cluster nodes) | `pvesm set local-zfs --nodes …`; `pvesr create-local-job …` | ✋ manual — see per-node section |
+| 7 | **Node-specific guests/services** (below) | per-node playbooks | ✅ playbooks (secrets prompted) |
+
+**Step 7 — which service plays to run, by node** (each is idempotent; secrets are pasted from
+Vaultwarden at the prompt where noted):
+
+| Node | Run after base |
+|------|----------------|
+| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) |
+| **carter** | `provision-technitium.yml --limit carter` (admin pw) · `provision-patching.yml` |
+| **oneill** | `provision-monitoring.yml` (Grafana pw) · `provision-tailscale.yml --limit oneill -e tailscale_ctid=126 …` (see [tailscale.md](../components/tailscale.md)) · `provision-technitium.yml --limit oneill` · `provision-pbs.yml` · `provision-ha-backup-share.yml` |
+
+> **Note (cluster nodes):** most guest **config** returns automatically via cluster-shared
+> `/etc/pve` on rejoin (users/2FA/ACLs/storage.cfg/VM configs) — the plays above rebuild the
+> **node-local** bits (node_exporter, NIC/watchdog) and re-create guests that live only as code
+> (Tailscale, Technitium). Imaged guests (VM 118 Vaultwarden) restore from PBS, not a play.
+
 ## Phase 4b: rebuild apophis on ZFS (one-time) — infra-designer-reviewed 2026-06-22
 
 Goal: move apophis from LVM-thin to **ZFS-on-root** so it can host `pvesr`-replicated VMs for
@@ -675,11 +710,11 @@ window**, one step at a time, honouring every VERIFY gate.
 2. **Migrate VM 100 → carter.** *Drive from a browser NOT inside mgmt-vm* (this session drops + reconnects; same IP via the UniFi MAC reservation). **VERIFY:** SSH to mgmt-vm works, `hostname`=mgmt-vm, git repo intact.
 3. ~~**Rebuild Tailscale on oneill**~~ — **SKIPPED (2026-06-25): Tailscale stays on apophis** (decided; supersedes the earlier "→ oneill" intent). CT 110 was migrated carter→apophis during 4b instead. See execution notes below.
 4. **Remove apophis from the cluster.** Power apophis off first, then on **carter**: `pvecm expected 1` (else carter, now 1/2, goes read-only) → `pvecm delnode apophis`. **VERIFY:** `pvecm status` on carter = Quorate, Expected 1; VMs 100+200 running on carter.
-5. **Reinstall apophis** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on the SSD, hostname `apophis`. Then: set no-subscription repos (same as carter onboarding), `apt update && dist-upgrade`, restore root `authorized_keys`. **VERIFY:** boots, `pveversion`=9.2.3, `zpool list` shows rpool.
+5. **Reinstall apophis** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on the SSD, hostname `apophis`. Then re-add the mgmt-vm key (`ssh-keygen -R YOUR_PROXMOX_IP` + `ssh-copy-id root@YOUR_PROXMOX_IP`) and run the **codified base**: `ansible-playbook playbooks/provision-host.yml --limit apophis` (no-sub repos + key-only SSH + node_exporter + NIC-hardening + net-watchdog), then `update-pve-host.yml` for the dist-upgrade. **VERIFY:** boots, `pveversion`=9.2.3, `zpool list` shows rpool. *(This replaces the old by-hand repo switch — see [Host rebuild — ordered recipe](#host-rebuild--ordered-recipe).)*
 6. **Rejoin (carter root has 2FA — cluster-wide):** from mgmt-vm `ssh-keygen -R YOUR_PROXMOX_IP` (clear apophis's old host key) then `ssh-copy-id root@YOUR_PROXMOX_IP` (re-add the node-local mgmt-vm key); on **apophis's shell (a TTY)** run `pvecm add YOUR_CARTER_IP` — enter carter's root pw **+ 2FA OTP** (the GUI/API join fails with 2FA, as when we first formed the cluster). On rejoin apophis pulls the cluster-shared `/etc/pve` → users/2FA/ACLs/monitoring-token/storage.cfg return automatically. **VERIFY:** `pvecm status` = 2 nodes, Quorate, Expected 2.
 7. **Fix storage:** `pvesm set local-zfs --nodes apophis,carter` and `pvesm remove local-lvm` (apophis has no LVM now). **VERIFY:** local-zfs active on both.
 8. **Migrate 100 + 200 back to apophis** (`--targetstorage local-zfs`). **VERIFY:** HA + mgmt-vm healthy on apophis.
-9. **Verify monitoring resumes:** the PVE monitoring token is in cluster-shared `/etc/pve` → it returns on rejoin, so apophis's pve-exporter should auth automatically. **node_exporter** is node-local → reinstall it: `ansible-playbook playbooks/install-node-exporter.yml --limit apophis`. **VERIFY:** apophis node + pve-exporter targets up in Prometheus; only re-run `provision-monitoring.yml` if the pve target stays down.
+9. **Verify monitoring resumes:** the PVE monitoring token is in cluster-shared `/etc/pve` → it returns on rejoin, so apophis's pve-exporter should auth automatically. **node_exporter** is node-local but already reinstalled by `provision-host.yml` at step 5 (re-run `install-node-exporter.yml --limit apophis` only if you skipped it). **VERIFY:** apophis node + pve-exporter targets up in Prometheus; only re-run `provision-monitoring.yml` if the pve target stays down.
 10. **2FA — no re-enrollment needed:** root@pam + simon@pve TOTP lives in cluster-shared `/etc/pve/priv/tfa.cfg` and returns on rejoin. **VERIFY:** log into apophis's GUI with TOTP to confirm it works.
 11. **Set up replication:** `pvesr create-local-job 200-0 carter --schedule '*/15'` then `pvesr run --id 200-0` (first full send). **VERIFY:** `pvesr status` shows job `200-0` State OK, FailCount 0; `zfs list -t snapshot` on carter shows a `__replicate__` snapshot. *(Note: the job ID is `<vmid>-<n>`, e.g. `200-0`; the older `pvesr create --guest …` form does not exist on PVE 9.)*
 
@@ -714,8 +749,11 @@ maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
    `pvecm delnode carter`, then if the node dir lingers `rm -rf /etc/pve/nodes/carter`. **VERIFY:**
    carter gone from `pvecm status` and the GUI.
 3. **Reinstall carter** from the PVE 9.2.3 ISO → **ZFS (RAID0)** on its SSD, hostname `carter`. Then
-   set no-subscription repos, `apt update && dist-upgrade`, restore root `authorized_keys`.
-   **VERIFY:** boots, `pveversion`, `zpool list` shows rpool.
+   re-add the mgmt-vm key (`ssh-keygen -R YOUR_CARTER_IP` + `ssh-copy-id root@YOUR_CARTER_IP`) and run
+   the **codified base**: `ansible-playbook playbooks/provision-host.yml --limit carter` (no-sub repos
+   + key-only SSH + node_exporter + NIC-hardening + net-watchdog), then `update-pve-host.yml` for the
+   dist-upgrade. **VERIFY:** boots, `pveversion`, `zpool list` shows rpool.
+   *(See [Host rebuild — ordered recipe](#host-rebuild--ordered-recipe).)*
 4. **Rejoin — mind the 2FA join blocker.** apophis's `root@pam` has cluster-wide 2FA; the `pvecm add`
    OTP prompt **will likely fail `401`** (this bit us on the apophis join). Pre-empt it: from mgmt-vm
    (key auth bypasses 2FA) on **apophis** `cp -a /etc/pve/priv/tfa.cfg /root/tfa.cfg.bak.$(date +%s)`
@@ -725,9 +763,10 @@ maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
    **re-enroll TOTP** for `root@pam` (and check `simon@pve`) via Datacenter → Permissions → Two Factor,
    and `pvecm expected 2`.
 5. **Fix storage:** `pvesm set local-zfs --nodes apophis,carter`. **VERIFY:** local-zfs active on both.
-6. **node_exporter** (node-local): `ansible-playbook playbooks/install-node-exporter.yml --limit carter`.
-   The PVE monitoring token is cluster-shared → carter's pve-exporter re-auths automatically.
-   **VERIFY:** carter node + pve targets up in Prometheus.
+6. **node_exporter** — already reinstalled by `provision-host.yml` at step 3 (re-run
+   `install-node-exporter.yml --limit carter` only if you skipped it). The PVE monitoring token is
+   cluster-shared → carter's pve-exporter re-auths automatically. **VERIFY:** carter node + pve
+   targets up in Prometheus.
 7. **Recreate replication (apophis → carter)** for both critical VMs:
    `pvesr create-local-job 200-0 carter --schedule '*/15'` and
    `pvesr create-local-job 118-0 carter --schedule '*/15'`, then `pvesr run --id 200-0 && pvesr run --id 118-0`
