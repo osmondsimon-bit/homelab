@@ -116,6 +116,23 @@
       no_log: true
       changed_when: true
 
+    - name: Deploy the Glance per-router health endpoint (:9099) into the CT
+      # 200 iff tailscaled up AND advertising the approved LAN route — real per-router status
+      # (Glance check_url), so a broken router shows RED even when Tailscale's cloud is fine.
+      vars:
+        _health_py: "{{ lookup('file', playbook_dir + '/../files/tailscale/tailscale-health.py') | b64encode }}"
+        _health_unit: "{{ lookup('file', playbook_dir + '/../files/tailscale/tailscale-health.service') | b64encode }}"
+      ansible.builtin.shell: |
+        pct exec {{ tailscale_ctid }} -- bash -c '
+          printf "%s\n" "{{ tailscale_advertise_routes }}" > /etc/tailscale-health.route
+          base64 -d > /usr/local/bin/tailscale-health.py <<< "{{ _health_py }}"
+          base64 -d > /etc/systemd/system/tailscale-health.service <<< "{{ _health_unit }}"
+          chmod +x /usr/local/bin/tailscale-health.py
+          systemctl daemon-reload && systemctl enable --now tailscale-health.service
+          systemctl restart tailscale-health.service
+        '
+      changed_when: true
+
     - name: Get the Tailscale IPv4 address
       ansible.builtin.command: "pct exec {{ tailscale_ctid }} -- tailscale ip -4"
       register: ts_ip

@@ -18,6 +18,11 @@ tailscale_cores: 1
 tailscale_disk_gb: 4
 tailscale_ip: YOUR_TAILSCALE_LAN_IP/24                                # verify free; reserve in UniFi
 tailscale_advertise_routes: "YOUR_LAN_CIDR"                # add IoT/mgmt subnets if wanted
+# 2nd HA subnet router (CT 126) — removes the single remote-access chokepoint (one router node).
+# Provisioned on a DIFFERENT node via per-instance overrides, then approve its route in the admin console:
+#   ansible-playbook playbooks/provision-tailscale.yml --limit <node> \
+#     -e tailscale_ctid=126 -e tailscale_ip=YOUR_TAILSCALE2_LAN_IP/24 -e tailscale_hostname=tailscale2
+tailscale2_ip: YOUR_TAILSCALE2_LAN_IP/24                   # CT 126 — used by the Glance per-router health tile
 
 # --- Technitium DNS LXC (DNS-only resolvers, ADR-011) ------------------------
 # Shared shape + config (both resolvers stay identical). Per-instance identity is in
@@ -169,11 +174,12 @@ glance_services:
   - { title: "Prometheus", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
   - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
   - { title: "Proxmox Backup Server", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
-  # Tailscale: tile links to the admin console, but the HEALTH check hits derpmap/default
-  # (clean 200, no auth) — the admin URL 302-redirects into the login page (~1.2s, heavy),
-  # which intermittently trips Glance's monitor timeout (false RED). derpmap is a fast,
-  # no-auth "Tailscale control-plane reachable" probe.
-  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", check_url: "https://login.tailscale.com/derpmap/default", icon: "di:tailscale" }
+  # Tailscale HA subnet-router pair: tiles link to the admin console; the HEALTH check hits each
+  # router CT's own :9099 endpoint (200 iff tailscaled up AND advertising the approved LAN route) —
+  # REAL per-router status (a broken router shows RED even when Tailscale's cloud is fine). The
+  # endpoint is deployed by provision-tailscale.yml. tailscale = router #1; tailscale2 = router #2 (HA).
+  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
+  - { title: "Tailscale2", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale2_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
   - { title: "Infra Portal", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.

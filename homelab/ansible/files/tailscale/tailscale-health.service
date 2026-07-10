@@ -1,0 +1,10 @@
+[Unit]
+Description=Tailscale subnet-router health endpoint (Glance check_url :9099)
+After=tailscaled.service
+Wants=tailscaled.service
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/tailscale-health.py
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
