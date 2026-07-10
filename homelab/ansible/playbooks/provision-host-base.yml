@@ -1,0 +1,59 @@
+---
+# Base host prep for a freshly (re)installed Proxmox VE node — the piece that used to be
+# "done by hand" (runbooks.md host-prep TODO). Switches the node off the enterprise apt repo
+# onto pve-no-subscription so `apt update` works without a subscription key, then refreshes the
+# cache. Node-agnostic + idempotent — safe to run on every PVE host and to re-run.
+#
+# Run from the mgmt-vm (control node), inside homelab/ansible/. After a reinstall you must first
+# re-add the mgmt-vm's root SSH key (`ssh-copy-id root@<node>`) so Ansible can connect.
+#   ansible-playbook playbooks/provision-host-base.yml --limit <node>
+#
+# Codename (trixie on PVE 9) is derived from the host, not hardcoded, so it survives a major
+# PVE/Debian bump. Does NOT run dist-upgrade — that's update-pve-host.yml / the operator.
+
+- name: Base host prep — no-subscription apt repos
+  hosts: proxmox
+  gather_facts: true
+  tasks:
+    - name: Find any enterprise apt sources present
+      ansible.builtin.stat:
+        path: "/etc/apt/sources.list.d/{{ item }}"
+      register: ent_src
+      loop:
+        - pve-enterprise.sources
+        - ceph.sources
+
+    - name: Disable enterprise apt sources (this is a no-subscription lab)
+      ansible.builtin.lineinfile:
+        path: "{{ item.stat.path }}"
+        regexp: '^Enabled:'
+        line: 'Enabled: false'
+        state: present
+      loop: "{{ ent_src.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stat.exists
+
+    - name: Add the pve-no-subscription source (deb822)
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/pve-no-subscription.sources
+        mode: "0644"
+        content: |
+          # Managed by provision-host-base.yml — PVE no-subscription repo.
+          Types: deb
+          URIs: http://download.proxmox.com/debian/pve
+          Suites: {{ ansible_distribution_release }}
+          Components: pve-no-subscription
+          Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+      register: no_sub
+
+    - name: Refresh apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      when: no_sub.changed
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: on pve-no-subscription ({{ ansible_distribution_release }}) ·
+          enterprise sources disabled where present · run update-pve-host.yml for the dist-upgrade.
