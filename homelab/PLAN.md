@@ -93,7 +93,8 @@ runbook. A daily Prometheus textfile audit checks LXC enrollment, pending/securi
 running-vs-newest-installed kernel. Glance's **Maintenance State** pane shows the resulting action
 list; Alertmanager warns only for missing enrollment, security updates pending for 3 days, a reboot
 left outstanding for 7 days, or a stale audit. Container pins are proposed by Renovate but never
-auto-merged or auto-deployed.
+auto-merged or auto-deployed. A persistent mgmt-vm systemd timer sends an ntfy reminder at noon on
+the last day of each month to open those queues and run the deliberate maintenance window.
 
 ## Security hardening
 
@@ -189,7 +190,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 
 **Design data quality:**
 - [ ] **Verify remaining physical_infra/ specs against datasheets** — switch port specs were wrong until 2026-06-19 (revealed by checking techspecs.ui.com). What else hasn't been verified? Candidates: UPS rating vs actual peak draw (switch PoE + servers + UDM), AP actual PoE draw (nominal 30W but U7 Pro XGS spec may differ), patch cable lengths for PP-B → SW 41-45 run.
-- [ ] **Patching cadence enforcement** — update-pve-host.yml exists but there's no mechanism to remember to run it monthly. Is this a calendar reminder? A Glance widget? An infra-manager cron prompt? Without enforcement the hosts will drift.
+- [x] **Patching cadence enforcement — ✅ DONE 2026-07-13.** `provision-maintenance-monitoring.yml` installs a persistent mgmt-vm systemd timer that sends an ntfy reminder at 12:00 local on the last day of every month. The reminder points to Glance Maintenance State + Renovate and never upgrades or reboots anything; the operator follows the node-safe runbook deliberately.
 
 **Lower priority but don't forget:**
 - [ ] **CT 116 infra-portal ADR-017 compliance** — the onboarding checklist (monitoring ✓, alerting ✓) was partially followed. CT 116 is fully reproducible from the playbook so a formal restore drill is low-value, but a quick note in the runbook confirming this is the intended recovery path would close the loop.

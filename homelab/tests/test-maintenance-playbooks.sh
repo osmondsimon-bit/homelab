@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 install_tasks="${repo_root}/homelab/ansible/playbooks/tasks/install-maintenance-collector.yml"
 update_playbook="${repo_root}/homelab/ansible/playbooks/update-pve-host.yml"
+maintenance_playbook="${repo_root}/homelab/ansible/playbooks/provision-maintenance-monitoring.yml"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -25,5 +26,29 @@ assert_synchronous_start() {
 
 assert_synchronous_start "$install_tasks" 'Run the maintenance collector now'
 assert_synchronous_start "$update_playbook" 'Refresh dashboard maintenance state immediately'
+
+grep -Fq 'ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass' \
+  "$maintenance_playbook" \
+  || fail 'the canonical deployment command must request the local sudo password'
+
+grep -Fq "OnCalendar=*-*~1 12:00 {{ patching_timezone | default('Etc/UTC') }}" \
+  "$maintenance_playbook" \
+  || fail 'the reminder must run at noon on the last day of each month in the configured timezone'
+
+grep -Fq 'Persistent=true' "$maintenance_playbook" \
+  || fail 'the monthly reminder must catch up after mgmt-vm downtime'
+
+grep -Fq 'when: inventory_hostname == "mgmt-vm-maintenance"' "$maintenance_playbook" \
+  || fail 'the monthly reminder must be installed only on mgmt-vm'
+
+grep -Fq 'Review Glance Maintenance State and Renovate PRs.' "$maintenance_playbook" \
+  || fail 'the reminder must direct the operator to both maintenance queues'
+
+if grep -Eq 'ExecStart=.*(apt|reboot|shutdown)' "$maintenance_playbook"; then
+  fail 'the monthly timer must remind only; it must not patch or reboot'
+fi
+
+systemd-analyze calendar '*-*~1 12:00 Etc/UTC' >/dev/null \
+  || fail 'systemd must accept the last-day-of-month calendar expression'
 
 printf 'PASS: maintenance playbook regression tests\n'

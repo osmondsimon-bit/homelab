@@ -65,8 +65,8 @@ A two-track policy, both tracks owned by Ansible so they're reproducible:
 - **Window: the last day of each month, 12:00 (midday, AEST)** — chosen so the operator is present
   to catch any breakage, rather than patching/rebooting overnight and discovering dead automations
   the next morning. The Proxmox hosts **and the mgmt-vm** are patched in this window. **Not**
-  unattended — host/PVE upgrades and reboots are done knowingly. (Manual cadence for now; a monthly
-  ntfy reminder could nudge it later.)
+  unattended — host/PVE upgrades and reboots are done knowingly. A persistent systemd timer on
+  mgmt-vm sends an ntfy reminder at the start of the window; it never upgrades or reboots anything.
 - **Pre-cluster (now):** update one node at a time; accept brief, scheduled downtime for that node's
   guests (move the HA VM off apophis first where practical). apophis and oneill on alternating weeks
   so both aren't down together.
@@ -78,9 +78,10 @@ A two-track policy, both tracks owned by Ansible so they're reproducible:
   node is patch-ready reproducibly (codifies the manual oneill step).
 
 ### 3. Drive it from the dashboard + alerts
-- The monthly window is informed by Glance's *Package Updates* / *Reboot required* panes (hosts).
-- Later (optional): an Alertmanager rule on `node_reboot_required == 1` persisting > N days, or
-  growing `apt_upgrades_pending`, to nudge the window. Not required for v1.
+- The monthly window is informed by Glance's **Maintenance State** pane and Renovate proposals.
+- A mgmt-vm systemd timer sends a reminder through ntfy at noon on the last day of each month.
+- Alertmanager separately warns when a reboot remains outstanding for seven days, security updates
+  remain pending for three days, LXC enrollment is missing, or a maintenance audit becomes stale.
 
 ## Consequences
 
@@ -124,4 +125,5 @@ running-vs-installed kernel result, and never reboots unless `-e do_reboot=true`
 passed. `maintenance-collector.sh` publishes that same kernel comparison so Glance cannot falsely
 show “reboot required: no” after a PVE kernel upgrade. `provision-maintenance-monitoring.yml` adds
 daily update/reboot metrics for the manual Ubuntu VMs and LXC enrollment checks; alerts apply only
-after defined grace periods. The operator window remains the last day of the month at 12:00 local.
+after defined grace periods. It also installs the reminder-only mgmt-vm timer. The operator window
+remains the last day of the month at 12:00 local.
