@@ -1,8 +1,8 @@
 ---
 # Deploy update/reboot and patch-enrollment monitoring without applying upgrades or rebooting anything.
 # Run from the mgmt-vm with no --limit:
-#   ansible-playbook playbooks/provision-maintenance-monitoring.yml
-# Add --ask-become-pass if the local simon account does not have passwordless sudo.
+#   ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass
+# The become prompt is for the local simon account; remote targets use their configured sudo access.
 
 - import_playbook: install-node-exporter.yml
 
@@ -42,3 +42,70 @@
   tasks:
     - name: Install node_exporter and maintenance metrics
       ansible.builtin.include_tasks: tasks/install-maintenance-collector.yml
+
+    - name: Configure the monthly maintenance reminder on mgmt-vm
+      when: inventory_hostname == "mgmt-vm-maintenance"
+      block:
+        - name: Install curl for the ntfy reminder
+          ansible.builtin.apt:
+            name: curl
+            state: present
+
+        - name: Install the monthly maintenance reminder
+          ansible.builtin.copy:
+            dest: /usr/local/bin/homelab-maintenance-reminder
+            mode: "0755"
+            content: |
+              #!/usr/bin/env bash
+              # Send the monthly operator reminder; this never upgrades or reboots anything.
+              set -euo pipefail
+              curl -fsS \
+                -H "Title: Monthly homelab maintenance window" \
+                -H "Priority: default" \
+                -d "Review Glance Maintenance State and Renovate PRs. Patch oneill, carter, then apophis separately; patch mgmt-vm and VMs 118/125; review HAOS. Reboot only deliberately and handle apophis out-of-band." \
+                "$NTFY_URL"
+
+        - name: Configure the monthly maintenance reminder destination
+          ansible.builtin.copy:
+            dest: /etc/default/homelab-maintenance-reminder
+            mode: "0600"
+            content: |
+              NTFY_URL={{ (ntfy_base_url ~ '/' ~ ntfy_topic) | quote }}
+          no_log: true
+
+        - name: Install the monthly maintenance reminder service
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/homelab-maintenance-reminder.service
+            mode: "0644"
+            content: |
+              [Unit]
+              Description=Send the monthly homelab maintenance reminder
+              After=network-online.target
+              Wants=network-online.target
+
+              [Service]
+              Type=oneshot
+              EnvironmentFile=/etc/default/homelab-maintenance-reminder
+              ExecStart=/usr/local/bin/homelab-maintenance-reminder
+
+        - name: Install the monthly maintenance reminder timer
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/homelab-maintenance-reminder.timer
+            mode: "0644"
+            content: |
+              [Unit]
+              Description=Remind the operator about monthly homelab maintenance
+
+              [Timer]
+              OnCalendar=*-*~1 12:00 {{ patching_timezone | default('Etc/UTC') }}
+              Persistent=true
+
+              [Install]
+              WantedBy=timers.target
+
+        - name: Enable the monthly maintenance reminder
+          ansible.builtin.systemd:
+            name: homelab-maintenance-reminder.timer
+            daemon_reload: true
+            enabled: true
+            state: started

@@ -58,7 +58,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-pbs.yml` | Proxmox Backup Server LXC on oneill — backup hub (prompts for admin password; ADR-012). Run with `--limit oneill` |
 | `provision-ha-backup-share.yml` | Samba LXC on oneill for HA native backups (prompts for share password; ADR-012). Run with `--limit oneill` |
 | `install-node-exporter.yml` | Installs node_exporter plus PVE reboot/update and LXC patch-enrollment metrics on all Proxmox hosts. Runs on all hosts |
-| `provision-maintenance-monitoring.yml` | Deploys the maintenance collector to PVE hosts, mgmt-vm, VM 118, and VM 125. Read-only: reports pending updates/reboot intent and never upgrades or reboots. Run without `--limit` |
+| `provision-maintenance-monitoring.yml` | Deploys the maintenance collector to PVE hosts, mgmt-vm, VM 118, and VM 125, plus a reminder-only monthly ntfy timer on mgmt-vm. Reports pending updates/reboot intent and never upgrades or reboots. Run without `--limit`: `ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass` |
 | `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana + Alertmanager + exporters (mints read-only PVE tokens; prompts Grafana pw, blank=keep; ADR-013). Run **without** `--limit` (play 1 hits both hosts) |
 | `provision-glance.yml` | Glance dashboard LXC on oneill — front-door launchpad, pinned Go binary (ADR-014). Run with `--limit oneill` |
 | `provision-patching.yml` | Unattended **security** upgrades on all guest LXCs (discovered via `pct list`) — no auto-reboot, midday-local timer, ntfy on failure (ADR-015). Run on both hosts (no `--limit`) |

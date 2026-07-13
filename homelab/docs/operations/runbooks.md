@@ -321,7 +321,8 @@ backlog item.)
   reports reboot need; add `-e do_reboot=true` to reboot in-window), order **oneill → carter →
   apophis** (apophis last — it holds mgmt-vm + the HA VM, so **its reboot is out-of-band**; never run
   it as one block — see the per-host steps + danger box below). mgmt-vm itself patches by hand
-  (`sudo apt`, it's the control node). Driven by Glance's **Maintenance State** pane.
+  (`sudo apt`, it's the control node). A persistent mgmt-vm timer sends an ntfy reminder at the
+  start of the window; open Glance's **Maintenance State** pane and Renovate PRs from that reminder.
 - **Docker OS-VMs (118 vaultwarden, 125 jellyseerr) — manual:** their Ubuntu base is **not** covered by
   the CT auto-patcher (they're VMs, not CTs). `sudo apt full-upgrade` + reboot (they run real kernels)
   in the monthly window; the *container images* are digest-pinned and bumped separately (see below).
@@ -409,6 +410,7 @@ ansible-playbook playbooks/update-pve-host.yml --limit apophis                  
 **mgmt-vm — manual (control node):**
 ```bash
 sudo apt update && sudo apt full-upgrade                 # reboot if it asks (ends any live SSH/agent session)
+sudo systemctl start homelab-maintenance.service         # refresh Glance immediately if not rebooting yet
 # stuck dpkg lock (D-state unattended-upgr = unkillable) → reboot the VM:
 #   sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
 #   last resort: from apophis -> qm reset 100
@@ -420,6 +422,9 @@ ssh simon@YOUR_VAULTWARDEN_IP 'sudo apt update && sudo apt full-upgrade -y && su
 ssh simon@YOUR_JELLYSEERR_IP  'sudo apt update && sudo apt full-upgrade -y && sudo systemctl reboot'   # 125
 ssh simon@YOUR_JELLYSEERR_IP  'sudo docker ps; sudo docker exec gluetun wget -qO- https://api.ipify.org'  # egress != home WAN
 ```
+
+The maintenance collector runs three minutes after boot. If an OS VM does not need a reboot, refresh
+its dashboard state immediately with `sudo systemctl start homelab-maintenance.service`.
 
 **HAOS (200):** HA UI → partial backup (ADR-012) → Settings → Updates.
 **Docker images (pinned):** Renovate proposes tag/digest changes against the committed
@@ -434,12 +439,13 @@ The collector is read-only. It can count packages and compare kernels but cannot
 
 ```bash
 cd ~/homelab/ansible
-ansible-playbook playbooks/provision-maintenance-monitoring.yml  # PVE hosts + mgmt-vm + VM 118/125
+ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass  # PVE + manual VMs + monthly reminder
 ansible-playbook playbooks/provision-monitoring.yml              # scrape manual VMs + load alert rules
 ansible-playbook playbooks/provision-glance.yml --limit oneill   # render Maintenance State
 ```
 
-If the local `simon` account requires a sudo password, add `--ask-become-pass` to the first command.
+The become prompt is for the local `simon` account on mgmt-vm. The playbook never patches or reboots;
+its monthly timer only sends the operator reminder.
 
 On PVE, `/var/run/reboot-required` is often absent after a kernel upgrade. The collector therefore
 uses the same reliable rule as `update-pve-host.yml`: **running kernel != newest installed `-pve`
@@ -452,6 +458,7 @@ Useful checks:
 ```bash
 systemctl start homelab-maintenance.service
 cat /var/lib/prometheus/node-exporter/homelab_maintenance.prom
+systemctl list-timers homelab-maintenance-reminder.timer  # on mgmt-vm; confirm next monthly reminder
 curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_required'
 ```
 
@@ -842,7 +849,9 @@ top-to-bottom; most monitoring is automatic, so the list is short.
       (it discovers running CTs via `pct list`, so a new one is only covered after a re-run) —
       otherwise the CT **never security-patches**. Confirm with
       `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer`. For a new **Docker/OS
-      VM**, it's not CT-auto-patched — add it to the monthly manual host window instead.
+      VM**, it's not CT-auto-patched — add it to the monthly manual host window, add it to
+      `provision-maintenance-monitoring.yml`'s manual targets, and add its node_exporter endpoint to
+      `provision-monitoring.yml`; then re-run both playbooks so Glance can report its state.
 
 **2. Monitoring — mostly automatic, confirm + register**
 - Automatic (no action): `GuestDown` (`pve_up`), Glance VM/LXC CPU/RAM/Disk (`pve_guest_info` +
