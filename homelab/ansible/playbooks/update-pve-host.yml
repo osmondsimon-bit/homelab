@@ -67,9 +67,7 @@
       register: maintenance_collector
 
     - name: Refresh dashboard maintenance state immediately
-      ansible.builtin.systemd:
-        name: homelab-maintenance.service
-        state: started
+      ansible.builtin.command: systemctl start homelab-maintenance.service
       when: maintenance_collector.stat.exists
 
     - name: Report
