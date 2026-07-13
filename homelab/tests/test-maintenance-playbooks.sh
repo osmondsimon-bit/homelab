@@ -27,6 +27,18 @@ assert_synchronous_start() {
 assert_synchronous_start "$install_tasks" 'Run the maintenance collector now'
 assert_synchronous_start "$update_playbook" 'Refresh dashboard maintenance state immediately'
 
+grep -Fq 'Carter GUI/TOTP login will fail while /etc/pve is read-only.' "$update_playbook" \
+  || fail 'the apophis update path must warn that Carter TOTP depends on quorum'
+
+grep -Fq "ssh root@carter 'pvecm expected 1'" "$update_playbook" \
+  || fail 'the apophis update path must print the Carter SSH quorum-recovery command'
+
+grep -Fq 'only AFTER confirming apophis is actually down' "$update_playbook" \
+  || fail 'the quorum-recovery command must include its split-brain safety condition'
+
+grep -Fq 'inventory_hostname == "apophis"' "$update_playbook" \
+  || fail 'the Carter quorum warning must be scoped to apophis'
+
 grep -Fq 'ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass' \
   "$maintenance_playbook" \
   || fail 'the canonical deployment command must request the local sudo password'
