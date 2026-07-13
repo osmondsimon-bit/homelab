@@ -1,0 +1,84 @@
+---
+# Shared node_exporter textfile-collector installation for PVE hosts and manually patched Ubuntu VMs.
+
+- name: Install node_exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    update_cache: true
+
+- name: Ensure the node_exporter textfile directory exists
+  ansible.builtin.file:
+    path: /var/lib/prometheus/node-exporter
+    state: directory
+    mode: "0755"
+
+- name: Install the maintenance collector
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../files/monitoring/maintenance-collector.sh"
+    dest: /usr/local/bin/homelab-maintenance-collector
+    mode: "0755"
+
+- name: Configure the maintenance collector identity
+  ansible.builtin.copy:
+    dest: /etc/default/homelab-maintenance
+    mode: "0644"
+    content: |
+      TARGET_NAME={{ maintenance_target_name }}
+      TARGET_KIND={{ maintenance_target_kind }}
+      TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+
+- name: Install the maintenance collector service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-maintenance.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Write homelab maintenance state for Prometheus
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      EnvironmentFile=/etc/default/homelab-maintenance
+      ExecStart=/usr/local/bin/homelab-maintenance-collector
+      Nice=10
+
+- name: Install the daily maintenance collector timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-maintenance.timer
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Audit homelab maintenance state daily
+
+      [Timer]
+      OnBootSec=3min
+      OnUnitActiveSec=1d
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Enable node_exporter and the maintenance timer
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop:
+    - prometheus-node-exporter
+    - homelab-maintenance.timer
+
+- name: Run the maintenance collector now
+  ansible.builtin.systemd:
+    name: homelab-maintenance.service
+    state: started
+
+- name: Confirm the maintenance metrics were written
+  ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_maintenance.prom
+  register: maintenance_metrics
+  changed_when: false
+
+- name: Report the maintenance metrics
+  ansible.builtin.debug:
+    var: maintenance_metrics.stdout_lines

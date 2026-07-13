@@ -19,7 +19,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Multi-node cluster + manual failover | Proxmox cluster + ZFS replication (`pvesr`) | **Phase 4 ✓ 2026-06-25** — **2-node** cluster `homelab` (apophis + carter); oneill stays standalone (ADR-009, revised from 3-node). `pvesr` job 200-0 replicates VM 200 every 15 min; **manual failover, NO HA manager/fencing** (single-NIC network isn't HA-grade). Corosync 10s token ride-out; replication-health alerts live. |
 | DNS + ad blocking | Technitium DNS | Phase 2 ✓ — CT 111 on **oneill**. DNS-only, UniFi keeps DHCP (ADR-011); OISD Big + DoH, config automated via API. Serves the **home VLAN**; IoT/guest use the gateway (DNS-by-VLAN-role). **Phase 4 ✓ 2026-06-25: DNS redundancy** — 2nd resolver CT 117 `technitium2` on **carter** (config-identical via the `technitium_instances` playbook loop), independent node from CT 111, removes the DNS SPOF. (Operator: hand both out as DHCP DNS servers.) |
 | Remote access (HA) | Cloudflare Tunnel (cloudflared add-on) | Already running for Home Assistant |
-| Remote access (admin) | Tailscale | Deployed — CT 110 on **apophis**. Stays on apophis (decided 2026-06-25 — supersedes the earlier "migrate to the NUC" intent; ADR-003) |
+| Remote access (admin) | Tailscale | HA subnet-router pair live — CT 110 on **apophis** + CT 126 on **oneill**, both advertising the LAN; Tailscale selects/fails over the route (ADR-003). |
 | Monitoring | Prometheus + Grafana + Alertmanager | Phase 3 ✓ — live on **oneill**, CT 114. Scrapes node/pve/UniFi/HA; Alertmanager → am-ntfy bridge → ntfy, starter rules + apophis dead-man's-switch (ADR-013) |
 | Service dashboard | **Glance** (was Homepage) | Phase 3 ✓ — front-door live on **oneill**, CT 115. Native Go binary (no Docker), links to Grafana; Homepage rejected as Docker-first (ADR-014). Wall-tablet UI is HA's job (Phase 5 HA-expansion) |
 | VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
@@ -29,7 +29,8 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Password manager | Vaultwarden (self-hosted) | **Phase 5 ✓ 2026-06-26** — VM 118 on apophis, Ubuntu 24.04 + Docker container (native-LXC plan OOMed), Tailscale-Serve TLS, tailnet-only; `pvesr` to carter + PBS daily; tailnet ACL locks it to operator devices. ADR-010/014/018. |
 | Secret handling | Tier 3 env files + Vaultwarden (Tier 1) | ADR-018 (revised 2026-06-25): **ansible-vault dropped** as never-wired-in. Machine tokens → gitignored `~/.*.env` on mgmt-vm; human-typed admin passwords → Vaultwarden. Tier 2 anchors (PBS/HA keys, 2FA recovery codes) → Keychain, outside the lab. |
 | Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
-| Updates / patching | unattended-upgrades + `provision-patching.yml` | Phase 3 ✓ — ADR-015 accepted and live. Guests: security-only, midday, no auto-reboot. Hosts + mgmt-vm: manual monthly window; zero-downtime once Phase 4 HA exists. |
+| Updates / patching | unattended-upgrades + maintenance intent metrics | ADR-015 live. Guests: security/point-release auto-patch at midday, no auto-reboot. PVE hosts + Ubuntu VMs: manual monthly. Glance shows pending/reboot/enrollment state; ntfy alerts only for overdue/security failures. Docker pins: Renovate proposals, manual deployment. |
+| Dependency updates | Renovate | Docker-image proposals only: custom manager watches committed Ansible defaults; no automerge or automatic deployment. Broader package automation remains deferred. |
 | Infra portal | Python + D2 generator → CT 116 nginx | Phase 3 ✓ — `infra-portal-generate.py` on mgmt-vm, daily systemd timer, rsync to CT 116 via restricted deploy key. Switch VLAN/PoE view, rack layout, network topology SVG (ADR-020). |
 
 ---
@@ -45,7 +46,6 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | MCP server (Grafana) | Grafana MCP | Phase 4+ | Parked — Grafana live but read-via-browser; revisit if agent-driven dashboard work becomes common |
 | Infra agent tool access | scoped-MCP pattern (TadMSTR) | Phase 5+ | Still parked — 4 agents exist (infra-designer, infra-manager, doc-auditor, continuity-reviewer) but each is narrow + manually-invoked; scoped-MCP plumbing not yet worth the overhead. Reassess Phase 5. |
 | Workflow engine | Temporal | New house | Complex multi-step automation beyond Ansible |
-| Dependency updates | Renovate | New house | Active container/package deployments to manage |
 
 ---
 

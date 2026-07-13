@@ -12,8 +12,8 @@ Assistant). Admin launchpad across apophis + oneill (ADR-014).
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
-| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, updates, alerts, versions |
-| Layout | One `Homelab` page, 3 columns — **left:** Proxmox hosts + storage pools + package updates · **center:** service status + infrastructure + VM/LXC metrics · **right:** alert summary + installed versions + latest releases + admin links |
+| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent, alerts, versions |
+| Layout | One `Homelab` page, 3 columns — **left:** Proxmox hosts + storage pools + Maintenance State · **center:** service status + infrastructure + VM/LXC metrics · **right:** alert summary + installed versions + latest releases + admin links |
 
 ## How it's managed
 
@@ -40,7 +40,10 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 >
 > **Scope:** keep this an operator *summary*. Deep time-series, network throughput, alert
 > debugging, and capacity planning belong in **Grafana** (the panels link out to it). "Installed
-> Versions" vs "Latest Releases" is a visual comparison only — not automatic drift detection.
+> Versions" vs "Latest Releases" remains a visual comparison. **Maintenance State** is the
+> actionable update surface: manual apt targets, PVE reboot need, LXC auto-patch enrollment,
+> security-pending counts, and audit age. Container version proposals arrive through Renovate;
+> they are always reviewed and deployed manually.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.

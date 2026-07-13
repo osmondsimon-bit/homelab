@@ -1,0 +1,44 @@
+---
+# Deploy update/reboot and patch-enrollment monitoring without applying upgrades or rebooting anything.
+# Run from the mgmt-vm with no --limit:
+#   ansible-playbook playbooks/provision-maintenance-monitoring.yml
+# Add --ask-become-pass if the local simon account does not have passwordless sudo.
+
+- import_playbook: install-node-exporter.yml
+
+- name: Register manually patched Ubuntu targets
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Register mgmt-vm locally
+      ansible.builtin.add_host:
+        name: mgmt-vm-maintenance
+        ansible_connection: local
+        maintenance_target_name: mgmt-vm
+        maintenance_target_kind: manual-vm
+        groups: _maintenance_targets
+      changed_when: false
+
+    - name: Register the Docker OS VMs
+      ansible.builtin.add_host:
+        name: "{{ item.name }}-maintenance"
+        ansible_host: "{{ item.ip | regex_replace('/.*$', '') }}"
+        ansible_user: "{{ item.user }}"
+        ansible_python_interpreter: /usr/bin/python3
+        maintenance_target_name: "{{ item.name }}"
+        maintenance_target_kind: manual-vm
+        groups: _maintenance_targets
+      loop:
+        - { name: vaultwarden, ip: "{{ vaultwarden_ip }}", user: "{{ vaultwarden_ci_user | default('simon') }}" }
+        - { name: jellyseerr, ip: "{{ jellyseerr_ip }}", user: "{{ jellyseerr_ci_user | default('simon') }}" }
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: false
+
+- name: Install maintenance metrics on manually patched Ubuntu VMs
+  hosts: _maintenance_targets
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Install node_exporter and maintenance metrics
+      ansible.builtin.include_tasks: tasks/install-maintenance-collector.yml

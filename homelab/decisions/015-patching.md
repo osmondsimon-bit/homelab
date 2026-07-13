@@ -1,7 +1,7 @@
 # ADR-015: Patching & updates — auto security patches on guests, monthly rolling window on hosts
 
 **Date:** 2026-06-17
-**Status:** Accepted (operator-confirmed 2026-06-17). Guest track **implemented** 2026-06-17; host track deferred (see Implementation note).
+**Status:** Accepted and implemented. Guest track live 2026-06-17; host playbook live 2026-06-19; maintenance-intent monitoring added 2026-07-13.
 
 ## Context
 
@@ -21,10 +21,11 @@ Constraints that shape the approach:
   own OS/Core updates through the HA UI — it is **not** an `apt` target.
 - **Reboot cost changes at Phase 4.** Pre-cluster, rebooting a host = downtime for its guests.
   Post-cluster, **HA failover + live migration** cover the reboot, enabling true rolling updates.
-- **Visibility now exists (hosts only).** `node_exporter` on apophis + oneill exposes
-  `apt_upgrades_pending` and `node_reboot_required`; Glance surfaces both (ADR-014). Guest LXCs
-  don't run `node_exporter`, so per-guest pending counts aren't visible — which is fine *if* guests
-  auto-patch.
+- **Visibility is intent-aware.** A node_exporter textfile collector on every PVE host compares the
+  running kernel with the newest installed `-pve` kernel (PVE often lacks
+  `/var/run/reboot-required`), counts pending/security packages, and audits every running LXC for
+  active unattended-upgrades enrollment. The same collector runs on the manually patched Ubuntu
+  VMs. Glance surfaces the combined state (ADR-014).
 - Fresh PVE nodes ship the **enterprise** apt repos, which `401` without a subscription and break
   `apt`; they must be switched to `pve-no-subscription` (done manually on oneill 2026-06-16).
 
@@ -117,6 +118,10 @@ security/point-release only, never the regular feature/bugfix pocket).
 without a subscription and broke `apt-get update` (and would have caused daily false ntfy failures).
 `provision-pbs.yml` now disables it (idempotently) in favour of the existing `pbs-no-subscription`.
 
-**Host track — deferred (tracked in PLAN).** The Proxmox hosts + mgmt-vm are still patched manually
-in the monthly window (last day, 12:00 local). The `pve-no-subscription` host-prep play (already done
-by hand on apophis + oneill) is the remaining piece to codify for reproducible new nodes.
+**Host track — done, still deliberately manual.** `provision-host-base.yml` codifies the
+`pve-no-subscription` repositories and `update-pve-host.yml` upgrades exactly one node, reports the
+running-vs-installed kernel result, and never reboots unless `-e do_reboot=true` is explicitly
+passed. `maintenance-collector.sh` publishes that same kernel comparison so Glance cannot falsely
+show “reboot required: no” after a PVE kernel upgrade. `provision-maintenance-monitoring.yml` adds
+daily update/reboot metrics for the manual Ubuntu VMs and LXC enrollment checks; alerts apply only
+after defined grace periods. The operator window remains the last day of the month at 12:00 local.

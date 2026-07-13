@@ -312,12 +312,16 @@ backlog item.)
   - Check a guest: `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer` (next = local noon);
     `pct exec <ctid> -- unattended-upgrade --dry-run` (shows allowed origins + candidates).
   - Logs: inside the CT, `/var/log/unattended-upgrades/`. A failure pushes an ntfy alert.
+  - Visibility: the daily maintenance collector on each PVE host reports enrollment, all pending
+    packages, security-classified pending packages, and last unattended-upgrades activity. A new
+    CT that was not enrolled turns the Glance Maintenance State pane red and raises
+    `GuestPatchEnrollmentMissing` after one hour.
 - **Hosts + mgmt-vm (manual):** deliberate **monthly window — last day of month, 12:00 AEST** (be
   present for fallout). One node at a time via **`update-pve-host.yml --limit <host>`** (upgrades +
   reports reboot need; add `-e do_reboot=true` to reboot in-window), order **oneill → carter →
   apophis** (apophis last — it holds mgmt-vm + the HA VM, so **its reboot is out-of-band**; never run
   it as one block — see the per-host steps + danger box below). mgmt-vm itself patches by hand
-  (`sudo apt`, it's the control node). Driven by Glance's *Package Updates* / *Reboot required* panes.
+  (`sudo apt`, it's the control node). Driven by Glance's **Maintenance State** pane.
 - **Docker OS-VMs (118 vaultwarden, 125 jellyseerr) — manual:** their Ubuntu base is **not** covered by
   the CT auto-patcher (they're VMs, not CTs). `sudo apt full-upgrade` + reboot (they run real kernels)
   in the monthly window; the *container images* are digest-pinned and bumped separately (see below).
@@ -418,7 +422,38 @@ ssh simon@YOUR_JELLYSEERR_IP  'sudo docker ps; sudo docker exec gluetun wget -qO
 ```
 
 **HAOS (200):** HA UI → partial backup (ADR-012) → Settings → Updates.
-**Docker images (pinned):** bump digests in group_vars + re-run the provision play — deliberate, not an OS round.
+**Docker images (pinned):** Renovate proposes tag/digest changes against the committed
+`all.yml.example`; review the upstream release notes, copy the accepted value into the gitignored
+live `all.yml`, and re-run the owning provision play. Renovate never automerges or deploys. The
+repository-side `renovate.json` is ready; proposal PRs begin only after the Renovate GitHub App is
+enabled for this repository.
+
+### Maintenance visibility — deploy or refresh
+
+The collector is read-only. It can count packages and compare kernels but cannot upgrade or reboot:
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/provision-maintenance-monitoring.yml  # PVE hosts + mgmt-vm + VM 118/125
+ansible-playbook playbooks/provision-monitoring.yml              # scrape manual VMs + load alert rules
+ansible-playbook playbooks/provision-glance.yml --limit oneill   # render Maintenance State
+```
+
+If the local `simon` account requires a sudo password, add `--ask-become-pass` to the first command.
+
+On PVE, `/var/run/reboot-required` is often absent after a kernel upgrade. The collector therefore
+uses the same reliable rule as `update-pve-host.yml`: **running kernel != newest installed `-pve`
+kernel** means a reboot is required. This is only a status signal. `update-pve-host.yml` still does
+not reboot unless `-e do_reboot=true` is explicitly supplied, and apophis reboot remains an
+out-of-band operation per the danger box above.
+
+Useful checks:
+
+```bash
+systemctl start homelab-maintenance.service
+cat /var/lib/prometheus/node-exporter/homelab_maintenance.prom
+curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_required'
+```
 
 ---
 
