@@ -70,9 +70,9 @@
     - homelab-maintenance.timer
 
 - name: Run the maintenance collector now
-  ansible.builtin.systemd:
-    name: homelab-maintenance.service
-    state: started
+  # The Ansible systemd module returns while an already-activating oneshot is still
+  # running. A direct systemctl start waits for completion before metrics are checked.
+  ansible.builtin.command: systemctl start homelab-maintenance.service
 
 - name: Confirm the maintenance metrics were written
   ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_maintenance.prom
