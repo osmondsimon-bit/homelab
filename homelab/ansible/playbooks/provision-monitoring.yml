@@ -5,12 +5,25 @@
 # TSDB on a quota'd ZFS bind-mount (ADR-013). node_exporter on the hosts is
 # install-node-exporter.yml (run that first). Idempotent.
 #
-# Run from the mgmt-vm, inside homelab/ansible/ — NO --limit (play 1 mints PVE tokens
-# on BOTH hosts, play 2 builds the CT on oneill):
+# Run from the mgmt-vm, inside homelab/ansible/ — NO --limit (the first play records
+# the control-node address, the token play hits every PVE node, and the final play
+# builds/configures CT 114):
 #   ansible-playbook playbooks/provision-monitoring.yml
 #
 # Grafana admin password is prompted; leave blank on re-runs to keep the current one.
 # Vars: monitoring_* in group_vars. Grafana :3000 / Prometheus :9090 — LAN/Tailscale only.
+
+- name: Discover the mgmt-vm address for maintenance metrics
+  hosts: localhost
+  gather_facts: true
+  tasks:
+    - name: Require a routable IPv4 address on the control node
+      ansible.builtin.assert:
+        that:
+          - ansible_default_ipv4.address is defined
+          - ansible_default_ipv4.address | length > 0
+        fail_msg: "Could not discover mgmt-vm's default IPv4 address for the Prometheus node target."
+        quiet: true
 
 - name: Mint read-only PVEAuditor tokens for pve-exporter
   hosts: proxmox
@@ -318,7 +331,7 @@
                 - targets: ["localhost:{{ monitoring_alertmanager_port }}"]
             - job_name: node
               static_configs:
-                - targets: {{ monitoring_node_targets | to_json }}
+                - targets: {{ (monitoring_node_targets + [hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100']) | unique | list | to_json }}
           {% for n in monitoring_pve_nodes %}
             - job_name: pve-{{ n.name }}
               metrics_path: /pve
@@ -589,6 +602,6 @@
           - "Monitoring CT {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
           - "Grafana :3000 (admin) / Prometheus :9090/targets — LAN/Tailscale only."
           - "Dashboards as code: Infrastructure (Node Exporter, Proxmox) + UniFi (unpoller set). allowUiUpdates=on — export live edits back to the repo."
-          - "Targets: prometheus + node (x{{ monitoring_node_targets | length }}) + pve (x{{ monitoring_pve_nodes | length }})."
+          - "Targets: prometheus + node (x{{ (monitoring_node_targets | length) + 3 }}, including manual-update VMs) + pve (x{{ monitoring_pve_nodes | length }})."
           - "Alerting: Prometheus rules -> Alertmanager :{{ monitoring_alertmanager_port }} -> am-ntfy :{{ monitoring_amntfy_port }} -> ntfy."
           - "Alerts at :9090/alerts, AM at :{{ monitoring_alertmanager_port }}. Test: amtool alert add (see runbook)."

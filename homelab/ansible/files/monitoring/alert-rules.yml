@@ -204,3 +204,42 @@ groups:
         annotations:
           summary: "Backup freshness metrics missing"
           description: "No homelab_backup_last_success_timestamp_seconds series — backup-freshness.sh/timer on the backup hub may have failed."
+
+      # Maintenance intent metrics come from maintenance-collector.sh on every PVE host and
+      # manually patched Ubuntu VM. Ordinary update availability stays a Glance concern;
+      # alerts are reserved for security exposure, broken enrollment, or stale collection.
+      - alert: GuestPatchEnrollmentMissing
+        expr: homelab_patch_enrolled{kind="lxc"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Automatic security patching missing: {{ $labels.target }}"
+          description: "LXC {{ $labels.id }} on {{ $labels.node }} does not have an enabled and active apt-daily-upgrade timer. Re-run provision-patching.yml."
+
+      - alert: SecurityUpdatesPending
+        expr: homelab_apt_security_upgrades_pending > 0
+        for: 3d
+        labels:
+          severity: warning
+        annotations:
+          summary: "Security updates pending: {{ $labels.target }}"
+          description: "{{ $value }} security-classified package update(s) have remained pending for three days on {{ $labels.target }}."
+
+      - alert: DeliberateRebootOverdue
+        expr: homelab_reboot_required == 1
+        for: 7d
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deliberate reboot overdue: {{ $labels.target }}"
+          description: "{{ $labels.target }} has needed a reboot for seven days. Use the node-specific maintenance runbook; this alert never reboots it automatically."
+
+      - alert: MaintenanceAuditStale
+        expr: (time() - homelab_maintenance_last_check_timestamp_seconds) > 172800
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Maintenance audit stale: {{ $labels.collector }}"
+          description: "The maintenance collector on {{ $labels.collector }} has not completed for more than 48 hours."

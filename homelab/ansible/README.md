@@ -57,7 +57,8 @@ ansible-playbook playbooks/<name>.yml
 | `provision-technitium.yml` | Technitium DNS LXC, DNS-only resolver (prompts for admin password; ADR-011) |
 | `provision-pbs.yml` | Proxmox Backup Server LXC on oneill — backup hub (prompts for admin password; ADR-012). Run with `--limit oneill` |
 | `provision-ha-backup-share.yml` | Samba LXC on oneill for HA native backups (prompts for share password; ADR-012). Run with `--limit oneill` |
-| `install-node-exporter.yml` | Installs node_exporter on the Proxmox hosts (ADR-013). Runs on both hosts |
+| `install-node-exporter.yml` | Installs node_exporter plus PVE reboot/update and LXC patch-enrollment metrics on all Proxmox hosts. Runs on all hosts |
+| `provision-maintenance-monitoring.yml` | Deploys the maintenance collector to PVE hosts, mgmt-vm, VM 118, and VM 125. Read-only: reports pending updates/reboot intent and never upgrades or reboots. Run without `--limit` |
 | `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana + Alertmanager + exporters (mints read-only PVE tokens; prompts Grafana pw, blank=keep; ADR-013). Run **without** `--limit` (play 1 hits both hosts) |
 | `provision-glance.yml` | Glance dashboard LXC on oneill — front-door launchpad, pinned Go binary (ADR-014). Run with `--limit oneill` |
 | `provision-patching.yml` | Unattended **security** upgrades on all guest LXCs (discovered via `pct list`) — no auto-reboot, midday-local timer, ntfy on failure (ADR-015). Run on both hosts (no `--limit`) |
@@ -73,7 +74,8 @@ test on a Proxmox snapshot.
 
 - One playbook per logical service; promote shared steps to roles when reused.
 - Non-secret defaults go in `group_vars/all.yml`. Secrets are prompted at runtime
-  (`vars_prompt`) or stored with `ansible-vault` — never committed.
+  (`vars_prompt`) or read from scoped gitignored files; human admin credentials live in
+  Vaultwarden (ADR-018). `ansible-vault` is not in use.
 - **Real IPs/hosts are not committed** — they live in the gitignored `inventory/hosts.ini`
   and `inventory/group_vars/all.yml`, created from the `*.example` templates. The public
   repo carries `YOUR_*` placeholders only (ADR-006).

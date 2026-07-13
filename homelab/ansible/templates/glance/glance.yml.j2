@@ -62,11 +62,11 @@ pages:
               updates:
                 url: << prom >>
                 parameters:
-                  query: sum by (instance) (apt_upgrades_pending)
+                  query: homelab_apt_upgrades_pending{kind="pve-host"}
               reboot:
                 url: << prom >>
                 parameters:
-                  query: node_reboot_required
+                  query: homelab_reboot_required{kind="pve-host"}
             template: |
               {{ $cpuPeak := .Subrequest "cpu_peak" }}
               {{ $ramNow := .Subrequest "ram_now" }}
@@ -98,11 +98,11 @@ pages:
                     </div>
                     <div class="flex justify-between gap-10">
                       <div>Updates</div>
-                      <div{{ range $updates.JSON.Array "data.result" }}{{ if and (eq (.String "metric.instance") $instance) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }}</div>
+                      <div>{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $host }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }}</div>
                     </div>
                     <div class="flex justify-between gap-10">
                       <div>Reboot required</div>
-                      <div>{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ if gt (.Float "value.1") 0.0 }}yes{{ else }}no{{ end }}{{ end }}{{ end }}</div>
+                      <div{{ range $reboot.JSON.Array "data.result" }}{{ if and (eq (.String "metric.target") $host) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $host }}{{ if gt (.Float "value.1") 0.0 }}YES — deliberate reboot{{ else }}no{{ end }}{{ end }}{{ end }}</div>
                     </div>
                   </div>
                 </div>
@@ -141,40 +141,85 @@ pages:
               </div>
 
           - type: custom-api
-            title: Package Updates
+            title: Maintenance State
             cache: 5m
             url: << prom >>
             parameters:
-              query: sum by (instance) (apt_upgrades_pending)
+              query: sort(homelab_apt_upgrades_pending{kind!="lxc"})
             subrequests:
-              origins:
+              security:
                 url: << prom >>
                 parameters:
-                  query: sum by (instance, origin) (apt_upgrades_pending)
+                  query: homelab_apt_security_upgrades_pending{kind!="lxc"}
+              reboot:
+                url: << prom >>
+                parameters:
+                  query: homelab_reboot_required{kind!="lxc"}
+              patch_age:
+                url: << prom >>
+                parameters:
+                  query: (time() - homelab_patch_last_success_timestamp_seconds{kind!="lxc"}) / 86400
+              lxc_missing:
+                url: << prom >>
+                parameters:
+                  query: sum(1 - homelab_patch_enrolled{kind="lxc"})
+              lxc_total:
+                url: << prom >>
+                parameters:
+                  query: count(homelab_patch_enrolled{kind="lxc"})
+              lxc_security:
+                url: << prom >>
+                parameters:
+                  query: sum(homelab_apt_security_upgrades_pending{kind="lxc"})
+              lxc_pending:
+                url: << prom >>
+                parameters:
+                  query: sum(homelab_apt_upgrades_pending{kind="lxc"})
+              audit_age:
+                url: << prom >>
+                parameters:
+                  query: max((time() - homelab_maintenance_last_check_timestamp_seconds) / 3600)
             template: |
-              {{ $origins := .Subrequest "origins" }}
-              <div class="list list-gap-15">
+              {{ $security := .Subrequest "security" }}
+              {{ $reboot := .Subrequest "reboot" }}
+              {{ $patchAge := .Subrequest "patch_age" }}
+              {{ $lxcMissing := .Subrequest "lxc_missing" }}
+              {{ $lxcTotal := .Subrequest "lxc_total" }}
+              {{ $lxcSecurity := .Subrequest "lxc_security" }}
+              {{ $lxcPending := .Subrequest "lxc_pending" }}
+              {{ $auditAge := .Subrequest "audit_age" }}
+              <div class="list list-gap-12">
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}
+                <div class="color-negative">No maintenance metrics — deploy/run the collector</div>
+              {{ end }}
               {{ range .JSON.Array "data.result" }}
-                {{ $instance := .String "metric.instance" }}
-                {{ $host := $instance }}
-                <% for h in glance_hosts %>
-                {{ if eq $instance "<< h.node_exporter_instance >>" }}{{ $host = "<< h.name >>" }}{{ end }}
-                <% endfor %>
+                {{ $target := .String "metric.target" }}
                 <div>
                   <div class="flex justify-between gap-10">
-                    <div class="color-highlight">{{ $host }}</div>
-                    <div{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}>{{ printf "%.0f pending" (.Float "value.1") }}</div>
+                    <div class="color-highlight">{{ $target }}</div>
+                    <div>{{ printf "%.0f pending" (.Float "value.1") }}</div>
                   </div>
-                  {{ range $origins.JSON.Array "data.result" }}
-                    {{ if eq (.String "metric.instance") $instance }}
-                      <div class="size-h6 color-subdue flex justify-between gap-10">
-                        <span class="text-truncate">{{ .String "metric.origin" }}</span>
-                        <span>{{ printf "%.0f" (.Float "value.1") }}</span>
-                      </div>
-                    {{ end }}
-                  {{ end }}
+                  <div class="size-h6 color-subdue flex justify-between gap-10">
+                    <span>{{ range $patchAge.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "last package change %.0fd ago" (.Float "value.1") }}{{ end }}{{ end }}</span>
+                    <span{{ range $security.JSON.Array "data.result" }}{{ if and (eq (.String "metric.target") $target) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}{{ end }}</span>
+                  </div>
+                  {{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ if gt (.Float "value.1") 0.0 }}
+                    <div class="size-h6 color-negative">Reboot required — use the deliberate maintenance procedure</div>
+                  {{ end }}{{ end }}{{ end }}
                 </div>
               {{ end }}
+              <hr class="margin-block-5">
+              <div>
+                <div class="flex justify-between gap-10">
+                  <div class="color-highlight">Guest LXCs</div>
+                  <div{{ range $lxcMissing.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcMissing.JSON.Array "data.result" }}{{ printf "%.0f missing" (.Float "value.1") }}{{ end }} / {{ range $lxcTotal.JSON.Array "data.result" }}{{ printf "%.0f total" (.Float "value.1") }}{{ end }}</div>
+                </div>
+                <div class="size-h6 color-subdue flex justify-between gap-10">
+                  <span>{{ range $lxcPending.JSON.Array "data.result" }}{{ printf "%.0f total pending" (.Float "value.1") }}{{ end }}</span>
+                  <span{{ range $lxcSecurity.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcSecurity.JSON.Array "data.result" }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}</span>
+                </div>
+              </div>
+              <div class="size-h6 color-subdue">Audit age: {{ range $auditAge.JSON.Array "data.result" }}{{ printf "%.1fh" (.Float "value.1") }}{{ end }}</div>
               </div>
 
       - size: full
@@ -454,6 +499,10 @@ pages:
                     url: https://github.com/osmondsimon-bit/homelab
                     description: Public IaC and docs
                     icon: di:github-light
+                  - title: Dependency Updates
+                    url: https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22
+                    description: Renovate proposals — review and deploy manually
+                    icon: di:renovate
               - title: Tailnet-only
                 color: 48 70 50
                 links:

@@ -61,6 +61,17 @@
       register: reboot_check
       changed_when: false
 
+    - name: Check whether maintenance monitoring is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/homelab-maintenance-collector
+      register: maintenance_collector
+
+    - name: Refresh dashboard maintenance state immediately
+      ansible.builtin.systemd:
+        name: homelab-maintenance.service
+        state: started
+      when: maintenance_collector.stat.exists
+
     - name: Report
       ansible.builtin.debug:
         msg:

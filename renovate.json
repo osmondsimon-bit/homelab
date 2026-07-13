@@ -1,0 +1,33 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track tagged Docker images declared in Ansible defaults",
+      "managerFilePatterns": ["/^homelab/ansible/inventory/group_vars/all\\.yml\\.example$/"],
+      "matchStrings": [
+        "# renovate: datasource=docker depName=(?<depName>\\S+)\\s+\\w+:\\s*[\\\"']?\\S+:(?<currentValue>[^\\\"'\\s@]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Track digest-pinned Docker images declared in Ansible defaults",
+      "managerFilePatterns": ["/^homelab/ansible/inventory/group_vars/all\\.yml\\.example$/"],
+      "matchStrings": [
+        "# renovate: datasource=docker depName=(?<depName>\\S+) currentValue=(?<currentValue>\\S+)\\s+\\w+:\\s*[\\\"']?\\S+@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Container updates always require operator review and playbook deployment",
+      "matchDatasources": ["docker"],
+      "automerge": false
+    }
+  ]
+}
