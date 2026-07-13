@@ -396,13 +396,15 @@ ssh root@apophis 'pvecm status | grep Quorate'                                  
 ```bash
 ansible-playbook playbooks/update-pve-host.yml --limit apophis                   # upgrade packages ONLY (no reboot)
 # If it needs a reboot, do NOT reboot from mgmt-vm. At the Proxmox console/IPMI:
-#   1. reboot apophis from its console. mgmt-vm + HA VM drop with it; carter goes read-only ~3 min
-#      BUT its running guests (incl. CT 117 DNS) keep serving, and DNS stays up on oneill.
+#   1. reboot apophis from its console. mgmt-vm + HA VM drop with it; carter loses quorum and
+#      /etc/pve becomes read-only. Carter GUI/TOTP login also FAILS while quorum is absent, but its
+#      running guests (incl. CT 117 DNS) keep serving, and DNS stays up on oneill.
 #   2. when it's back:   ssh root@apophis 'pvecm status | grep Quorate'   # auto-restores to 2 votes
 # NOTE: do NOT run `pvecm expected 1` as a pre-step — corosync rejects lowering expected below the
 #       live vote count (CS_ERR_INVALID_PARAM). It is a RECOVERY step ONLY, valid once apophis is
-#       actually down (carter = 1 live vote): if apophis does not return promptly, run
-#       `ssh root@carter 'pvecm expected 1'` to make carter manageable while you troubleshoot.
+#       actually down (carter = 1 live vote): if apophis does not return promptly or you need the
+#       Carter GUI, SSH from another machine and run `ssh root@carter 'pvecm expected 1'`. Confirm
+#       apophis is truly down first; never do this for an uncertain network partition.
 # TODO (durable fix): add a QDevice — corosync-qnetd on oneill (standalone, ideal tiebreaker) — so
 #       either apophis or carter can reboot with quorum intact and no read-only window.
 ```

@@ -74,7 +74,26 @@
       ansible.builtin.debug:
         msg:
           - "{{ inventory_hostname }}: upgrade {{ 'made changes' if upgrade_result.changed else 'no changes' }}; pveversion below."
-          - "Reboot required: {{ 'YES — ' ~ reboot_check.stdout ~ ' — reboot in a window (drops oneill services) or rerun with -e do_reboot=true' if reboot_check.stdout.startswith('REBOOT') else 'no (' ~ reboot_check.stdout ~ ')' }}"
+          - >-
+            Reboot required: {{
+              'YES — ' ~ reboot_check.stdout ~
+              (' — reboot apophis out-of-band; read the Carter quorum warning below'
+               if inventory_hostname == 'apophis'
+               else ' — reboot in a window or rerun with -e do_reboot=true')
+              if reboot_check.stdout.startswith('REBOOT')
+              else 'no (' ~ reboot_check.stdout ~ ')'
+            }}
+
+    - name: Explain Carter recovery during an apophis reboot
+      ansible.builtin.debug:
+        msg:
+          - "APOPHIS REBOOT: Carter will lose quorum when apophis leaves the two-node cluster."
+          - "Carter GUI/TOTP login will fail while /etc/pve is read-only."
+          - "If Carter management is needed before apophis returns, SSH from another machine and run: ssh root@carter 'pvecm expected 1'"
+          - "Run that command only AFTER confirming apophis is actually down; never run it before the reboot or for an uncertain network partition."
+      when:
+        - inventory_hostname == "apophis"
+        - reboot_check.stdout.startswith('REBOOT')
 
     - name: Show pveversion after upgrade
       ansible.builtin.command: pveversion
