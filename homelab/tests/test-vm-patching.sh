@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression test for security-only unattended upgrades on the three Ubuntu VMs.
+# Regression test for security-only unattended upgrades on the normal Ubuntu VMs.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,7 +13,7 @@ fail() {
   exit 1
 }
 
-for target in mgmt-vm vaultwarden jellyseerr; do
+for target in mgmt-vm vaultwarden jellyseerr actual; do
   grep -Fq "name: ${target}-patching" "$patching_playbook" \
     || fail "provision-patching.yml must register ${target}"
 done

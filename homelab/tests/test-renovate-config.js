@@ -15,6 +15,7 @@ const matches = config.customManagers.flatMap((manager) =>
 );
 const dependencies = matches.map((match) => match.groups.depName).sort();
 const expected = [
+  "actualbudget/actual-server",
   "fallenbagel/jellyseerr",
   "ghcr.io/thephaseless/byparr",
   "lscr.io/linuxserver/prowlarr",
@@ -26,4 +27,4 @@ if (JSON.stringify(dependencies) !== JSON.stringify(expected)) {
   throw new Error(`Renovate image detection mismatch: ${JSON.stringify(dependencies)}`);
 }
 
-console.log("PASS: Renovate detects all five pinned Docker images");
+console.log("PASS: Renovate detects all six pinned Docker images");

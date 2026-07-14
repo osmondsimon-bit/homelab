@@ -69,6 +69,22 @@ vaultwarden_startup: "order=2,up=10"
 vaultwarden_image: vaultwarden/server:1.36.0              # PINNED container tag — Renovate proposes; operator deploys deliberately
 vaultwarden_domain: https://vaultwarden.YOUR_TAILNET.ts.net # Tailscale Serve URL (tailnet-only) — Glance link-tile + Bitwarden server URL
 
+# --- Actual Budget VM (personal finance, Carter; ADR-023) --------------------
+# Dedicated Ubuntu VM: the official container stays isolated from the host and service LXCs.
+# Actual binds to loopback; Tailscale Serve is the only ingress. Stateful /data is PBS-imaged.
+actual_vmid: 127
+actual_enabled: false                                      # set true only after VM 127 is live
+actual_hostname: actual
+actual_ram_mb: 2048
+actual_cores: 1
+actual_disk_gb: 10
+actual_ip: YOUR_ACTUAL_IP/24                              # reserve in UniFi before provisioning
+actual_cpu: Skylake-Client-noTSX-IBRS                     # live-migratable across the Coffee-Lake cluster pair
+actual_startup: "order=5,up=10"
+# renovate: datasource=docker depName=actualbudget/actual-server
+actual_image: actualbudget/actual-server:26.7.0           # PINNED stable release; operator deploys deliberately
+actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"
+
 # --- Proxmox Backup Server LXC (backup hub on oneill, ADR-012) ---------------
 # Unprivileged LXC; datastore on a quota'd ZFS dataset bind-mount. Run --limit oneill.
 pbs_ctid: 112
@@ -198,6 +214,7 @@ glance_release_repos:
   - Sonarr/Sonarr
   - Radarr/Radarr
   - fallenbagel/jellyseerr
+  - actualbudget/actual
 
 # --- Infra Portal (CT 116, oneill — ADR-020) ---------------------
 portal_ctid: 116

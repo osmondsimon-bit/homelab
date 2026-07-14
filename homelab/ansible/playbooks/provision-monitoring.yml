@@ -331,7 +331,7 @@
                 - targets: ["localhost:{{ monitoring_alertmanager_port }}"]
             - job_name: node
               static_configs:
-                - targets: {{ (monitoring_node_targets + [hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100']) | unique | list | to_json }}
+                - targets: {{ (monitoring_node_targets + [hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100'] + ([(actual_ip | regex_replace('/.*$', '')) ~ ':9100'] if (actual_enabled | default(false) | bool) else [])) | unique | list | to_json }}
           {% for n in monitoring_pve_nodes %}
             - job_name: pve-{{ n.name }}
               metrics_path: /pve

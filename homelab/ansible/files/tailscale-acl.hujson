@@ -8,12 +8,13 @@
 //   YOUR_LAN_CIDR   -> the real LAN subnet (see ansible/inventory/group_vars/all.yml)
 //
 // MODEL: default-deny. group:operators (your signed-in devices) reach everything;
-// the Vaultwarden node (tag:vaultwarden) is reachable ONLY by operators, ONLY on :443
-// (Tailscale Serve). Every other node is denied the vault by omission — that IS the lockdown.
+// the Vaultwarden and Actual nodes are reachable ONLY by operators, ONLY on :443
+// (Tailscale Serve). Every other node is denied them by omission — that IS the lockdown.
 //
 // ROLLOUT (how this was applied, so a rebuild repeats it safely):
 //   1. Add groups + tagOwners + autoApprovers, KEEP allow-all acls -> Save (nothing breaks).
-//   2. Machines -> tag `vaultwarden` = tag:vaultwarden, subnet router = tag:subnet-router.
+//   2. Machines -> tag `vaultwarden` = tag:vaultwarden, `actual` = tag:actual,
+//      subnet router = tag:subnet-router.
 //      (Re-tagging the router can drop its route approval; autoApprovers re-approves it.)
 //   3. Swap allow-all for the operator-only acls below. The `tests` block makes Save FAIL
 //      rather than lock you out. Verify the vault still loads from an operator device.
@@ -24,6 +25,7 @@
 
   "tagOwners": {
     "tag:vaultwarden":   ["group:operators"],
+    "tag:actual":        ["group:operators"],
     "tag:subnet-router": ["group:operators"],
   },
 
@@ -47,6 +49,12 @@
       "src":    ["group:operators"],
       "dst":    ["tag:vaultwarden:443"],
     },
+    // Actual Budget is likewise tailnet-only and operator-only.
+    {
+      "action": "accept",
+      "src":    ["group:operators"],
+      "dst":    ["tag:actual:443"],
+    },
   ],
 
   // Tailscale SSH: operators into their own devices, check mode.
@@ -62,5 +70,6 @@
   // Guard rail: Save FAILS if the operator ever loses vault access.
   "tests": [
     { "src": "osmond.simon@gmail.com", "accept": ["tag:vaultwarden:443"] },
+    { "src": "osmond.simon@gmail.com", "accept": ["tag:actual:443"] },
   ],
 }

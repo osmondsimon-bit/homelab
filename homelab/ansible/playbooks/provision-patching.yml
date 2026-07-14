@@ -1,8 +1,8 @@
 ---
 # Configure unattended SECURITY upgrades on Debian guest LXCs and Ubuntu VMs (ADR-015).
 #
-# The first play discovers running CTs on every Proxmox host. The later plays register the three
-# normal Ubuntu VMs directly: mgmt-vm, Vaultwarden, and Jellyseerr. HAOS remains excluded because it
+# The first play discovers running CTs on every Proxmox host. The later plays register the normal
+# Ubuntu VMs directly: mgmt-vm, Vaultwarden, Jellyseerr, and Actual. HAOS remains excluded because it
 # is an appliance, not an apt target. Idempotent — re-run any time; this installs/configures policy
 # but does not force an immediate upgrade. The first automatic run is the next 12:00 local.
 #
@@ -75,6 +75,16 @@
         ansible_python_interpreter: /usr/bin/python3
         groups: _ubuntu_patch_targets
       changed_when: false
+
+    - name: Register Actual Budget VM
+      ansible.builtin.add_host:
+        name: actual-patching
+        ansible_host: "{{ actual_ip | regex_replace('/.*$', '') }}"
+        ansible_user: "{{ actual_ci_user | default('simon') }}"
+        ansible_python_interpreter: /usr/bin/python3
+        groups: _ubuntu_patch_targets
+      changed_when: false
+      when: actual_enabled | default(false) | bool
 
 - name: Configure unattended security upgrades on Ubuntu VMs
   hosts: _ubuntu_patch_targets

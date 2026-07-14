@@ -76,7 +76,8 @@ groups:
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · 117 technitium2 · 120 jellyfin · 121 qbittorrent
       #         · 123 sonarr · 124 radarr · 126 tailscale2 (HA subnet router #2, on oneill)
-      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 jellyseerr+prowlarr+gluetun · 200 home-assistant.
+      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 jellyseerr+prowlarr+gluetun
+      #         · 127 actual-budget (planned) · 200 home-assistant.
       - alert: GuestDown
         expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*"}) == 0
         for: 5m

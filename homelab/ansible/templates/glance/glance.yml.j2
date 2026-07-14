@@ -511,3 +511,9 @@ pages:
                     url: << vaultwarden_domain >>
                     description: Password vault (Tailscale Serve — no LAN/internet)
                     icon: di:vaultwarden
+                  <% if actual_enabled | default(false) %>
+                  - title: Actual Budget
+                    url: << actual_domain >>
+                    description: Personal finance (Tailscale Serve — no LAN/internet)
+                    icon: di:actual-budget
+                  <% endif %>
