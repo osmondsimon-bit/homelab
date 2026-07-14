@@ -14,6 +14,7 @@
 # comparison only (no automatic drift detection).
 <% set prom = glance_prometheus_url ~ '/api/v1/query' %>
 <% set unifi = gateway | regex_replace('/.*$', '') %>
+<% set glance_host_instances = glance_hosts | map(attribute='node_exporter_instance') | map('regex_escape') | join('|') %>
 server:
   host: 0.0.0.0
   port: << glance_port >>
@@ -41,20 +42,20 @@ pages:
             cache: 30s
             url: << prom >>
             parameters:
-              query: instance:node_cpu_util:percent
+              query: instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}
             subrequests:
               cpu_peak:
                 url: << prom >>
                 parameters:
-                  query: max_over_time(instance:node_cpu_util:percent[24h:5m])
+                  query: max_over_time(instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
               ram_now:
                 url: << prom >>
                 parameters:
-                  query: instance:node_mem_util:percent
+                  query: instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}
               ram_peak:
                 url: << prom >>
                 parameters:
-                  query: max_over_time(instance:node_mem_util:percent[24h:5m])
+                  query: max_over_time(instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
               storage:
                 url: << prom >>
                 parameters:
