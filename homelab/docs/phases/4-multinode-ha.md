@@ -5,7 +5,7 @@ shipped, key decisions, verification, and carry-forwards. Authoritative status: 
 
 ## What shipped
 
-- **2-node Proxmox cluster `homelab`** = **apophis + carter** (ThinkCentre M920q, i5-8500 / 32 GB /
+- **2-node Proxmox cluster `homelab`** = **apophis + carter** (ThinkStation P330 Tiny type 30CE, i5-8500 / 32 GB /
   256 GB SSD, matched Coffee-Lake CPU to apophis for live migration). **oneill stays standalone**
   (NOT a cluster member). No HA manager, no fencing — the single-NIC network isn't HA-grade.
 - **apophis rebuilt LVM-thin → ZFS-on-root** (`rpool`, 472 GB) so storage is ZFS cluster-wide.

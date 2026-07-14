@@ -651,7 +651,7 @@ services up. Two independent things must both be true: the **host powers itself 
 
 After a power blip, a host only comes back if its firmware is set to power on. How to check/set it:
 
-- **apophis / carter (Lenovo ThinkCentre) — REMOTE, no console needed.** Recent kernels expose the
+- **apophis (ThinkCentre M720q) / carter (ThinkStation P330 Tiny) — REMOTE, no console needed.** Recent kernels expose the
   Lenovo BIOS via the `thinklmi` driver, so set it over SSH (no BIOS password is set here):
   ```bash
   base="/sys/class/firmware-attributes/thinklmi/attributes/After Power Loss"
@@ -659,8 +659,8 @@ After a power blip, a host only comes back if its firmware is set to power on. H
   printf "Power On" > "$base/current_value"   # set it; applies on the next power event
   ```
   (If an Admin BIOS password is ever enabled — `.../authentication/Admin/is_enabled` = 1 — write it
-  to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22.**
-  carter: run the same one-liner once it's on the network.
+  to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22;
+  carter verified "Power On" 2026-07-14.**
 - **oneill (generic N150 mini-PC, AMI Aptio BIOS) — NO remote interface** (`/sys/class/firmware-attributes/`
   absent). ✅ **FIXED 2026-06-22.** Root cause: BIOS **"State After G3" = S5** (stay off after power
   loss); changed to **S0** (power on) — confirmed self-boots on AC restore. On this board the setting
@@ -668,6 +668,41 @@ After a power blip, a host only comes back if its firmware is set to power on. H
   also check **Deep Sleep/ErP = Disabled**. Entry key: Del (try F2/Esc). No remote/SSH path for it.
 - **UPS:** confirm the UPS also feeds the **network device** (gateway/switch) — else a blip still
   causes the common-mode outage ADR-009 warns about.
+
+#### Carter firmware baseline before the planned update (2026-07-14)
+
+Carter was previously documented as an M920q; DMI confirms it is a **ThinkStation P330 Tiny**, type
+`30CE`, machine type/model `30CES0DW00`, with an i5-8500. It runs PVE 9.2.4 and kernel
+`7.0.14-4-pve`. The installed BIOS is **`M1UKT23A` (2018-12-05)**. Lenovo's model-compatible,
+recommended release is [M1UKT79A (2026-03-30)](https://support.lenovo.com/ag/en/downloads/DS503907),
+available as bootable ISO `m1uj979usa.iso`; use the checksum shown by Lenovo at download time.
+
+Record these values again immediately before flashing and restore them if the update resets setup:
+
+| Setting | Verified value |
+|---|---|
+| Boot mode / CSM | UEFI Only / Disabled |
+| Secure Boot | Disabled |
+| Primary boot sequence | M.2 Drive 1 first; Linux Boot Manager is current EFI entry |
+| SATA | Controller enabled; AHCI |
+| Intel Virtualization Technology / VT-d | Enabled / Enabled |
+| Core multiprocessing / Turbo / EIST | Enabled / Enabled / Enabled |
+| C-state support | C1/C3/C6/C7/C8 |
+| Security chip | TPM 2.0 enabled; discrete TPM selected |
+| After Power Loss | Power On |
+| Wake on LAN / NIC wake | Automatic / magic-packet enabled |
+| PXE | Option ROM plus IPv4/IPv6 stacks enabled; after local storage in primary sequence |
+| OS Optimized Defaults | Enabled |
+| BIOS rollback | Allowed |
+| BIOS administrator password | Not enabled |
+| Windows UEFI firmware updates | Enabled |
+
+The active watchdog remains **Software Watchdog (`softdog`)**, timeout 10 seconds, `nowayout=0`;
+there is no proven hardware-backed watchdog. Do not load or experiment with `iTCO_wdt` during the
+firmware window. The upgrade from 23A to 79A is strongly justified: Lenovo's cumulative changelog
+includes security fixes, CPU microcode, NVMe detection/support, POST-hang fixes, and BIOS-update
+reliability changes. Deploy and verify the oneill QDevice before taking either cluster node down,
+then update one Lenovo per maintenance window with a local display and power control available.
 
 ### B. Per-guest: autostart + ordering
 
@@ -787,8 +822,8 @@ maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
 > Node-local to redo: SSH host key, mgmt-vm's root authorized_key, no-sub repos, node_exporter,
 > the `local-zfs` node list, the replication jobs, and CT 117.
 
-> **Prereq:** carter's BIOS **AC power-recovery = Power On** (PLAN backlog) — so an unattended power
-> blip brings the failover target back by itself.
+> **Prereq:** carter's BIOS **AC power-recovery = Power On** (verified 2026-07-14) — so an unattended
+> power blip brings the failover target back by itself.
 
 1. **Keep apophis writable.** A 2-node cluster minus carter is 1/2 → apophis goes **read-only**. On
    apophis: `pvecm expected 1`. **VERIFY:** `pvecm status` = Quorate, Expected 1; VMs 100/110/118/200
