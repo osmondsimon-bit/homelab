@@ -7,7 +7,7 @@
 
 - **Tailscale** subnet router — CT 110 on apophis (ADR-003), advertising the LAN. (Completed earlier in Phase 2.)
 - **Technitium DNS** — CT 111, DNS-only resolver with ad/tracker/malware blocking (ADR-011):
-  - Deployed on **oneill** (Intel NUC, arrived mid-phase) directly — not apophis-then-migrate.
+  - Deployed on **oneill** (KAMRUI Essenx E2, arrived mid-phase) directly — not apophis-then-migrate.
   - DNS-only role; **UniFi keeps DHCP** and hands out the resolver. Live on the **home VLAN**; IoT/guest use the gateway for DNS (DNS-by-VLAN-role, ADR-011 — isolated VLANs can't reach a main-LAN resolver, and appliances break on blocklists; camera/management have no internet).
   - **OISD Big** blocklist (`domainswild2`) + **DoH** forwarders (Cloudflare, Quad9), `NxDomain` blocking.
   - Config is applied **declaratively via the Technitium API** by `provision-technitium.yml` from `technitium_*` group_vars, with read-back verification. Console is treated as read-only.

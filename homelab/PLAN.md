@@ -19,9 +19,10 @@
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | Running — movie automation → `/media/library/movies` (ADR-022). In the media group. |
 | jellyseerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | Running — Jellyseerr request UI (LAN, auths via Jellyfin) **+ Prowlarr + ByParr (CF solver) behind a Gluetun VPN** (indexer egress via a 2nd ProtonVPN exit to bypass AU ISP blocks + keep a consistent IP for CF solving) (ADR-022; ADR-014 exception #2). Prowlarr WebUI on `:9696`. |
 
-### oneill (Intel NUC, Proxmox host)
+### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
-- IP: YOUR_NUC_IP — Proxmox VE 9.2, **standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
+- IP: YOUR_NUC_IP — Proxmox VE 9.2.4, kernel `7.0.14-4-pve`, **standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
+- Firmware baseline (inventoried 2026-07-14): AMI BIOS `TWL_P0_AK_10_0108_AMI.15W` (2025-01-17), UEFI, Secure Boot disabled/platform Setup Mode. The purchase record identifies the machine as the KAMRUI Essenx E2 N150/16 GB/512 GB variant, but DMI contains only `Default string`; do not flash a BIOS unless KAMRUI confirms it is for this exact E2/N150 variant and firmware family. Settings and recovery behavior are recorded in the runbook.
 - The low-power "simple services" node, offloading apophis (ADR-009 hardware roadmap)
 
 | VM/LXC | VMID | Type | IP | Status |
@@ -54,7 +55,7 @@
 |------|------|--------|-----------------|
 | apophis | Compute-heavy, cluster member | **Live (cluster)** | Jellyfin (QuickSync, iGPU — Phase 6) + media stack; HA VM 200 (primary) |
 | carter (ThinkStation P330 Tiny 30CE, i5-8500 / 32 GB / ZFS) | Cluster member, failover target | **Live (cluster)** — technitium2 (CT 117) | VM 200 manual-failover target (pvesr replication); 2nd DNS resolver |
-| Intel NUC (**oneill**, N150 / 16 GB / ZFS) | Low-power, **standalone** | **Live (standalone)** — Technitium, PBS, HA-share, Monitoring, Glance, infra-portal, Tailscale2 | Simple services offloaded from apophis; CT 126 provides an independent Tailscale subnet-router path |
+| KAMRUI Essenx E2 (**oneill**, N150 / 16 GB / ZFS) | Low-power, **standalone** | **Live (standalone)** — Technitium, PBS, HA-share, Monitoring, Glance, infra-portal, Tailscale2 | Simple services offloaded from apophis; CT 126 provides an independent Tailscale subnet-router path |
 
 Offloading the simple services to oneill frees apophis's CPU for media transcoding. The apophis+carter pair (matched Coffee-Lake CPUs) supports live migration; failover for VM 200 is **manual** from the latest replicated snapshot (runbook). oneill being standalone means a node-down there is a DNS/monitoring/backup outage, not a quorum event — which is why DNS now has a 2nd resolver on carter.
 
