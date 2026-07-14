@@ -31,9 +31,11 @@
       loop:
         - { name: vaultwarden, ip: "{{ vaultwarden_ip }}", user: "{{ vaultwarden_ci_user | default('simon') }}" }
         - { name: jellyseerr, ip: "{{ jellyseerr_ip }}", user: "{{ jellyseerr_ci_user | default('simon') }}" }
+        - { name: actual, ip: "{{ actual_ip }}", user: "{{ actual_ci_user | default('simon') }}" }
       loop_control:
         label: "{{ item.name }}"
       changed_when: false
+      when: item.name != 'actual' or (actual_enabled | default(false) | bool)
 
 - name: Install maintenance metrics on Ubuntu VMs
   hosts: _maintenance_targets
@@ -62,7 +64,7 @@
               curl -fsS \
                 -H "Title: Monthly homelab maintenance window" \
                 -H "Priority: default" \
-                -d "Review Glance Maintenance State and Renovate PRs. Patch oneill, carter, then apophis separately; apply remaining non-security updates on Ubuntu VMs 100/118/125; review HAOS. Reboot only deliberately and handle apophis out-of-band." \
+                -d "Review Glance Maintenance State and Renovate PRs. Patch oneill, carter, then apophis separately; apply remaining non-security updates on Ubuntu VMs 100/118/125/127; review HAOS. Reboot only deliberately and handle apophis out-of-band." \
                 "$NTFY_URL"
 
         - name: Configure the monthly maintenance reminder destination

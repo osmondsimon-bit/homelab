@@ -1,0 +1,199 @@
+---
+# Provision Actual Budget on Carter as a dedicated Ubuntu VM with the official container.
+# The application listens on VM loopback only; Tailscale Serve provides tailnet-only HTTPS.
+# Persistent finance data lives in /opt/actual/data and is protected by a daily PBS VM image.
+#
+# Prerequisites: reserve actual_ip in UniFi and create a tagged Tailscale auth key for tag:actual.
+# Run from the mgmt-vm, inside homelab/ansible:
+#   ansible-playbook playbooks/provision-actual.yml
+# The first browser visit sets the server password. Enable budget E2EE separately in Actual and
+# store its distinct recovery password off the VM.
+
+- name: Create the Actual Budget VM on Carter
+  hosts: carter
+  gather_facts: false
+  vars:
+    actual_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    actual_cloud_image: "noble-server-cloudimg-amd64.img"
+    actual_ip_bare: "{{ actual_ip | regex_replace('/.*$', '') }}"
+  vars_prompt:
+    - name: actual_ts_authkey
+      prompt: "Tagged Tailscale auth key for Actual Budget (tskey-auth-...)"
+      private: true
+
+  tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that:
+          - "'YOUR_' not in actual_ip"
+          - actual_ts_authkey is match('^tskey-')
+        fail_msg: "Reserve and set actual_ip, then provide a tag:actual Tailscale auth key."
+        quiet: true
+
+    - name: Check whether VM {{ actual_vmid }} already exists
+      ansible.builtin.command: "qm status {{ actual_vmid }}"
+      register: actual_vm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Download the Ubuntu cloud image
+      ansible.builtin.get_url:
+        url: "{{ actual_cloud_image_url }}"
+        dest: "/var/lib/vz/template/{{ actual_cloud_image }}"
+        mode: "0644"
+      when: actual_vm_status.rc != 0
+
+    - name: Stage the mgmt-vm public key for cloud-init
+      ansible.builtin.copy:
+        dest: /tmp/actual-cloudinit.pub
+        content: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}\n"
+        mode: "0644"
+      when: actual_vm_status.rc != 0
+
+    - name: Create and start the VM
+      ansible.builtin.shell: |
+        set -e
+        qm create {{ actual_vmid }} --name {{ actual_hostname }} \
+          --memory {{ actual_ram_mb }} --cores {{ actual_cores }} --cpu {{ actual_cpu }} \
+          --net0 virtio,bridge={{ bridge }} --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
+          --agent enabled=1 --onboot 1 --startup {{ actual_startup }}
+        qm set {{ actual_vmid }} --scsi0 {{ rootfs_storage }}:0,import-from=/var/lib/vz/template/{{ actual_cloud_image }}
+        qm set {{ actual_vmid }} --ide2 {{ rootfs_storage }}:cloudinit --boot order=scsi0
+        qm disk resize {{ actual_vmid }} scsi0 {{ actual_disk_gb }}G
+        qm set {{ actual_vmid }} --ciuser {{ actual_ci_user | default('simon') }} \
+          --sshkeys /tmp/actual-cloudinit.pub \
+          --ipconfig0 ip={{ actual_ip }},gw={{ gateway }} --nameserver {{ gateway }}
+        rm -f /tmp/actual-cloudinit.pub
+        qm start {{ actual_vmid }}
+      when: actual_vm_status.rc != 0
+      changed_when: true
+
+    - name: Wait for cloud-init SSH
+      ansible.builtin.wait_for:
+        host: "{{ actual_ip_bare }}"
+        port: 22
+        timeout: 180
+      delegate_to: localhost
+
+    - name: Register the VM for configuration
+      ansible.builtin.add_host:
+        name: actual-vm
+        ansible_host: "{{ actual_ip_bare }}"
+        ansible_user: "{{ actual_ci_user | default('simon') }}"
+        ansible_python_interpreter: /usr/bin/python3
+        groups: _actual_target
+        actual_ts_authkey_memory: "{{ actual_ts_authkey }}"
+      no_log: true
+      changed_when: false
+
+- name: Configure Actual Budget on the VM
+  hosts: _actual_target
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name: [qemu-guest-agent, ca-certificates, curl]
+        update_cache: true
+      register: actual_base_packages
+      retries: 3
+      delay: 5
+      until: actual_base_packages is succeeded
+
+    - name: Configure the official Docker apt repository
+      ansible.builtin.shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Install Docker engine and Compose
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        update_cache: true
+
+    - name: Install Tailscale
+      ansible.builtin.shell: "curl -fsSL https://tailscale.com/install.sh | sh"
+      args:
+        creates: /usr/bin/tailscale
+
+    - name: Read the Tailscale backend state
+      ansible.builtin.command: tailscale status --json
+      register: actual_ts_state
+      changed_when: false
+
+    - name: Join the tailnet
+      ansible.builtin.command: >
+        tailscale up --authkey={{ hostvars['actual-vm'].actual_ts_authkey_memory }}
+        --hostname={{ actual_hostname }} --ssh=false
+      no_log: true
+      when: (actual_ts_state.stdout | from_json).BackendState != 'Running'
+
+    - name: Resolve the tailnet DNS name
+      ansible.builtin.shell: |
+        tailscale status --json | python3 -c 'import json,sys;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'
+      register: actual_ts_dnsname
+      changed_when: false
+      until: actual_ts_dnsname.stdout | length > 0
+      retries: 10
+      delay: 3
+
+    - name: Create the Actual project and data directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /opt/actual, mode: "0750" }
+        - { path: /opt/actual/data, mode: "0750" }
+
+    - name: Install the hardened Compose definition
+      ansible.builtin.copy:
+        dest: /opt/actual/docker-compose.yml
+        mode: "0644"
+        content: |
+          services:
+            actual:
+              image: {{ actual_image }}
+              container_name: actual
+              restart: unless-stopped
+              environment:
+                - ACTUAL_DATA_DIR=/data
+                - ACTUAL_HOSTNAME=0.0.0.0
+                - ACTUAL_PORT=5006
+                - ACTUAL_ALLOWED_LOGIN_METHODS=password
+              volumes:
+                - ./data:/data
+              ports:
+                - "127.0.0.1:5006:5006"
+              security_opt:
+                - no-new-privileges:true
+              cap_drop:
+                - ALL
+      register: actual_compose
+
+    - name: Deploy or update Actual
+      ansible.builtin.command:
+        cmd: docker compose up -d {{ '--force-recreate' if actual_compose.changed else '' }}
+        chdir: /opt/actual
+      changed_when: true
+
+    - name: Configure Tailscale Serve HTTPS
+      ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:5006
+      changed_when: true
+
+    - name: Verify loopback-only binding and application response
+      ansible.builtin.shell: |
+        ss -tlnp | grep -q '127.0.0.1:5006' || { echo "Actual is not loopback-only"; exit 1; }
+        curl -fsS --max-time 8 http://127.0.0.1:5006 >/dev/null
+      changed_when: false
+
+    - name: Report the first-run and continuity steps
+      ansible.builtin.debug:
+        msg:
+          - "Actual Budget is available at https://{{ actual_ts_dnsname.stdout }} (tailnet-only)."
+          - "FIRST RUN: set the server password, enable budget E2EE with a different password, and create/export the initial budget."
+          - "NEXT: confirm tag:actual ACL access, run patching/monitoring plays, then create and restore-test the Carter PBS backup job."

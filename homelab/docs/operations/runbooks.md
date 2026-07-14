@@ -26,6 +26,7 @@ recovery stays non-circular.
 | **mgmt-vm** (VM 100) dies | not recreatable from code → `qmrestore` its PBS image to a new VMID | ✅ 2026-06-17 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
 | **Home Assistant** (VM 200) dies | restore the native partial backup onto a fresh HAOS, **or** fail over to carter's replica | ✅ HA restore 2026-06-18 · ✅ failover 2026-06-25 | [HA native partial backup](#home-assistant--native-partial-backup-primary-for-ha) · [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) |
 | **Vaultwarden** (VM 118) dies | playbook rebuilds VM+container; vault **data** comes from the PBS image (or carter replica) → `qmrestore` | ✅ 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
+| **Actual Budget** (VM 127, planned) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ⚠️ deployment + drill pending | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
 | **Jellyfin** (CT 120) dies | reproducible from code → re-run `provision-jellyfin.yml`, redo wizard + re-add `/media/library`; **media persists on the USB SSD**, config not imaged (cheap to recreate) | n/a — not imaged by design | [jellyfin.md](../components/jellyfin.md) |
 | **qBittorrent** (CT 121) dies | reproducible → re-run `provision-qbittorrent.yml` (needs WG config + IP in gitignored `all.yml`); downloads persist on the USB SSD; killswitch must pass leak-test after | n/a — not imaged by design | [qbittorrent.md](../components/qbittorrent.md) · [leak-test](#qbittorrent--wireguard-killswitch-ct-121--adr-021-phase-6b) |
 | **Sonarr** (CT 123) dies | reproducible → re-run `provision-sonarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/tv`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored series) is lost** — re-add manually or from a Sonarr backup export. | n/a — not imaged by design | [sonarr.md](../components/sonarr.md) |
@@ -488,6 +489,9 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
   **02:30**, retention **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs
   rebuild from their playbooks; HA uses the native partial below. The two imaged VMs are the
   stateful ones not reproducible from code (mgmt-vm hand-built; vaultwarden's Docker data volume).
+- **Planned Carter job (after Actual goes live):** **VM 127 (Actual Budget)** → `pbs-oneill`, daily
+  **02:45**, snapshot mode, retention **keep-daily 7 / keep-weekly 4**. Keep it Carter-scoped and
+  run an immediate backup before enabling the freshness expectation.
 - **GC:** datastore `main` runs garbage collection daily.
 - **Encryption (2026-06-17, ADR-012):** client-side encryption is **on** (`pvesm set pbs-oneill
   --encryption-key autogen`) — backups are encrypted before leaving apophis. The key lives at
@@ -500,6 +504,7 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
 ```bash
 ssh root@YOUR_PROXMOX_IP "pvesm list pbs-oneill"                                            # list points
 ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/118/<ISO-timestamp> <newvmid>"     # VM (only vm/100, vm/118 are in PBS)
+ssh root@YOUR_CARTER_IP "qmrestore pbs-oneill:backup/vm/127/<ISO-timestamp> <newvmid>"       # Actual, after its job is live
 # CTs are reprovisioned from Ansible, NOT restored from PBS (no CT is in the backup job).
 ```
 
@@ -534,7 +539,7 @@ don't need image backups — only genuinely stateful or hand-built things do.
 |---|---|---|
 | Ansible playbooks | **the LXCs end-to-end** — `pct create` + config (Tailscale, Technitium, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** (hand-built, no playbook) + **vaultwarden VM 118** (Docker data volume) | oneill |
+| PBS images | **mgmt-vm** (hand-built) + **vaultwarden VM 118** + planned **Actual VM 127** (stateful Docker data) | oneill |
 | HA native partial | HA config + Zigbee2MQTT + add-ons (restore onto a fresh HAOS) | oneill share |
 | Terraform (ADR-008) | **planned** — declarative VM/LXC definitions; not yet imported (empty scaffold) | git (public) |
 
