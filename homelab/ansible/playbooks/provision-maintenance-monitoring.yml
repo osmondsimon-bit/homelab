@@ -6,7 +6,7 @@
 
 - import_playbook: install-node-exporter.yml
 
-- name: Register manually patched Ubuntu targets
+- name: Register Ubuntu maintenance targets
   hosts: localhost
   gather_facts: false
   tasks:
@@ -15,7 +15,7 @@
         name: mgmt-vm-maintenance
         ansible_connection: local
         maintenance_target_name: mgmt-vm
-        maintenance_target_kind: manual-vm
+        maintenance_target_kind: ubuntu-vm
         groups: _maintenance_targets
       changed_when: false
 
@@ -26,7 +26,7 @@
         ansible_user: "{{ item.user }}"
         ansible_python_interpreter: /usr/bin/python3
         maintenance_target_name: "{{ item.name }}"
-        maintenance_target_kind: manual-vm
+        maintenance_target_kind: ubuntu-vm
         groups: _maintenance_targets
       loop:
         - { name: vaultwarden, ip: "{{ vaultwarden_ip }}", user: "{{ vaultwarden_ci_user | default('simon') }}" }
@@ -35,7 +35,7 @@
         label: "{{ item.name }}"
       changed_when: false
 
-- name: Install maintenance metrics on manually patched Ubuntu VMs
+- name: Install maintenance metrics on Ubuntu VMs
   hosts: _maintenance_targets
   gather_facts: false
   become: true
@@ -62,7 +62,7 @@
               curl -fsS \
                 -H "Title: Monthly homelab maintenance window" \
                 -H "Priority: default" \
-                -d "Review Glance Maintenance State and Renovate PRs. Patch oneill, carter, then apophis separately; patch mgmt-vm and VMs 118/125; review HAOS. Reboot only deliberately and handle apophis out-of-band." \
+                -d "Review Glance Maintenance State and Renovate PRs. Patch oneill, carter, then apophis separately; apply remaining non-security updates on Ubuntu VMs 100/118/125; review HAOS. Reboot only deliberately and handle apophis out-of-band." \
                 "$NTFY_URL"
 
         - name: Configure the monthly maintenance reminder destination

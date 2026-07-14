@@ -205,8 +205,8 @@ groups:
           summary: "Backup freshness metrics missing"
           description: "No homelab_backup_last_success_timestamp_seconds series — backup-freshness.sh/timer on the backup hub may have failed."
 
-      # Maintenance intent metrics come from maintenance-collector.sh on every PVE host and
-      # manually patched Ubuntu VM. Ordinary update availability stays a Glance concern;
+      # Maintenance intent metrics come from maintenance-collector.sh on every PVE host and Ubuntu
+      # VM. Ordinary update availability stays a Glance concern;
       # alerts are reserved for security exposure, broken enrollment, or stale collection.
       - alert: GuestPatchEnrollmentMissing
         expr: homelab_patch_enrolled{kind="lxc"} == 0

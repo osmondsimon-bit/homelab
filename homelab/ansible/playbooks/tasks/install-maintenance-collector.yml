@@ -1,5 +1,5 @@
 ---
-# Shared node_exporter textfile-collector installation for PVE hosts and manually patched Ubuntu VMs.
+# Shared node_exporter textfile-collector installation for PVE hosts and Ubuntu VMs.
 
 - name: Install node_exporter
   ansible.builtin.apt:

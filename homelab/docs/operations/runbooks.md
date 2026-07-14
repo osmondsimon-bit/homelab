@@ -301,31 +301,36 @@ backlog item.)
 
 ## Patching & updates (ADR-015)
 
-- **Guest LXCs (auto):** `provision-patching.yml` puts **`unattended-upgrades`** on every running CT
-  (discovered via `pct list` on both hosts → the service LXCs; mgmt-vm + HA VM are excluded). Policy:
-  **security/point-release only** (Debian default origins, *not* `-updates`), **no auto-reboot**,
+- **Apt guests (auto security):** `provision-patching.yml` puts **`unattended-upgrades`** on every
+  running CT (discovered via `pct list`) plus Ubuntu VMs 100/118/125. HAOS remains excluded. Policy:
+  **security-only** (Debian security/point-release defaults; Ubuntu security plus release-pocket
+  dependencies; never `-updates`), **no auto-reboot**,
   applied at **12:00 local** (`patching_timezone`, pinned in the systemd calendar so the UTC CTs
   still fire at local noon), **ntfy on failure** (OnFailure hook → your topic). **`needrestart`
-  (mode `a`)** auto-restarts services on updated libs so the patch takes effect immediately — guests
-  **never need a manual reboot** (they share the host kernel; kernel fixes come via the host window).
-  - Apply/refresh: `cd homelab/ansible && ansible-playbook playbooks/provision-patching.yml` (idempotent, both hosts).
+  (mode `a`)** auto-restarts services on updated libs so the patch takes effect immediately. LXCs
+  **never need a manual reboot** because they share the host kernel. Ubuntu VMs can require a
+  real-kernel reboot, but that remains a deliberate monthly action.
+  - Apply/refresh: `cd homelab/ansible && ansible-playbook playbooks/provision-patching.yml --ask-become-pass`
+    (idempotent; all PVE hosts + the three Ubuntu VMs).
   - Check a guest: `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer` (next = local noon);
     `pct exec <ctid> -- unattended-upgrade --dry-run` (shows allowed origins + candidates).
-  - Logs: inside the CT, `/var/log/unattended-upgrades/`. A failure pushes an ntfy alert.
+  - Check an Ubuntu VM: `systemctl list-timers apt-daily-upgrade.timer`; `sudo unattended-upgrade --dry-run`.
+  - Logs: `/var/log/unattended-upgrades/` inside the target. A failure pushes an ntfy alert.
   - Visibility: the daily maintenance collector on each PVE host reports enrollment, all pending
     packages, security-classified pending packages, and last unattended-upgrades activity. A new
     CT that was not enrolled turns the Glance Maintenance State pane red and raises
     `GuestPatchEnrollmentMissing` after one hour.
-- **Hosts + mgmt-vm (manual):** deliberate **monthly window — last day of month, 12:00 AEST** (be
-  present for fallout). One node at a time via **`update-pve-host.yml --limit <host>`** (upgrades +
+- **PVE hosts + remaining Ubuntu work (manual):** deliberate **monthly window — last day of month,
+  12:00 AEST** (be present for fallout). One node at a time via
+  **`update-pve-host.yml --limit <host>`** (upgrades +
   reports reboot need; add `-e do_reboot=true` to reboot in-window), order **oneill → carter →
   apophis** (apophis last — it holds mgmt-vm + the HA VM, so **its reboot is out-of-band**; never run
-  it as one block — see the per-host steps + danger box below). mgmt-vm itself patches by hand
-  (`sudo apt`, it's the control node). A persistent mgmt-vm timer sends an ntfy reminder at the
+  it as one block — see the per-host steps + danger box below). Ubuntu VM **non-security updates and
+  reboots** are handled by hand. A persistent mgmt-vm timer sends an ntfy reminder at the
   start of the window; open Glance's **Maintenance State** pane and Renovate PRs from that reminder.
-- **Docker OS-VMs (118 vaultwarden, 125 jellyseerr) — manual:** their Ubuntu base is **not** covered by
-  the CT auto-patcher (they're VMs, not CTs). `sudo apt full-upgrade` + reboot (they run real kernels)
-  in the monthly window; the *container images* are digest-pinned and bumped separately (see below).
+- **Ubuntu VMs (100 mgmt-vm, 118 vaultwarden, 125 jellyseerr):** security updates now auto-apply at
+  local noon. Ordinary Ubuntu packages and any required reboot wait for the monthly window. Docker
+  images on 118/125 remain pinned and are bumped separately (see below).
   After 125 reboots, confirm Gluetun's VPN egress ≠ home WAN.
 - **HAOS:** update via the HA UI on your cadence; take/confirm a partial backup first (ADR-012).
 - **Note (PBS repo):** the PBS CT must stay on `pbs-no-subscription` — `provision-pbs.yml` disables
@@ -334,10 +339,9 @@ backlog item.)
   `pve-no-subscription`. Now codified: `provision-host-base.yml` (or `provision-host.yml`, which
   runs it first). See the [Host rebuild — ordered recipe](#host-rebuild--ordered-recipe).
 
-> **Why the hosts always show a pile of updates** (and the guests don't): hosts **batch monthly**
-> while guests **auto-patch daily**, so up to a month of Debian + the fast-moving `pve-no-subscription`
-> channel accumulates on the hosts between windows. Normal — mostly low-risk userspace; kernel/reboot
-> updates are rarer. Patch hosts fortnightly instead if you want a smaller pile.
+> **Why hosts and Ubuntu VMs can still show a pile of updates:** only guest **security** updates run
+> daily. PVE packages and ordinary Ubuntu updates batch monthly, so they accumulate between windows.
+> Normal — Glance separates the security count so overdue exposure is visible independently.
 
 ### Run it yourself — ONE tier at a time (never as a single block)
 
@@ -360,18 +364,18 @@ backlog item.)
 
 | Tier | Cadence | Reboot? | Tool |
 |------|---------|---------|------|
-| Guest LXCs | auto, daily 12:00 local | never (share host kernel) | `unattended-upgrades` |
+| Guest LXCs | security auto, daily 12:00 local; other monthly | never (share host kernel) | `unattended-upgrades` |
 | PVE hosts (oneill/carter/apophis) | manual, monthly | only if kernel/PVE | `update-pve-host.yml` |
-| mgmt-vm | manual, monthly | if kernel | `sudo apt` |
-| Docker OS-VMs (118, 125) | manual, monthly | usually (Ubuntu kernel) | `sudo apt` + reboot |
+| Ubuntu VMs (100, 118, 125) | security auto daily; other monthly | deliberate if kernel | `unattended-upgrades` + monthly `sudo apt` |
 | HAOS (200) | manual, your cadence | yes (appliance) | HA UI |
 | Docker images (pinned) | manual, deliberate | n/a | bump digests |
 
-**Guest LXCs — automatic.** Only act after creating a new CT, or to force a run:
+**Apt guests — automatic security.** Re-run after adding a CT/Ubuntu VM, or to force one target:
 ```bash
 cd ~/homelab/ansible
-ansible-playbook playbooks/provision-patching.yml        # (re)enrol ALL running CTs — do this after adding any CT
+ansible-playbook playbooks/provision-patching.yml --ask-become-pass  # enrol CTs + VMs 100/118/125
 pct exec <ctid> -- unattended-upgrade -v                 # (optional) force one now
+sudo unattended-upgrade -v                              # on an Ubuntu VM; optional immediate run
 ```
 
 **PVE hosts — one at a time, verify between each.** Upgrade first (safe from mgmt-vm); reboot is a
@@ -409,7 +413,7 @@ ansible-playbook playbooks/update-pve-host.yml --limit apophis                  
 #       either apophis or carter can reboot with quorum intact and no read-only window.
 ```
 
-**mgmt-vm — manual (control node):**
+**mgmt-vm — monthly non-security packages / deliberate reboot (control node):**
 ```bash
 sudo apt update && sudo apt full-upgrade                 # reboot if it asks (ends any live SSH/agent session)
 sudo systemctl start homelab-maintenance.service         # refresh Glance immediately if not rebooting yet
@@ -418,7 +422,7 @@ sudo systemctl start homelab-maintenance.service         # refresh Glance immedi
 #   last resort: from apophis -> qm reset 100
 ```
 
-**Docker OS-VMs (118, 125) — one at a time (real Ubuntu kernels → reboot):**
+**Docker OS-VMs (118, 125) — monthly non-security packages, one at a time:**
 ```bash
 ssh simon@YOUR_VAULTWARDEN_IP 'sudo apt update && sudo apt full-upgrade -y && sudo systemctl reboot'   # 118
 ssh simon@YOUR_JELLYSEERR_IP  'sudo apt update && sudo apt full-upgrade -y && sudo systemctl reboot'   # 125
@@ -441,8 +445,8 @@ The collector is read-only. It can count packages and compare kernels but cannot
 
 ```bash
 cd ~/homelab/ansible
-ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass  # PVE + manual VMs + monthly reminder
-ansible-playbook playbooks/provision-monitoring.yml              # scrape manual VMs + load alert rules
+ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass  # PVE + Ubuntu VMs + monthly reminder
+ansible-playbook playbooks/provision-monitoring.yml              # scrape Ubuntu VMs + load alert rules
 ansible-playbook playbooks/provision-glance.yml --limit oneill   # render Maintenance State
 ```
 
@@ -850,10 +854,11 @@ top-to-bottom; most monitoring is automatic, so the list is short.
 - [ ] **Enrol in auto-patching (ADR-015):** for a new **CT**, re-run `provision-patching.yml`
       (it discovers running CTs via `pct list`, so a new one is only covered after a re-run) —
       otherwise the CT **never security-patches**. Confirm with
-      `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer`. For a new **Docker/OS
-      VM**, it's not CT-auto-patched — add it to the monthly manual host window, add it to
-      `provision-maintenance-monitoring.yml`'s manual targets, and add its node_exporter endpoint to
-      `provision-monitoring.yml`; then re-run both playbooks so Glance can report its state.
+      `pct exec <ctid> -- systemctl list-timers apt-daily-upgrade.timer`. For a new **Ubuntu VM**,
+      add it to the direct targets in `provision-patching.yml` and
+      `provision-maintenance-monitoring.yml`, then add its node_exporter endpoint to
+      `provision-monitoring.yml`; re-run all three so it auto-patches security updates and Glance
+      reports its state. Ordinary packages, Docker image changes, and reboots remain manual.
 
 **2. Monitoring — mostly automatic, confirm + register**
 - Automatic (no action): `GuestDown` (`pve_up`), Glance VM/LXC CPU/RAM/Disk (`pve_guest_info` +
