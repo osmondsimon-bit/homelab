@@ -3,7 +3,7 @@
 set -euo pipefail
 
 TARGET_NAME="${TARGET_NAME:-$(hostname -s)}"
-TARGET_KIND="${TARGET_KIND:-manual-vm}"
+TARGET_KIND="${TARGET_KIND:-ubuntu-vm}"
 TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/prometheus/node-exporter}"
 BOOT_DIR="${BOOT_DIR:-/boot}"
 RUNNING_KERNEL="${RUNNING_KERNEL:-$(uname -r)}"
@@ -71,9 +71,11 @@ fi
 read -r pending security_pending < <(count_pending)
 last_patch=0
 [[ -f "$APT_HISTORY_FILE" ]] && last_patch="$(stat -c %Y "$APT_HISTORY_FILE")"
+target_policy="manual-monthly"
+[[ "$TARGET_KIND" == "ubuntu-vm" ]] && target_policy="auto-security-manual-other"
 
 emit "homelab_reboot_required{target=\"${target_label}\",kind=\"${TARGET_KIND}\"} ${reboot_required}"
-emit "homelab_apt_upgrades_pending{target=\"${target_label}\",kind=\"${TARGET_KIND}\",policy=\"manual-monthly\"} ${pending}"
+emit "homelab_apt_upgrades_pending{target=\"${target_label}\",kind=\"${TARGET_KIND}\",policy=\"${target_policy}\"} ${pending}"
 emit "homelab_apt_security_upgrades_pending{target=\"${target_label}\",kind=\"${TARGET_KIND}\"} ${security_pending}"
 emit "homelab_patch_last_success_timestamp_seconds{target=\"${target_label}\",kind=\"${TARGET_KIND}\"} ${last_patch}"
 

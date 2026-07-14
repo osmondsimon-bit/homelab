@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression tests for the maintenance textfile collector: kernel reboot detection and LXC patch enrollment.
+# Regression tests for maintenance metrics: reboot detection, patch policy, and LXC enrollment.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -73,6 +73,17 @@ assert_metric "$flag_dir/textfile/homelab_maintenance.prom" \
   'homelab_apt_upgrades_pending\{target="oneill",kind="pve-host",policy="manual-monthly"\} 2'
 assert_metric "$flag_dir/textfile/homelab_maintenance.prom" \
   'homelab_apt_security_upgrades_pending\{target="oneill",kind="pve-host"\} 1'
+
+# Ubuntu VMs auto-apply security updates while leaving ordinary packages and reboots deliberate.
+ubuntu_dir="$tmpdir/ubuntu-vm"
+mkdir -p "$ubuntu_dir/boot" "$ubuntu_dir/textfile"
+make_fake_apt "$ubuntu_dir/apt-get"
+TARGET_NAME=vaultwarden TARGET_KIND=ubuntu-vm TEXTFILE_DIR="$ubuntu_dir/textfile" \
+  BOOT_DIR="$ubuntu_dir/boot" RUNNING_KERNEL="6.8.0-63-generic" \
+  REBOOT_REQUIRED_FILE="$ubuntu_dir/reboot-required" APT_GET_CMD="$ubuntu_dir/apt-get" \
+  PCT_CMD="$ubuntu_dir/no-pct" "$collector"
+assert_metric "$ubuntu_dir/textfile/homelab_maintenance.prom" \
+  'homelab_apt_upgrades_pending\{target="vaultwarden",kind="ubuntu-vm",policy="auto-security-manual-other"\} 2'
 
 # PVE-side intent reconciliation must expose an unenrolled new LXC instead of silently
 # treating a running guest as compliant.

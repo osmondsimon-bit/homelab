@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Configure unattended SECURITY upgrades inside a Debian guest LXC (ADR-015). Idempotent —
-# delivered + run via provision-patching.yml (piped to `bash -s` inside the CT). Arg $1 is the
-# ntfy URL (base + private topic) for failure notifications; pass "" to skip the notify hook.
+# Configure unattended SECURITY upgrades on a Debian/Ubuntu apt guest (ADR-015). Idempotent —
+# delivered + run via provision-patching.yml. Arg $1 is the ntfy URL (base + private topic) for
+# failure notifications; pass "" to skip the notify hook.
 #
 # Policy: security pocket only (the distro's shipped Origins-Pattern default — we don't widen it),
 # NEVER auto-reboot, and apply at MIDDAY (not the ~06:00 default) so any fallout is seen while the
@@ -21,7 +21,8 @@ if [ -n "$need" ]; then
   apt-get install -y -qq $need >/dev/null
 fi
 
-# Turn the periodic update + unattended-upgrade on (security-only is the shipped default origin set).
+# Turn the periodic update + unattended-upgrade on. Debian and Ubuntu ship security-only default
+# origin sets; Ubuntu also allows its release pocket solely for dependencies of security updates.
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
@@ -43,8 +44,8 @@ cat > /etc/needrestart/conf.d/50homelab.conf <<'EOF'
 $nrconf{restart} = 'a';
 EOF
 
-# Apply at 12:00 LOCAL (override the vendor ~06:00 randomized schedule). The CTs run in UTC, so we
-# pin the timezone in the calendar spec (systemd >= 252) — otherwise "12:00" would be 12:00 UTC.
+# Apply at 12:00 LOCAL (override the vendor ~06:00 randomized schedule). Guests may run in UTC, so
+# pin the timezone in the calendar spec (systemd >= 252) — otherwise "12:00" means 12:00 UTC.
 if [ -n "$PATCH_TZ" ]; then CAL="*-*-* 12:00 $PATCH_TZ"; else CAL="*-*-* 12:00"; fi
 mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
 cat > /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf <<EOF
@@ -89,4 +90,4 @@ fi
 
 systemctl daemon-reload
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 || true
-echo "unattended-upgrades configured on $(hostname) (security-only, no-reboot, 12:00)"
+echo "unattended-upgrades configured on $(hostname) (security-only, no-reboot, 12:00 local)"

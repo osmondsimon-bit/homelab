@@ -85,9 +85,9 @@ Per-service RAM/disk sizing is set when each is built; with services spread acro
 
 ## Updates & patching
 
-ADR-015 is live. Debian LXCs apply security/point-release updates automatically at local noon with
-no automatic reboot; the three PVE hosts, mgmt-vm, VM 118, VM 125, HAOS, and pinned Docker images
-remain deliberate manual updates. `update-pve-host.yml` upgrades one PVE node but reboots only when
+ADR-015 is live. Debian LXCs plus Ubuntu VMs 100/118/125 apply security updates automatically at
+local noon with no automatic reboot; ordinary Ubuntu packages, the three PVE hosts, HAOS, pinned
+Docker images, and every reboot remain deliberate manual maintenance. `update-pve-host.yml` upgrades one PVE node but reboots only when
 the operator explicitly passes `-e do_reboot=true`; apophis reboots remain out-of-band per the
 runbook. A daily Prometheus textfile audit checks LXC enrollment, pending/security updates, and the
 running-vs-newest-installed kernel. Glance's **Maintenance State** pane shows the resulting action
@@ -256,7 +256,7 @@ Prometheus is scraping (node/pve/UniFi/HA) and alerting works, but **Grafana its
 - [x] **Document the cross-subnet Zigbee path** — ✅ done (runbook → Check Zigbee coordinator). HA (Home/Secure) → SLZB-06 (IoT/Unsecure) via UniFi **Allow Secure→Unsecure** (subnet-wide) + return. **Hardening backlog:** tighten that broad Home→IoT allow to `HA-IP → coordinator-IP` only. **Confirmed via UniFi read 2026-06-19** — there are **two** over-broad `Secure→Unsecure (ANY)` ALLOW policies (Home→IoT *and* Home→Camera); both should be scoped to specific host/port. Also note: a reusable **isolated test VLAN (5, internet-only)** now exists for future restore drills.
 
 ### Decisions to make
-- [~] **Patching/update approach — ADR-015 ACCEPTED; guest track LIVE (2026-06-17).** `provision-patching.yml` configures all guest LXCs (110–115, discovered via `pct list`): `unattended-upgrades` **security/point-release only (Debian default, not `-updates`)**, **no auto-reboot**, timer pinned to **12:00 local** (`patching_timezone`, DST-safe), **ntfy on failure**. mgmt-vm + HA VM excluded (manual). Also fixed: PBS CT 112 shipped the `pbs-enterprise` repo (401) — `provision-pbs.yml` now disables it. **Host track now codified (2026-06-19):** `update-pve-host.yml` does `apt update` + `dist-upgrade` + autoremove on a single host (`--limit`, refuses multiple), guards that the enterprise repo is disabled, and reports reboot-required via **running-vs-newest-kernel** (PVE lacks `/var/run/reboot-required`) — **no auto-reboot** (oneill reboot drops DNS/monitoring/PBS/Glance; plan a window). First run on **oneill 2026-06-19**: 44 pkgs, pve-manager 9.2.2→9.2.3, kernel 7.0.2-6→7.0.6-2 (reboot scheduled). **Remaining:** monthly cadence + the mgmt-vm manual window; reboot via HA failover once clustered.
+- [x] **Patching/update approach — ADR-015 LIVE; Ubuntu VM track codified 2026-07-14.** `provision-patching.yml` configures every running guest LXC plus Ubuntu VMs 100/118/125: `unattended-upgrades` **security-only** (Debian security/point-release defaults; Ubuntu security + required release-pocket dependencies, never `-updates`), **no auto-reboot**, timer pinned to **12:00 local** (`patching_timezone`, DST-safe), `needrestart`, and **ntfy on failure**. Ordinary Ubuntu packages, Docker image changes, and VM reboots stay in the deliberate monthly window; HAOS remains appliance-managed. PBS CT 112's enterprise repo stays disabled. **Host track remains manual:** `update-pve-host.yml` upgrades one PVE node (`--limit`) and reports reboot need, but never reboots without `-e do_reboot=true`.
 - [x] **Version the agents** — `.claude/agents/*.md` and `.claude/skills/phase-gate/SKILL.md` are now published with narrow `.gitignore` exceptions. Transcripts, memory, settings, caches, and credentials stay private.
 
 _Resolved this session:_ RAM trim (moot — services now spread across 3 nodes); Proxmox API Ansible modules (superseded by Terraform, ADR-008); drop the `100.x` IP (done — full decouple, ADR-006).
