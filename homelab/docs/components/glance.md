@@ -8,7 +8,7 @@ Assistant). Admin launchpad across apophis + oneill (ADR-014).
 
 | | |
 |---|---|
-| Host / VMID | **oneill** (NUC) / CT 115 (unprivileged LXC, Debian 12) |
+| Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 115 (unprivileged LXC, Debian 12) |
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |

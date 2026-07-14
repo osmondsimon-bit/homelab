@@ -50,13 +50,13 @@ now. If we revisit it, it gets its own ADR.
 
 Unprivileged LXC, CTID **111**, provisioned by `ansible/playbooks/provision-technitium.yml`.
 
-> **Placement update (2026-06-16):** the Intel NUC (**oneill**) arrived during Phase 2, so
+> **Placement update (2026-06-16):** the KAMRUI Essenx E2 (**oneill**) arrived during Phase 2, so
 > Technitium was deployed **directly on oneill** rather than apophis-then-migrate — the
-> planned Phase 4 migration is moot. The original plan (apophis now → NUC in Phase 4) is
+> planned Phase 4 migration is moot. The original plan (apophis now → E2 in Phase 4) is
 > kept below for context. DNS-only kept this trivial: it was a placement choice at deploy
 > time, not a data migration.
 
-Original intent: deploy on apophis now and migrate to the NUC in Phase 4 (like Tailscale,
+Original intent: deploy on apophis now and migrate to the E2 in Phase 4 (like Tailscale,
 CT 110) to free apophis for Plex.
 
 ## Consequences

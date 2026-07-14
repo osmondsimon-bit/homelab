@@ -134,7 +134,7 @@ the playbook, then **approve the new route** in the Tailscale admin console.
 
 ## Technitium DNS (CT 111, DNS-only resolver)
 
-Unprivileged LXC 111 on **oneill** (NUC, `YOUR_NUC_IP`). **DNS only — UniFi keeps DHCP**
+Unprivileged LXC 111 on **oneill** (KAMRUI Essenx E2, `YOUR_NUC_IP`). **DNS only — UniFi keeps DHCP**
 (ADR-011). Provisioned via Ansible
 (`ansible-playbook playbooks/provision-technitium.yml --limit oneill`, idempotent). Web
 console on port `5380`, DNS on `53`.
@@ -661,13 +661,43 @@ After a power blip, a host only comes back if its firmware is set to power on. H
   (If an Admin BIOS password is ever enabled — `.../authentication/Admin/is_enabled` = 1 — write it
   to `.../authentication/Admin/current_password` first.) **apophis set to "Power On" 2026-06-22;
   carter verified "Power On" 2026-07-14.**
-- **oneill (generic N150 mini-PC, AMI Aptio BIOS) — NO remote interface** (`/sys/class/firmware-attributes/`
+- **oneill (KAMRUI Essenx E2 N150, AMI Aptio BIOS) — NO remote interface** (`/sys/class/firmware-attributes/`
   absent). ✅ **FIXED 2026-06-22.** Root cause: BIOS **"State After G3" = S5** (stay off after power
   loss); changed to **S0** (power on) — confirmed self-boots on AC restore. On this board the setting
   is under **"State After G3" (S0/S5)**, *not* "Restore AC Power Loss"; if you're back in this BIOS,
   also check **Deep Sleep/ErP = Disabled**. Entry key: Del (try F2/Esc). No remote/SSH path for it.
 - **UPS:** confirm the UPS also feeds the **network device** (gateway/switch) — else a blip still
   causes the common-mode outage ADR-009 warns about.
+
+#### Oneill firmware baseline (2026-07-14)
+
+The purchase record identifies Oneill as a **KAMRUI Essenx E2**, Twin Lake-N N150, 16 GB DDR4 and
+512 GB M.2 SSD; that configuration also matches
+[KAMRUI's E2 product page](https://kamrui.com/products/kamrui-essenx-basic-e2). Its SMBIOS identity
+fields all contain `Default string`, so Linux alone cannot identify its manufacturer, product, SKU,
+family, or baseboard. The installed AMI BIOS is **`TWL_P0_AK_10_0108_AMI.15W` (2025-01-17)**,
+revision 5.27. It runs PVE 9.2.4 and kernel
+`7.0.14-4-pve` in UEFI mode. Secure Boot is disabled and the platform is in Setup Mode (no enrolled
+platform key); this is recorded state, not a reason to enable Secure Boot during routine maintenance.
+
+| Setting / capability | Verified value |
+|---|---|
+| Boot mode | UEFI; ZFS root |
+| Secure Boot | Disabled; platform in Setup Mode |
+| CPU virtualization | VT-x exposed |
+| Firmware settings from Linux | None (`/sys/class/firmware-attributes/` absent) |
+| State After G3 | S0 / power on; set and AC-restore tested 2026-06-22 |
+| Active watchdog | Software Watchdog (`softdog`), 10-second timeout, `nowayout=0` |
+| Chipset watchdog candidate | Alder Lake-N PCH; `iTCO_wdt` module available but untested/not loaded |
+| Wired NIC wake | Supported, but disabled (`Wake-on: d`) |
+
+**Do not flash Oneill from a BIOS image inferred from the BIOS version string.** The purchase record
+establishes the E2/N150 model, but the blank SMBIOS still prevents the machine from validating an
+image itself. Before any update, obtain an image and checksum from KAMRUI support with explicit
+confirmation that it applies to the Essenx E2 N150 and current `TWL_P0_AK` firmware family. The
+2025 BIOS date creates no immediate update pressure in the absence of a model-specific security
+advisory or a firmware fault. Loading or testing `iTCO_wdt` is a separate controlled maintenance
+task; module availability alone does not prove the watchdog is usable.
 
 #### Carter firmware baseline before the planned update (2026-07-14)
 
