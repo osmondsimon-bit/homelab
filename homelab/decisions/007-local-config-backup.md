@@ -29,8 +29,11 @@ Backed up:
 - `.claude/projects/-home-simon/memory/` (auto-memory)
 - `.codex/AGENTS.md` and `.codex/config.toml` (non-secret Codex local config)
 
-**Never backed up — regenerated/rotated on restore:** SSH private keys, `~/.git-credentials`,
-GitHub/Tailscale tokens. The script aborts if it detects a private key or token in the backup set.
+**Never backed up by this script:** SSH private keys and GitHub/Tailscale tokens. GitHub access
+uses a dedicated `~/.ssh/id_ed25519_github` key rather than a plaintext PAT; the key is present in
+the full mgmt-vm PBS image but excluded from this private config repo. After a config-only restore,
+regenerate/rotate these credentials. The script aborts if it detects a private key or token in the
+backup set.
 
 **Convention (standard part of the workflow for now):** run the backup script after changing local
 config and at session close. The private repo complements PBS by keeping the small, portable local
@@ -43,7 +46,8 @@ config set easy to inspect and restore.
 - The private repo contains real IPs; that's acceptable because it's private.
 - This is **not** a substitute for full VM backups (which also capture the OS, packages, and
   everything else). PBS now covers the mgmt-vm; the private repo remains the portable config layer.
-- Restore procedure: clone `homelab-private`, copy files back to the same paths under `$HOME`,
-  then regenerate the SSH key and mint a fresh GitHub token.
+- Restore procedure: after a full mgmt-vm image restore, use the restored dedicated GitHub SSH key
+  to clone `homelab-private` and copy files back under `$HOME`. On a fresh build, generate and
+  register a new dedicated GitHub SSH key first.
 - Manual for now; could be automated later (cron or a git post-commit hook) — deferred to keep it
   simple while the cadence is low.

@@ -6,14 +6,14 @@
 # local Claude/Codex config. Those live only on this machine — this script gives
 # them an off-box, off-site backup alongside the mgmt-vm PBS image (ADR-007).
 #
-# IMPORTANT: credentials are NEVER backed up here — no SSH private keys, no tokens,
-# no ~/.git-credentials. Those are regenerated/rotated on restore, not stored in a repo.
+# IMPORTANT: credentials are NEVER backed up here — no SSH private keys or tokens.
+# GitHub uses a dedicated SSH key that stays on the mgmt-vm (and in its PBS image).
 #
 # Restore: clone homelab-private and copy the files back to the same paths under $HOME.
 
 set -euo pipefail
 
-PRIVATE_REPO_URL="https://github.com/osmondsimon-bit/homelab-private.git"
+PRIVATE_REPO_URL="git@github.com:osmondsimon-bit/homelab-private.git"
 WORKDIR="$HOME/homelab-private"     # gitignored by the public repo
 SRC="$HOME"
 
