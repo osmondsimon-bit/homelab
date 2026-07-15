@@ -23,6 +23,8 @@ grep -Fq 'hosts: carter' "$playbook" \
   || fail 'Actual must be created on Carter only'
 grep -Fq 'actual_vmid: 127' "$example_vars" \
   || fail 'Actual must use the agreed VMID 127'
+grep -Fq 'actual_mac: YOUR_ACTUAL_MAC' "$example_vars" \
+  || fail 'Actual must use a pre-reserved deterministic MAC address'
 grep -Fq 'actualbudget/actual-server:26.7.0' "$example_vars" \
   || fail 'Actual must use the pinned stable container release'
 grep -Fq '127.0.0.1:5006:5006' "$playbook" \
@@ -37,8 +39,28 @@ grep -Fq 'cap_drop:' "$playbook" \
   || fail 'the Actual container must drop Linux capabilities'
 grep -Fq 'tailscale serve --bg --https=443 http://127.0.0.1:5006' "$playbook" \
   || fail 'Tailscale Serve must provide the only HTTPS ingress'
+grep -Fq "lookup('file', actual_ts_authkey_file, errors='ignore')" "$playbook" \
+  || fail 'a used Tailscale key file must be optional on idempotent reruns'
+grep -Fq "when: (actual_ts_state.stdout | from_json).BackendState != 'Running'" "$playbook" \
+  || fail 'the Tailscale key must only be required when the VM is not joined'
+grep -Fq -- '--net0 virtio={{ actual_mac }},bridge={{ bridge }}' "$playbook" \
+  || fail 'the VM must use the MAC reserved in UniFi'
 grep -Fq 'curl -fsS --max-time 8 http://127.0.0.1:5006' "$playbook" \
   || fail 'provisioning must include a local application smoke test'
+grep -Fq 'until: actual_health.rc == 0' "$playbook" \
+  || fail 'the application smoke test must tolerate first-start initialization'
+grep -Fq 'files/patching/setup-unattended.sh' "$playbook" \
+  || fail 'the deployment must enroll Actual in security-only patching'
+grep -Fq 'include_tasks: tasks/install-maintenance-collector.yml' "$playbook" \
+  || fail 'the deployment must install Actual maintenance metrics and node_exporter'
+[[ "$(grep -Fc 'lock_timeout: 300' "$playbook")" -ge 2 ]] \
+  || fail 'apt operations must tolerate Ubuntu first-boot package locks'
+grep -Fq 'pvesh get /cluster/backup --output-format json' "$playbook" \
+  || fail 'provisioning must discover the existing PBS backup job'
+grep -Fq "grep -q 'backup/vm/{{ actual_vmid }}/'" "$playbook" \
+  || fail 'PBS verification must use the PVE 9-compatible volume identifier'
+grep -Fq 'vzdump {{ actual_vmid }} --storage pbs-oneill --mode snapshot' "$playbook" \
+  || fail 'provisioning must take an immediate encrypted PBS backup'
 
 grep -Fq 'name: actual-patching' "$patching_playbook" \
   || fail 'Actual must be enrolled in Ubuntu security patching'

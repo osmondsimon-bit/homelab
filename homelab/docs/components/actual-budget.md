@@ -1,7 +1,7 @@
 # Actual Budget (VM 127)
 
-Private personal-finance server on Carter. The deployment is codified but is **not live** until the
-operator reserves an address, provisions VM 127, completes first-run setup, and proves the PBS restore.
+Private personal-finance server on Carter. **Live since 2026-07-15**; first-run security setup,
+monitoring, encrypted PBS protection, portable export, and an isolated restore drill are complete.
 
 | | |
 |---|---|
@@ -15,16 +15,19 @@ operator reserves an address, provisions VM 127, completes first-run setup, and 
 
 ## Deploy
 
-1. Reserve a free Home-VLAN address in UniFi and set `actual_ip` in the gitignored `all.yml`.
-2. Create a tagged Tailscale auth key for `tag:actual`; keep `actual_enabled: false` for now.
+1. Reserve `YOUR_ACTUAL_IP` for `YOUR_ACTUAL_MAC` in UniFi. Set these values as `actual_ip` and
+   `actual_mac` in the gitignored `all.yml`; keep `actual_enabled: false` until the VM is healthy.
+2. Apply the versioned Tailscale ACL, create a scoped auth key for `tag:actual`, and write only the
+   key to `~/.tailscale-actual-authkey` on mgmt-vm with mode `0600`. Never commit the key. Delete the
+   one-use file after the node joins; idempotent reruns do not require it while Tailscale is running.
 3. From `homelab/ansible`, run:
 
    ```bash
    ansible-playbook playbooks/provision-actual.yml
    ```
 
-4. Confirm the node is tagged `tag:actual`, disable key expiry, apply the versioned ACL, and open the
-   printed HTTPS URL from an operator device.
+4. Confirm the node is tagged `tag:actual`, disable key expiry, and open the printed HTTPS URL from
+   an operator device.
 5. Create a strong server password and store it in Vaultwarden. Enable budget E2EE with a different
    password and store that recovery password off VM 127. Losing it can make the budget unrecoverable.
 6. Create or import the budget, then download a portable Actual ZIP export.
@@ -36,9 +39,14 @@ OFX/QFX/CSV file import; do not add bank API credentials as part of this rollout
 
 ## Backup and recovery
 
-In Proxmox, add a **Carter-scoped** job for VM 127 to `pbs-oneill`: snapshot mode, daily at 02:45,
-retention `keep-daily=7,keep-weekly=4`. Run it immediately and confirm `vm/127` appears in Glance's
-Backup State after the hourly collector runs.
+The deployment playbook adds VM 127 to the existing cluster backup job targeting `pbs-oneill`:
+snapshot mode, daily at 02:30, retention `keep-daily=7,keep-weekly=4`. It also takes the first image
+immediately when none exists. Confirm `vm/127` appears in Glance's Backup State after the hourly
+collector runs.
+
+**Proven 2026-07-15:** a data-bearing, client-side-encrypted image was restored to throwaway VM 197
+on Carter with its NIC removed before boot. The account database, budget files, and Compose definition
+were present; measured RTO was 155 seconds. VM 197 was destroyed and production VM 127 was untouched.
 
 Restore drill:
 

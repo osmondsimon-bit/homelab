@@ -6,6 +6,7 @@
     name: prometheus-node-exporter
     state: present
     update_cache: true
+    lock_timeout: 300
 
 - name: Ensure the node_exporter textfile directory exists
   ansible.builtin.file:

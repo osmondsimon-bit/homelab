@@ -39,11 +39,12 @@
 - Intel i5-8500 (6c/6t, Coffee Lake — matched to apophis for live migration), **32 GB RAM**, ~256 GB SSD (**ZFS-on-root**, `rpool`)
 - IP: YOUR_CARTER_IP — Proxmox VE 9.2.4, kernel `7.0.14-4-pve`, **cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
 - Firmware baseline (inventoried 2026-07-14): BIOS `M1UKT23A` (2018-12-05), UEFI-only, Secure Boot disabled; Lenovo's current recommended release is `M1UKT79A` (2026-03-30). Settings recorded in the runbook before the planned update.
-- Role: manual-failover target for VM 200 (`pvesr` replication apophis→carter) + 2nd DNS resolver host. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
+- Role: manual-failover target for VM 200 (`pvesr` replication apophis→carter) + 2nd DNS resolver host + Actual Budget. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
 | technitium2 | 117 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM2_IP | Running — 2nd DNS resolver, config-identical to CT 111 via the `technitium_instances` playbook loop (ADR-011). Independent node from CT 111 (oneill) for DNS redundancy. GuestDown covers `lxc/117`. |
+| actual | 127 | VM (Ubuntu 24.04) | YOUR_ACTUAL_IP | Running — Actual Budget in a pinned official Docker container; loopback-only application behind Tailscale Serve, `tag:actual` operator-only; encrypted PBS daily + no-network restore drill proven 2026-07-15 (ADR-023). |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 
@@ -54,7 +55,7 @@
 | Node | Role | Status | Intended to run |
 |------|------|--------|-----------------|
 | apophis | Compute-heavy, cluster member | **Live (cluster)** | Jellyfin (QuickSync, iGPU — Phase 6) + media stack; HA VM 200 (primary) |
-| carter (ThinkStation P330 Tiny 30CE, i5-8500 / 32 GB / ZFS) | Cluster member, failover target | **Live (cluster)** — technitium2 (CT 117) | VM 200 manual-failover target (pvesr replication); 2nd DNS resolver; Actual Budget VM 127 planned |
+| carter (ThinkStation P330 Tiny 30CE, i5-8500 / 32 GB / ZFS) | Cluster member, failover target | **Live (cluster)** — technitium2 (CT 117) + Actual (VM 127) | VM 200 manual-failover target (pvesr replication); 2nd DNS resolver; Actual Budget VM 127 |
 | KAMRUI Essenx E2 (**oneill**, N150 / 16 GB / ZFS) | Low-power, **standalone** | **Live (standalone)** — Technitium, PBS, HA-share, Monitoring, Glance, infra-portal, Tailscale2 | Simple services offloaded from apophis; CT 126 provides an independent Tailscale subnet-router path |
 
 Offloading the simple services to oneill frees apophis's CPU for media transcoding. The apophis+carter pair (matched Coffee-Lake CPUs) supports live migration; failover for VM 200 is **manual** from the latest replicated snapshot (runbook). oneill being standalone means a node-down there is a DNS/monitoring/backup outage, not a quorum event — which is why DNS now has a 2nd resolver on carter.
@@ -77,7 +78,7 @@ Offloading the simple services to oneill frees apophis's CPU for media transcodi
 | ~~Sonarr~~ | LXC (CT 123) | apophis | ✅ Live (Phase 7) — TV automation; native Servarr install; bind-mounted to the USB-SSD media share; hands grabs to qBittorrent via Prowlarr (ADR-022). |
 | ~~Radarr~~ | LXC (CT 124) | apophis | ✅ Live (Phase 7) — movie automation; native Servarr install; same media share + hardlinks (ADR-022). |
 | ~~Jellyseerr + Prowlarr + ByParr~~ | VM (VM 125) | apophis | ✅ Live (Phase 7) — request UI (Jellyseerr) + indexer stack (Prowlarr + ByParr) **behind a 2nd ProtonVPN Gluetun container** to bypass AU ISP blocks + satisfy CF egress-IP consistency (ADR-022, ADR-014 exception #2). |
-| Actual Budget | VM (VM 127) | **carter** | **Codified, not live** — Ubuntu 24.04 + pinned official Docker image; tailnet-only HTTPS through Tailscale Serve; daily encrypted PBS image planned (ADR-023). Reserve an IP, provision, complete E2EE first run, then restore-drill before marking live. |
+| ~~Actual Budget~~ | VM (VM 127) | **carter** | ✅ Live 2026-07-15 — Ubuntu 24.04 + pinned official Docker image; tailnet-only HTTPS through Tailscale Serve; server password + budget E2EE configured; portable ZIP taken; daily encrypted PBS image and isolated restore drill proven (ADR-023). |
 | Minecraft server | VM/LXC | TBD | Game server for future use — low priority, size/placement TBD |
 
 Per-service RAM/disk sizing is set when each is built; with services spread across three nodes the old single-16 GB-host budget no longer binds. Jellyfin stays on apophis for the iGPU.
@@ -88,7 +89,7 @@ Per-service RAM/disk sizing is set when each is built; with services spread acro
 
 ## Updates & patching
 
-ADR-015 is live. Debian LXCs plus Ubuntu VMs 100/118/125 apply security updates automatically at
+ADR-015 is live. Debian LXCs plus Ubuntu VMs 100/118/125/127 apply security updates automatically at
 local noon with no automatic reboot; ordinary Ubuntu packages, the three PVE hosts, HAOS, pinned
 Docker images, and every reboot remain deliberate manual maintenance. `update-pve-host.yml` upgrades one PVE node but reboots only when
 the operator explicitly passes `-e do_reboot=true`; apophis reboots remain out-of-band per the
@@ -220,7 +221,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 - Monitoring is live (Prometheus/Grafana + node/pve/unifi/HA + ntfy dead-man's-switch). `/phase-gate` skill exists for closing phases. A read-only Technitium token is at `~/.technitium-ro-token` for diagnostics.
 
 ### New initiatives (proposed 2026-06-19)
-- [~] **Actual Budget on Carter — deployment codified 2026-07-14, live rollout pending (ADR-023).** VM 127: Ubuntu 24.04, 1 core / 2 GB / 10 GB, pinned official container, application bound to loopback and exposed only through Tailscale Serve. Ansible, patching/monitoring hooks, Glance link, ACL reference, and recovery documentation are ready but gated by `actual_enabled: false`. **Next:** reserve `YOUR_ACTUAL_IP`, run `provision-actual.yml`, set server password + budget E2EE, create the Carter→oneill PBS job, take a portable ZIP, and pass the no-network restore drill. Australian bank sync is not built in; use OFX/QFX/CSV import initially.
+- [x] **Actual Budget on Carter — ✅ LIVE 2026-07-15 (ADR-023).** VM 127: Ubuntu 24.04, 1 core / 2 GB / 10 GB, pinned official container, application bound to loopback and exposed only through Tailscale Serve with operator-only `tag:actual`. Server password + separate budget E2EE configured; portable ZIP taken. Security patching, Prometheus/Glance, the existing encrypted cluster PBS job, and a 155-second no-network restore drill are all proven. Australian bank sync is not built in; use OFX/QFX/CSV import initially.
 - [x] **UniFi read access for the agent — done 2026-06-19.** `scripts/unifi-query.sh` (GET-only, cookie auth, cached session) reuses the read-only `prometheus_user` (unpoller) account; creds in gitignored `~/.unifi-ro.env` (chmod 600). Verified: networkconf/wlanconf/firewallgroup/user/device/sta/health all `rc=ok`. First review captured the topology (VLANs Home 2 / Camera 3 / IoT 4 / Guest 99 / Mgmt 254 — matches docs). **v2 firewall review added 2026-06-19:** `unifi-query.sh --v2 firewall-policies firewall/zone trafficrules` reads the zone-based firewall (9 zones; 143 policies = 136 predefined + **7 custom**). Posture is sound (Default net blocked from internet/gateway; IoT/Camera blocked from gateway; Test VLAN isolated from Secure) **except** two **over-broad `Secure → Unsecure (ANY)` ALLOW** rules — Home→IoT and Home→Camera — which **confirm the existing Zigbee-path hardening backlog item** (tighten to `HA-IP → coordinator-IP`+port; see Small/quick). **Cleanup candidates:** leftover **WireGuard Client** network (ADR-003 superseded WG w/ Tailscale; vpn health `unknown`) + vestigial untagged **Default** net (0 clients, already firewalled off — subnet intentionally not committed). MCP path still parked. Now enables reading current topology to design the new-house network.
 - [x] **Vaultwarden — ✅ LIVE 2026-06-26 (VM 118, Phase 5 Secrets track closed).** Deployed on apophis (Ubuntu 24.04 + Docker, Tailscale-only, replicated to carter + PBS-imaged, restore drill PASS); tiered secrets model per ADR-018; SSH access audit done (Phase 5 step 1). See "Phase 5 — Secrets + HA expansion".
 - [ ] **New-house build inventory → design surface.** Digitise the separate new-house project (network devices, rooms, switches, drops, rack) as **structured YAML** under `homelab/new-house/` (NOT prose) so the agent can reason over it and generate configs. **Scope, once ingested:** validate the port plan, design VLANs + firewall rules, plan rack U-space/port map, AP placement; later scaffold HA areas/devices/automations from the same source of truth. **First step:** Simon shares the existing project → agree a schema → ingest. Needs an ADR (where/how the new-house design lives). This is the umbrella for the currently "deferred to new house" items (NAS/shared storage, cameras, Frigate, switch → USW dashboard).
@@ -234,7 +235,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 
 ### Backups
 - [x] Local config backup — done (ADR-007); now includes ansible inventory + host_vars.
-- [x] **VM images via PBS** — PBS on oneill (CT 112), apophis wired (scoped token), scheduled daily (**VM 100 mgmt-vm + VM 118 vaultwarden** → keep 7d/4w), GC daily. (ADR-012) CTs excluded — reproducible from playbooks; the two stateful VMs (mgmt-vm hand-built, vaultwarden's Docker data volume) are the ones imaged.
+- [x] **VM images via PBS** — PBS on oneill (CT 112), cluster job scheduled daily (**VM 100 mgmt-vm + VM 118 vaultwarden + VM 127 Actual** → keep 7d/4w), GC daily. (ADR-012/023) CTs excluded — reproducible from playbooks; the three stateful VMs are imaged. Actual's data-bearing encrypted image passed a no-network restore drill 2026-07-15.
 - [x] **[High] HA native backup — landing confirmed (2026-06-17).** Samba CT 113 (`provision-ha-backup-share.yml`) + HAOS scheduled **PARTIAL** backup; automatic backups are recurring onto the share (~131 MB each). **Scope verified** from `backup.json`: HA core + **Zigbee2MQTT** add-on + Mosquitto + Cloudflared, compressed, no media. (Optional: tune recorder `purge_keep_days` ~10–14.)
 - [x] **[High] HA backup encryption key — saved off-box (2026-06-17).** HAOS backups are **encrypted** (`"protected": true`); the key (HAOS → Settings → System → Backups → ⋮ → "Show encryption key") is stored in **Google Password Manager / Keychain**. It's a **Tier 2 anchor (ADR-018)** — it stays **outside** Vaultwarden so recovery is non-circular (the vault may itself be down). Without the key the encrypted backup is unrestorable.
 - [x] **Interim safety net — fully cleared (2026-06-18).** `vzdump-qemu-100` (mgmt-vm) deleted (PBS covers it); `vzdump-qemu-200` (HA) **retired** after the HA-native-restore drill proved the partial backup restorable. No `vzdump-qemu` images remain on apophis `local`.
