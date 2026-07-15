@@ -117,8 +117,9 @@ egress via a VPN** — which also keeps a consistent exit IP for any Cloudflare 
 **As-built change:** Prowlarr is now a **Docker container behind Gluetun on VM 125** (the Jellyseerr
 VM already runs Docker), `network_mode: service:gluetun`, on a **2nd ProtonVPN WireGuard exit** (no
 port-forwarding). Its WebUI is published on the VM IP `:9696`; Gluetun's `FIREWALL_OUTBOUND_SUBNETS`
-lets it still reach Sonarr/Radarr on the LAN. **The native Prowlarr CT 122 is retired** (`.21` freed).
-Egress verified = ProtonVPN exit, not the home WAN. The native Prowlarr CT 122 is retired (`.21` freed).
+lets it still reach Sonarr/Radarr on the LAN. **The native Prowlarr CT 122 is retired** (its address
+was released and later reused for another service). Egress verified = ProtonVPN exit, not the home
+WAN.
 `provision-prowlarr.yml` native playbook is removed; VM 125 is built by `provision-jellyseerr.yml`.
 This supersedes the "Prowlarr native LXC, LAN-only" parts of the decision above.
 

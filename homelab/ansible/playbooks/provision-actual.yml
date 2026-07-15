@@ -3,7 +3,9 @@
 # The application listens on VM loopback only; Tailscale Serve provides tailnet-only HTTPS.
 # Persistent finance data lives in /opt/actual/data and is protected by a daily PBS VM image.
 #
-# Prerequisites: reserve actual_ip in UniFi and create a tagged Tailscale auth key for tag:actual.
+# Prerequisites: reserve the actual_ip + actual_mac pair in UniFi. For a new VM, write a scoped,
+# tagged Tailscale auth key for tag:actual to actual_ts_authkey_file (mode 0600); it is optional
+# after the node has joined successfully.
 # Run from the mgmt-vm, inside homelab/ansible:
 #   ansible-playbook playbooks/provision-actual.yml
 # The first browser visit sets the server password. Enable budget E2EE separately in Actual and
@@ -16,18 +18,16 @@
     actual_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
     actual_cloud_image: "noble-server-cloudimg-amd64.img"
     actual_ip_bare: "{{ actual_ip | regex_replace('/.*$', '') }}"
-  vars_prompt:
-    - name: actual_ts_authkey
-      prompt: "Tagged Tailscale auth key for Actual Budget (tskey-auth-...)"
-      private: true
+    actual_ts_authkey_value: "{{ lookup('file', actual_ts_authkey_file, errors='ignore') | trim }}"
 
   tasks:
     - name: Validate inputs
       ansible.builtin.assert:
         that:
           - "'YOUR_' not in actual_ip"
-          - actual_ts_authkey is match('^tskey-')
-        fail_msg: "Reserve and set actual_ip, then provide a tag:actual Tailscale auth key."
+          - "'YOUR_' not in actual_mac"
+          - actual_mac is match('^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+        fail_msg: "Reserve actual_ip + actual_mac before provisioning Actual."
         quiet: true
 
     - name: Check whether VM {{ actual_vmid }} already exists
@@ -55,7 +55,7 @@
         set -e
         qm create {{ actual_vmid }} --name {{ actual_hostname }} \
           --memory {{ actual_ram_mb }} --cores {{ actual_cores }} --cpu {{ actual_cpu }} \
-          --net0 virtio,bridge={{ bridge }} --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
+          --net0 virtio={{ actual_mac }},bridge={{ bridge }} --scsihw virtio-scsi-pci --machine q35 --ostype l26 \
           --agent enabled=1 --onboot 1 --startup {{ actual_startup }}
         qm set {{ actual_vmid }} --scsi0 {{ rootfs_storage }}:0,import-from=/var/lib/vz/template/{{ actual_cloud_image }}
         qm set {{ actual_vmid }} --ide2 {{ rootfs_storage }}:cloudinit --boot order=scsi0
@@ -82,7 +82,7 @@
         ansible_user: "{{ actual_ci_user | default('simon') }}"
         ansible_python_interpreter: /usr/bin/python3
         groups: _actual_target
-        actual_ts_authkey_memory: "{{ actual_ts_authkey }}"
+        actual_ts_authkey_memory: "{{ actual_ts_authkey_value }}"
       no_log: true
       changed_when: false
 
@@ -96,6 +96,7 @@
       ansible.builtin.apt:
         name: [qemu-guest-agent, ca-certificates, curl]
         update_cache: true
+        lock_timeout: 300
       register: actual_base_packages
       retries: 3
       delay: 5
@@ -114,6 +115,7 @@
       ansible.builtin.apt:
         name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
         update_cache: true
+        lock_timeout: 300
 
     - name: Install Tailscale
       ansible.builtin.shell: "curl -fsSL https://tailscale.com/install.sh | sh"
@@ -124,6 +126,15 @@
       ansible.builtin.command: tailscale status --json
       register: actual_ts_state
       changed_when: false
+
+    - name: Require a scoped key when the node is not joined
+      ansible.builtin.assert:
+        that:
+          - hostvars['actual-vm'].actual_ts_authkey_memory is match('^tskey-')
+        fail_msg: "Place a valid tag:actual auth key in actual_ts_authkey_file for this first join."
+        quiet: true
+      no_log: true
+      when: (actual_ts_state.stdout | from_json).BackendState != 'Running'
 
     - name: Join the tailnet
       ansible.builtin.command: >
@@ -189,11 +200,101 @@
       ansible.builtin.shell: |
         ss -tlnp | grep -q '127.0.0.1:5006' || { echo "Actual is not loopback-only"; exit 1; }
         curl -fsS --max-time 8 http://127.0.0.1:5006 >/dev/null
+      register: actual_health
       changed_when: false
+      retries: 12
+      delay: 5
+      until: actual_health.rc == 0
+
+    - name: Enrol Actual in security-only patching
+      ansible.builtin.script:
+        cmd: >-
+          {{ playbook_dir }}/../files/patching/setup-unattended.sh
+          {{ (ntfy_base_url ~ '/' ~ ntfy_topic) | quote }}
+          {{ patching_timezone | default('') | quote }}
+      no_log: true
+      changed_when: true
+
+    - name: Install node_exporter and maintenance metrics
+      ansible.builtin.include_tasks: tasks/install-maintenance-collector.yml
+      vars:
+        maintenance_target_name: actual
+        maintenance_target_kind: ubuntu-vm
 
     - name: Report the first-run and continuity steps
       ansible.builtin.debug:
         msg:
           - "Actual Budget is available at https://{{ actual_ts_dnsname.stdout }} (tailnet-only)."
           - "FIRST RUN: set the server password, enable budget E2EE with a different password, and create/export the initial budget."
-          - "NEXT: confirm tag:actual ACL access, run patching/monitoring plays, then create and restore-test the Carter PBS backup job."
+          - "Patching and maintenance metrics are enrolled; NEXT: render central monitoring/Glance, then restore-test the PBS image."
+
+- name: Enrol Actual Budget in encrypted PBS backups
+  hosts: carter
+  gather_facts: false
+
+  tasks:
+    - name: Read cluster backup jobs
+      ansible.builtin.command: pvesh get /cluster/backup --output-format json
+      register: actual_backup_jobs_raw
+      changed_when: false
+
+    - name: Select the existing PBS job
+      ansible.builtin.set_fact:
+        actual_pbs_jobs: >-
+          {{ (actual_backup_jobs_raw.stdout | from_json)
+             | selectattr('type', 'equalto', 'vzdump')
+             | selectattr('storage', 'equalto', 'pbs-oneill')
+             | list }}
+
+    - name: Require one unambiguous PBS job
+      ansible.builtin.assert:
+        that:
+          - actual_pbs_jobs | length == 1
+        fail_msg: "Expected exactly one cluster backup job targeting pbs-oneill; refusing to alter an ambiguous schedule."
+        quiet: true
+
+    - name: Calculate the protected VM list
+      ansible.builtin.set_fact:
+        actual_pbs_job_id: "{{ actual_pbs_jobs[0].id }}"
+        actual_pbs_vmids: >-
+          {{ ((actual_pbs_jobs[0].vmid | default('') | string).split(',')
+              + [actual_vmid | string])
+             | reject('equalto', '') | map('int') | unique | sort | join(',') }}
+
+    - name: Add Actual to the existing daily PBS job
+      ansible.builtin.command: >-
+        pvesh set /cluster/backup/{{ actual_pbs_job_id }} --vmid {{ actual_pbs_vmids }}
+      when: >-
+        ((actual_pbs_jobs[0].vmid | default('') | string).split(',')
+         | reject('equalto', '') | map('int') | unique | sort | join(','))
+        != actual_pbs_vmids
+      changed_when: true
+
+    - name: Check for an existing Actual backup
+      ansible.builtin.shell: >-
+        pvesm list pbs-oneill --content backup --vmid {{ actual_vmid }}
+        | grep -q 'backup/vm/{{ actual_vmid }}/'
+      register: actual_backups_before
+      changed_when: false
+      failed_when: false
+
+    - name: Take the first encrypted PBS image
+      ansible.builtin.command: >-
+        vzdump {{ actual_vmid }} --storage pbs-oneill --mode snapshot
+        --prune-backups keep-daily=7,keep-weekly=4
+      when: actual_backups_before.rc != 0
+      changed_when: true
+
+    - name: Verify an Actual backup is present
+      ansible.builtin.shell: >-
+        pvesm list pbs-oneill --content backup --vmid {{ actual_vmid }}
+        | grep -q 'backup/vm/{{ actual_vmid }}/'
+      register: actual_backups_after
+      changed_when: false
+      failed_when: actual_backups_after.rc != 0
+
+    - name: Report backup enrolment
+      ansible.builtin.debug:
+        msg:
+          - "VM {{ actual_vmid }} is enrolled in cluster PBS job {{ actual_pbs_job_id }} with VMIDs {{ actual_pbs_vmids }}."
+          - "At least one encrypted PBS image exists; the isolated restore drill is still required before continuity is proven."

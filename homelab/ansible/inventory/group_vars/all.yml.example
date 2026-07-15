@@ -79,8 +79,10 @@ actual_ram_mb: 2048
 actual_cores: 1
 actual_disk_gb: 10
 actual_ip: YOUR_ACTUAL_IP/24                              # reserve in UniFi before provisioning
+actual_mac: YOUR_ACTUAL_MAC                               # reserve this MAC+IP pair before provisioning
 actual_cpu: Skylake-Client-noTSX-IBRS                     # live-migratable across the Coffee-Lake cluster pair
 actual_startup: "order=5,up=10"
+actual_ts_authkey_file: "{{ lookup('env', 'HOME') }}/.tailscale-actual-authkey" # one-use join key; chmod 600, never commit, delete after join
 # renovate: datasource=docker depName=actualbudget/actual-server
 actual_image: actualbudget/actual-server:26.7.0           # PINNED stable release; operator deploys deliberately
 actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"

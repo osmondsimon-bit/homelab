@@ -21,12 +21,12 @@ recovery stays non-circular.
 | What's down | Recovery model (one line) | Drill | Jump to |
 |---|---|---|---|
 | **apophis** (primary node) dies | carter survives read-only → `pvecm expected 1`, manual-failover VM 200 (+ 118) from the latest replica → rebuild apophis on ZFS → rejoin → failback | ✅ failover 2026-06-25 · ✅ rebuild executed 2026-06-25 | [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) · [Rebuild apophis on ZFS](#phase-4b-rebuild-apophis-on-zfs-one-time--infra-designer-reviewed-2026-06-22) |
-| **carter** (failover target) dies | production continues on apophis (VM 200 has no failover target until carter returns) → rebuild + rejoin → recreate replication jobs 200-0 + 118-0 → reprovision CT 117 | ⚠️ runbook written; live drill deferred (apophis 4b is the symmetric proof) | [Rebuild carter — DR runbook](#rebuild-carter-the-failover-target--dr-runbook) |
+| **carter** (failover target + Actual host) dies | HA/Vaultwarden continue on apophis, but Actual is down → restore VM 127's PBS image temporarily to apophis or rebuild + rejoin Carter → restore 127 → recreate replication jobs 200-0 + 118-0 → reprovision CT 117 | ⚠️ runbook written; live host drill deferred (apophis 4b is the symmetric proof) | [Rebuild carter — DR runbook](#rebuild-carter-the-failover-target--dr-runbook) |
 | **oneill** (standalone services hub) dies | DNS/monitoring/backup outage only — CT 117 covers DNS; production unaffected if apophis is up → fresh PVE+ZFS → no-sub repo → re-run the oneill playbooks | ⚠️ not drilled | [Recovery model → "oneill dies"](#recovery-model--what-recovers-what-avoid-doubling-up) |
 | **mgmt-vm** (VM 100) dies | not recreatable from code → `qmrestore` its PBS image to a new VMID | ✅ 2026-06-17 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
 | **Home Assistant** (VM 200) dies | restore the native partial backup onto a fresh HAOS, **or** fail over to carter's replica | ✅ HA restore 2026-06-18 · ✅ failover 2026-06-25 | [HA native partial backup](#home-assistant--native-partial-backup-primary-for-ha) · [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) |
 | **Vaultwarden** (VM 118) dies | playbook rebuilds VM+container; vault **data** comes from the PBS image (or carter replica) → `qmrestore` | ✅ 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
-| **Actual Budget** (VM 127, planned) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ⚠️ deployment + drill pending | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
+| **Actual Budget** (VM 127) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ✅ PBS restore 2026-07-15 | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
 | **Jellyfin** (CT 120) dies | reproducible from code → re-run `provision-jellyfin.yml`, redo wizard + re-add `/media/library`; **media persists on the USB SSD**, config not imaged (cheap to recreate) | n/a — not imaged by design | [jellyfin.md](../components/jellyfin.md) |
 | **qBittorrent** (CT 121) dies | reproducible → re-run `provision-qbittorrent.yml` (needs WG config + IP in gitignored `all.yml`); downloads persist on the USB SSD; killswitch must pass leak-test after | n/a — not imaged by design | [qbittorrent.md](../components/qbittorrent.md) · [leak-test](#qbittorrent--wireguard-killswitch-ct-121--adr-021-phase-6b) |
 | **Sonarr** (CT 123) dies | reproducible → re-run `provision-sonarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/tv`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored series) is lost** — re-add manually or from a Sonarr backup export. | n/a — not imaged by design | [sonarr.md](../components/sonarr.md) |
@@ -485,13 +485,12 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
     inside CT 112.
   - apophis storage `pbs-oneill` added with that token + the datastore **fingerprint**
     (`proxmox-backup-manager cert info` on PBS).
-- **Scheduled job (apophis):** **VM 100 (mgmt-vm) + VM 118 (vaultwarden)** → `pbs-oneill`, daily
-  **02:30**, retention **keep-daily 7 / keep-weekly 4**. CTs and HA are **excluded** — the CTs
-  rebuild from their playbooks; HA uses the native partial below. The two imaged VMs are the
-  stateful ones not reproducible from code (mgmt-vm hand-built; vaultwarden's Docker data volume).
-- **Planned Carter job (after Actual goes live):** **VM 127 (Actual Budget)** → `pbs-oneill`, daily
-  **02:45**, snapshot mode, retention **keep-daily 7 / keep-weekly 4**. Keep it Carter-scoped and
-  run an immediate backup before enabling the freshness expectation.
+- **Scheduled cluster job:** **VM 100 (mgmt-vm) + VM 118 (vaultwarden) + VM 127 (Actual)** →
+  `pbs-oneill`, daily **02:30**, snapshot mode, retention **keep-daily 7 / keep-weekly 4**.
+  `provision-actual.yml` idempotently enrols VM 127 and takes its first image immediately.
+  A cluster backup job follows each selected VM to its current node; a separate Carter schedule is
+  unnecessary. CTs and HA are **excluded** — CTs rebuild from playbooks and HA uses the native
+  partial below. The imaged VMs contain state that Ansible cannot reproduce.
 - **GC:** datastore `main` runs garbage collection daily.
 - **Encryption (2026-06-17, ADR-012):** client-side encryption is **on** (`pvesm set pbs-oneill
   --encryption-key autogen`) — backups are encrypted before leaving apophis. The key lives at
@@ -503,8 +502,8 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
 #### Restore a guest from PBS
 ```bash
 ssh root@YOUR_PROXMOX_IP "pvesm list pbs-oneill"                                            # list points
-ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/118/<ISO-timestamp> <newvmid>"     # VM (only vm/100, vm/118 are in PBS)
-ssh root@YOUR_CARTER_IP "qmrestore pbs-oneill:backup/vm/127/<ISO-timestamp> <newvmid>"       # Actual, after its job is live
+ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/118/<ISO-timestamp> <newvmid>"     # Vaultwarden
+ssh root@YOUR_CARTER_IP "qmrestore pbs-oneill:backup/vm/127/<ISO-timestamp> <newvmid>"       # Actual Budget
 # CTs are reprovisioned from Ansible, NOT restored from PBS (no CT is in the backup job).
 ```
 
@@ -539,17 +538,18 @@ don't need image backups — only genuinely stateful or hand-built things do.
 |---|---|---|
 | Ansible playbooks | **the LXCs end-to-end** — `pct create` + config (Tailscale, Technitium, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** (hand-built) + **vaultwarden VM 118** + planned **Actual VM 127** (stateful Docker data) | oneill |
+| PBS images | **mgmt-vm** (hand-built) + **vaultwarden VM 118** + **Actual VM 127** (stateful Docker data) | oneill |
 | HA native partial | HA config + Zigbee2MQTT + add-ons (restore onto a fresh HAOS) | oneill share |
 | Terraform (ADR-008) | **planned** — declarative VM/LXC definitions; not yet imported (empty scaffold) | git (public) |
 
 **Reality check (2026-06-16):** Terraform manages nothing yet (no state) — the four LXCs are
 created **and** configured by their Ansible playbooks today (re-run to rebuild). The CTs are
-deliberately not in PBS (the playbooks rebuild them). **mgmt-vm, the HA VM, and Vaultwarden (VM 118)
-are the exceptions — none is fully recreatable from code:** mgmt-vm relies on its PBS image; HA
+deliberately not in PBS (the playbooks rebuild them). **mgmt-vm, the HA VM, Vaultwarden (VM 118),
+and Actual (VM 127) are the exceptions — none is fully recreatable from code:** mgmt-vm relies on its PBS image; HA
 relies on manually creating a HAOS VM then restoring the native partial; Vaultwarden's playbook
-rebuilds the VM+container but its vault data comes from the PBS image (or carter replica). VM 118's
-PBS restore path is **proven ✅ 2026-06-26** (restore drill — see Restore drills table). The playbook rebuild path is unproven
+rebuilds the VM+container but its vault data comes from the PBS image (or carter replica); Actual's
+playbook rebuilds the VM+container but its finance data comes from PBS or the portable ZIP. VM 118's
+PBS restore path is **proven ✅ 2026-06-26** and VM 127's is **proven ✅ 2026-07-15** (see Restore drills table). The playbook rebuild path is unproven
 until the **CT 111 reprovision drill** (pending) actually runs it.
 
 **Restore by scenario:**
@@ -634,6 +634,7 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 | 2026-06-18 | HA native partial → fresh HAOS (isolated VLAN 5) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
 | 2026-06-25 | **VM 200 `pvesr` failover (apophis→carter)** | ✅ PASS — disabled job 200-0, `zfs clone` of the latest `__replicate__` snapshot → **no-network** test VM 299 on carter; HAOS **booted off the replicated copy** (~1 GB read / 119 MB written, CPU climbing). Procedure validated (clone→create→start). Live HA untouched; clones+VM destroyed; replication re-enabled + re-synced OK. *Bootability proven non-destructively; full app-on-network is the real failover's job (uses VM 200's own config/IP).* |
 | 2026-06-26 | **PBS image of VM 118 (Vaultwarden)** | ✅ PASS — `qmrestore` of the 02:01Z image → throwaway VM 119 (NIC stripped, never on the tailnet), restored in 11 s. Guest agent up; `/opt/vaultwarden/data/db.sqlite3` present (272 KB, non-zero) + `rsa_key.pem` intact. 119 destroyed; live 118 untouched. **Vault recovery is now proven, not a hypothesis.** |
+| 2026-07-15 | **Encrypted PBS image of VM 127 (Actual Budget)** | ✅ PASS — restored the data-bearing 05:22Z image to throwaway VM 197 on Carter, removed its NIC before boot, and verified the account database, non-empty budget files, and Compose definition. RTO 155 s. VM 197 destroyed; live VM 127 remained running. **Finance-state recovery is proven.** |
 | _pending_ | CT 111 / CT 117 Ansible reprovision | untested — records the real RTO |
 | _pending_ | CT 123 (Sonarr) Ansible reprovision | untested — simplest Phase 7 drill (no VPN credential dep); re-add qBit + root folder, verify hardlink import |
 | _pending_ | CT 124 (Radarr) Ansible reprovision | untested — same drill path as Sonarr |
@@ -796,7 +797,7 @@ Vaultwarden at the prompt where noted):
 | Node | Run after base |
 |------|----------------|
 | **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) |
-| **carter** | `provision-technitium.yml --limit carter` (admin pw) · `provision-patching.yml` |
+| **carter** | `provision-technitium.yml --limit carter` (admin pw) · restore stateful VM 127 from PBS (or `provision-actual.yml` only for a clean deployment with no finance data) · `provision-patching.yml` |
 | **oneill** | `provision-monitoring.yml` (Grafana pw) · `provision-tailscale.yml --limit oneill -e tailscale_ctid=126 …` (see [tailscale.md](../components/tailscale.md)) · `provision-technitium.yml --limit oneill` · `provision-pbs.yml` · `provision-ha-backup-share.yml` |
 
 > **Note (cluster nodes):** most guest **config** returns automatically via cluster-shared
@@ -846,10 +847,11 @@ window**, one step at a time, honouring every VERIFY gate.
 ## Rebuild carter (the failover target) — DR runbook
 
 carter is the `pvesr` replication + manual-failover target for **VM 200 (HA)** and **VM 118
-(Vaultwarden)**, and hosts **CT 117 `technitium2`** (the 2nd DNS resolver). Production runs on
-**apophis**, so a carter loss is *not* a production outage — but while carter is down/rebuilding
-there is **no failover target** for VM 200/118 and DNS rides on CT 111 (oneill) alone. Do this in a
-maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
+(Vaultwarden)**, and hosts **CT 117 `technitium2`** (the 2nd DNS resolver) plus stateful **VM 127
+`actual`**. A Carter loss leaves HA/Vaultwarden running on apophis, but **Actual is unavailable**
+until its encrypted PBS image is restored to apophis or Carter returns. While Carter is down there is
+also no failover target for VM 200/118 and DNS rides on CT 111 (oneill) alone. Do this in a maintenance
+window. This mirrors the apophis 4b rebuild; the same lessons apply.
 
 > **Key fact — `/etc/pve` is cluster-shared.** Reinstalling carter wipes only its *node-local*
 > state. On `pvecm add`, carter pulls the cluster filesystem from apophis, so **users, 2FA, ACLs,
@@ -893,7 +895,12 @@ maintenance window. This mirrors the apophis 4b rebuild; the same lessons apply.
 8. **Reprovision CT 117 `technitium2`** (reproducible from code; admin password pasted from Vaultwarden
    at the prompt): `ansible-playbook playbooks/provision-technitium.yml --limit carter`. **VERIFY:**
    `dig @YOUR_TECHNITIUM2_IP example.com +short` resolves and a blocked domain returns NXDOMAIN.
-9. **Restore freshness/quorum baseline:** confirm 0 firing alerts, `pvecm status` Expected 2, and
+9. **Restore VM 127 `actual` from PBS** to Carter using the newest `vm/127` image. Do not run
+   `provision-actual.yml` over a replacement VM when finance data already exists; the PBS image is the
+   authoritative full recovery. **VERIFY:** Tailscale Serve URL loads, `/opt/actual/data` is present,
+   and VM 127 remains selected in the cluster backup job. For a prolonged Carter outage, restore 127
+   to apophis instead; its fixed MAC/IP let the UniFi reservation follow it without a network change.
+10. **Restore freshness/quorum baseline:** confirm 0 firing alerts, `pvecm status` Expected 2, and
    that VM 200/118 failover to carter is available again (replication snapshots present).
 
 > **Lessons carried from the apophis 4b rebuild (2026-06-25):** do the `delnode` *before* wiping

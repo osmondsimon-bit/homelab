@@ -1,7 +1,7 @@
 # ADR-023: Actual Budget on Carter
 
 **Date:** 2026-07-14
-**Status:** Accepted; deployment codified, live rollout pending
+**Status:** Accepted; implemented 2026-07-15
 
 ## Context
 
@@ -26,8 +26,9 @@ Run Actual Budget as **VM 127 `actual` on Carter**:
   `tag:actual` is restricted to `group:operators`. No LAN or public application listener.
 - Password login is the only permitted login method. The operator creates the server password on
   first use and enables Actual's separate end-to-end budget encryption.
-- Daily encrypted PBS VM image from Carter to oneill, retaining 7 daily and 4 weekly backups. Make a
-  portable Actual ZIP export before application upgrades. A no-network PBS restore drill is required.
+- Add VM 127 to the existing daily encrypted cluster PBS job targeting oneill, retaining 7 daily and
+  4 weekly backups. Make a portable Actual ZIP export before application upgrades. A no-network PBS
+  restore drill is required.
 - No ZFS replication initially. Actual is not availability-critical; restore to an available cluster
   node is proportionate. Revisit only if measured recovery is inadequate.
 
