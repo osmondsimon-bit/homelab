@@ -410,8 +410,7 @@ ansible-playbook playbooks/update-pve-host.yml --limit apophis                  
 #       actually down (carter = 1 live vote): if apophis does not return promptly or you need the
 #       Carter GUI, SSH from another machine and run `ssh root@carter 'pvecm expected 1'`. Confirm
 #       apophis is truly down first; never do this for an uncertain network partition.
-# TODO (durable fix): add a QDevice — corosync-qnetd on oneill (standalone, ideal tiebreaker) — so
-#       either apophis or carter can reboot with quorum intact and no read-only window.
+# ACCEPTED: manual quorum recovery is the intended 2-node operating model. No QDevice is planned.
 ```
 
 **mgmt-vm — monthly non-security packages / deliberate reboot (control node):**
@@ -737,8 +736,9 @@ The active watchdog remains **Software Watchdog (`softdog`)**, timeout 10 second
 there is no proven hardware-backed watchdog. Do not load or experiment with `iTCO_wdt` during the
 firmware window. The upgrade from 23A to 79A is strongly justified: Lenovo's cumulative changelog
 includes security fixes, CPU microcode, NVMe detection/support, POST-hang fixes, and BIOS-update
-reliability changes. Deploy and verify the oneill QDevice before taking either cluster node down,
-then update one Lenovo per maintenance window with a local display and power control available.
+reliability changes. Before taking either cluster node down, confirm SSH access to the survivor and
+keep `pvecm expected 1` available as a recovery-only step. Update one Lenovo per maintenance window
+with a local display and power control available.
 
 ### B. Per-guest: autostart + ordering
 

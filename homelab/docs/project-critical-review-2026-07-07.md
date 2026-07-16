@@ -8,6 +8,12 @@ strategy, architecture, implementation, operations, documentation, and next-step
 The aim is not to produce a long list of clever improvements. The aim is to decide what matters
 most now, what risk is knowingly accepted, and what should change in the next focused work pass.
 
+> **Decision update (2026-07-16):** the QDevice recommendation in this historical dialogue was
+> rejected. ADR-009's existing manual-failover model remains authoritative: when one cluster node
+> is truly down, SSH to the survivor and run `pvecm expected 1` before using its UI or starting a
+> replica. No QDevice, second corosync ring, or automatic HA manager is planned. DNS failover
+> remains Phase 8 work.
+
 ## Dialogue Protocol
 
 - Codex created this file with an initial review and will poll it every 5 minutes for up to 10

@@ -19,6 +19,6 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 
 ## Current phase
 
-**Phases 3–7 complete** — foundation + observability, multi-node cluster + HA, secrets (Vaultwarden), media (Jellyfin/qBittorrent), and media automation (the *arr stack) are all live. **Next: Phase 8 — resilience + off-site recovery** ("close silent-failure blind spots", per the 2026-07-07 critical review: off-site backup, DNS failover + cluster QDevice, intent-compliance auditing).
+**Phases 3–7 complete** — foundation + observability, multi-node cluster + HA, secrets (Vaultwarden), media (Jellyfin/qBittorrent), and media automation (the *arr stack) are all live. **Next: Phase 8 — resilience + off-site recovery** ("close silent-failure blind spots": off-site backup, DNS failover, leak scanning/CI, and intent-compliance auditing). The 2-node cluster deliberately keeps manual quorum recovery and manual failover; no QDevice or automatic HA manager is planned.
 
 **[PLAN.md](homelab/PLAN.md) is the single source of truth** for phase/status and the service inventory — this line is a pointer, not a duplicate (keep it that way to avoid drift).
