@@ -95,8 +95,9 @@ Implementation specifics live in PLAN.md / runbooks.
   set to power on after AC loss**; a **UPS that also covers the network device** so a power blip
   doesn't cause the common-mode outage at all; **service-level redundancy** (2nd Technitium for
   DNS); PBS backups as the ultimate fallback. See the power-loss/autostart runbook. A second
-  corosync ring via USB-Gigabit NIC stays a documented future option (secondary ring only) if
-  automatic HA is ever revisited — deferred.
+  corosync ring or QDevice is not planned. The operator accepts the documented `pvecm expected 1`
+  recovery step when one clustered node is truly down. Revisit quorum design only if the rejected
+  automatic-HA decision changes.
 
 - **Controlled control-plane updates** regardless of the above: disable UniFi auto-update (gateway
   + switch), apply firmware manually in a window, and alert on pending updates via existing
