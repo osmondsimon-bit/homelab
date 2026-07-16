@@ -9,6 +9,9 @@
 !/index.md
 !/renovate.json
 !/homelab/
+!/.github/
+!/.github/workflows/
+!/.github/workflows/*.yml
 !/.claude/
 .claude/*
 !/.claude/agents/
