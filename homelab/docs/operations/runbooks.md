@@ -799,7 +799,7 @@ Vaultwarden at the prompt where noted):
 
 | Node | Run after base |
 |------|----------------|
-| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) · `provision-media-storage-monitoring.yml` |
+| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) |
 | **carter** | `provision-technitium.yml --limit carter` (admin pw) · restore stateful VM 127 from PBS (or `provision-actual.yml` only for a clean deployment with no finance data) · `provision-patching.yml` |
 | **oneill** | `provision-monitoring.yml` (Grafana pw) · `provision-tailscale.yml --limit oneill -e tailscale_ctid=126 …` (see [tailscale.md](../components/tailscale.md)) · `provision-technitium.yml --limit oneill` · `provision-pbs.yml` · `provision-ha-backup-share.yml` |
 
@@ -973,8 +973,8 @@ top-to-bottom; most monitoring is automatic, so the list is short.
 **6. Docs**
 - [ ] Update `PLAN.md` (infra table + single source of truth) and add `docs/components/<svc>.md`.
 
-**Node-specific:** also add to `monitoring_node_targets`, `monitoring_pve_nodes`, and
-`glance_hosts`; run `install-node-exporter.yml`; mint the PVEAuditor token (play 1 of
+**Node-specific:** also add to `monitoring_pve_nodes` and `glance_hosts`; run
+`install-node-exporter.yml`; mint the PVEAuditor token (play 1 of
 `provision-monitoring.yml`, no `--limit`). **Storage-specific:** `PVEStorageFull` +
 Storage Pools cover it automatically; if it's a new backup datastore, extend
 `backup-freshness.sh`.
@@ -983,38 +983,55 @@ Storage Pools cover it automatically; if it's a new backup datastore, extend
 
 ## Media USB monitoring — apophis
 
-The media stack expects a distinct filesystem at `/mnt/usb-media`. A five-minute node_exporter
-textfile collector reports mounted state, used/available/total bytes, and its last check time. It
-tests the exact mount before calling `df`, so a missing USB drive can never be mistaken for free
-space on apophis's root filesystem.
+The media stack expects a distinct filesystem at `/mnt/usb-media`. Prometheus uses node_exporter's
+native `node_filesystem_*` series for capacity and labels each PVE target with its stable node name.
+An available `node="apophis"` target with no `/mnt/usb-media` series means the mount is absent; an
+unavailable target is host/exporter loss. No additional service probes the USB filesystem.
 
-Deploy or refresh all three consumers from `~/homelab/ansible`:
+Deploy or refresh both consumers from `~/homelab/ansible`:
 
 ```bash
-ansible-playbook playbooks/provision-media-storage-monitoring.yml
 ansible-playbook playbooks/provision-monitoring.yml
 ansible-playbook playbooks/provision-glance.yml --limit oneill
 ```
 
-The monitoring play reloads these alerts: `MediaStorageNotMounted` (critical after 5m),
-`MediaStorageMetricsAbsent` (warning when absent or stale), and `MediaStorageSpaceLow` (warning
-above 85% used). Glance shows capacity when mounted and a distinct concern when the mount or
-collector is unavailable.
+The monitoring play reloads `MediaStorageNotMounted` (critical after 5m while apophis remains
+reachable) and `MediaStorageSpaceLow` (warning above 85% used). The existing `TargetDown` alert
+covers host/exporter loss. Glance shows capacity when mounted and distinct `Not mounted` versus
+`Monitoring unavailable` states.
 
 Useful checks on apophis:
 
 ```bash
 mountpoint /mnt/usb-media
 findmnt /mnt/usb-media
-systemctl status homelab-media-storage.timer
-systemctl start homelab-media-storage.service
-cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
 ```
 
-If `mounted` is `0`, stop media writes and correct the USB device/mount first. The collector
-intentionally emits zero byte capacity in this state. If the mount is present but the metrics are
-absent or stale, inspect `journalctl -u homelab-media-storage.service` and confirm node_exporter is
-running with its textfile collector enabled.
+If the mount is absent, stop media writes and correct the USB device/mount first. If the mount is
+present but Prometheus has no filesystem series, confirm `prometheus-node-exporter` is running and
+inspect the `node` target on Prometheus's Targets page.
+
+### Retired collector incident — 2026-07-17
+
+The first deployment of a dedicated `df`-based textfile collector coincided with a complete apophis
+lock at 18:54 AEST during timer enablement or the immediate service run. The previous boot ended
+without USB, UAS, xHCI, NIC, OOM, panic, or hung-task diagnostics; after a physical power cycle the
+Samsung T5 mounted cleanly. The deployment is the prime suspect, but the kernel/firmware root cause
+is unproven. The custom collector was retired rather than wrapped in a timeout: a userspace timeout
+cannot contain uninterruptible kernel I/O, and node_exporter already supplies the required data.
+
+The failed deployment left inert files on apophis. After native monitoring is deployed, remove them
+once from an apophis root shell:
+
+```bash
+systemctl disable --now homelab-media-storage.timer 2>/dev/null || true
+rm -f /etc/systemd/system/homelab-media-storage.service \
+  /etc/systemd/system/homelab-media-storage.timer \
+  /etc/default/homelab-media-storage \
+  /usr/local/bin/homelab-media-storage-collector \
+  /var/lib/prometheus/node-exporter/homelab_media_storage.prom
+systemctl daemon-reload
+```
 
 ---
 

@@ -331,7 +331,11 @@
                 - targets: ["localhost:{{ monitoring_alertmanager_port }}"]
             - job_name: node
               static_configs:
-                - targets: {{ (monitoring_node_targets + [hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100'] + ([(actual_ip | regex_replace('/.*$', '')) ~ ':9100'] if (actual_enabled | default(false) | bool) else [])) | unique | list | to_json }}
+          {% for n in monitoring_pve_nodes %}
+                - targets: ["{{ n.host }}:9100"]
+                  labels: { node: "{{ n.name }}" }
+          {% endfor %}
+                - targets: {{ ([hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100'] + ([(actual_ip | regex_replace('/.*$', '')) ~ ':9100'] if (actual_enabled | default(false) | bool) else [])) | unique | list | to_json }}
           {% for n in monitoring_pve_nodes %}
             - job_name: pve-{{ n.name }}
               metrics_path: /pve
@@ -602,6 +606,6 @@
           - "Monitoring CT {{ monitoring_ctid }} up at {{ monitoring_ip | regex_replace('/.*$', '') }}."
           - "Grafana :3000 (admin) / Prometheus :9090/targets — LAN/Tailscale only."
           - "Dashboards as code: Infrastructure (Node Exporter, Proxmox) + UniFi (unpoller set). allowUiUpdates=on — export live edits back to the repo."
-          - "Targets: prometheus + node (x{{ (monitoring_node_targets | length) + 3 }}, including manual-update VMs) + pve (x{{ monitoring_pve_nodes | length }})."
+          - "Targets: prometheus + node (x{{ (monitoring_pve_nodes | length) + 3 + (1 if (actual_enabled | default(false) | bool) else 0) }}, including manual-update VMs) + pve (x{{ monitoring_pve_nodes | length }})."
           - "Alerting: Prometheus rules -> Alertmanager :{{ monitoring_alertmanager_port }} -> am-ntfy :{{ monitoring_amntfy_port }} -> ntfy."
           - "Alerts at :9090/alerts, AM at :{{ monitoring_alertmanager_port }}. Test: amtool alert add (see runbook)."

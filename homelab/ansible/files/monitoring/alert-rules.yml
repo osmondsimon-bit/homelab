@@ -33,34 +33,28 @@ groups:
 
       # The media tree must be a distinct USB filesystem. If the mount disappears, media services
       # can otherwise see an empty directory on apophis's root filesystem and the loss is easy to
-      # miss. Dedicated textfile metrics also keep a dead collector from masking that condition.
+      # miss. Native node_exporter state distinguishes that condition from apophis itself being down.
       - alert: MediaStorageNotMounted
-        expr: homelab_media_storage_mounted == 0
+        expr: >
+          (up{job="node", node="apophis"} == 1)
+          unless on(node)
+          node_filesystem_size_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Media USB is not mounted on {{ $labels.node }}"
-          description: "Expected filesystem {{ $labels.mountpoint }} has been absent for 5m. Stop media writes and check the USB device plus mount before using the services."
-
-      - alert: MediaStorageMetricsAbsent
-        expr: absent(homelab_media_storage_mounted) or (time() - homelab_media_storage_last_check_timestamp_seconds > 900)
-        for: 15m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Media USB monitoring is absent or stale"
-          description: "The apophis Media USB collector has no current metrics. Check homelab-media-storage.timer and node_exporter textfile collection."
+          summary: "Media USB is not mounted on apophis"
+          description: "Expected filesystem /mnt/usb-media has been absent for 5m while apophis node_exporter remains reachable. Stop media writes and check the USB device plus mount before using the services."
 
       - alert: MediaStorageSpaceLow
         expr: >
-          (homelab_media_storage_available_bytes / homelab_media_storage_size_bytes) < 0.15
-          and on(node, mountpoint) (homelab_media_storage_mounted == 1)
+          (node_filesystem_avail_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}
+           / node_filesystem_size_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}) < 0.15
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "Media USB on {{ $labels.node }} is over 85% used"
+          summary: "Media USB on apophis is over 85% used"
           description: "{{ $labels.mountpoint }} has less than 15% capacity available."
 
       # Host memory nearly exhausted.

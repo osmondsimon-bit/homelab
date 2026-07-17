@@ -80,7 +80,7 @@ pages:
           media_storage:
             url: << prom >>
             parameters:
-              query: 100 * homelab_media_storage_used_bytes{node="apophis"} / homelab_media_storage_size_bytes{node="apophis"}
+              query: 100 * (1 - (node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}))
           host_cpu:
             url: << prom >>
             parameters:
@@ -232,19 +232,19 @@ pages:
               media_percent:
                 url: << prom >>
                 parameters:
-                  query: 100 * homelab_media_storage_used_bytes{node="apophis"} / homelab_media_storage_size_bytes{node="apophis"}
+                  query: 100 * (1 - (node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}))
               media_used:
                 url: << prom >>
                 parameters:
-                  query: homelab_media_storage_used_bytes{node="apophis"} / 1e9
+                  query: (node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} - node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}) / 1e9
               media_size:
                 url: << prom >>
                 parameters:
-                  query: homelab_media_storage_size_bytes{node="apophis"} / 1e9
-              media_mounted:
+                  query: node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / 1e9
+              media_up:
                 url: << prom >>
                 parameters:
-                  query: homelab_media_storage_mounted{node="apophis"}
+                  query: up{job="node",node="apophis"}
               updates:
                 url: << prom >>
                 parameters:
@@ -260,7 +260,7 @@ pages:
             template: |
               {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $storageUsed := .Subrequest "storage_used" }}{{ $storageSize := .Subrequest "storage_size" }}
               {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}
-              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaMounted := .Subrequest "media_mounted" }}
+              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaUp := .Subrequest "media_up" }}
               {{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
               <div class="host-pulse-grid">
               <% for h in glance_hosts %>
@@ -291,13 +291,13 @@ pages:
               {{ range $pbsPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">PBS datastore</div><div class="resource-label">Shared backup · shown once</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $pbsUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $pbsSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
               {{ end }}
-              {{ if eq (len ($mediaMounted.JSON.Array "data.result")) 0 }}
-                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Monitoring unavailable</div></div><div class="resource-reading"><span>Dedicated metric absent</span><span>Check collector and exporter</span></div></div>
-              {{ else }}{{ $isMounted := 0.0 }}{{ range $mediaMounted.JSON.Array "data.result" }}{{ $isMounted = .Float "value.1" }}{{ end }}{{ if eq $isMounted 0.0 }}
+              {{ $mediaUpN := 0.0 }}{{ range $mediaUp.JSON.Array "data.result" }}{{ $mediaUpN = .Float "value.1" }}{{ end }}{{ if eq $mediaUpN 0.0 }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Monitoring unavailable</div></div><div class="resource-reading"><span>Apophis node_exporter unavailable</span><span>Check host and exporter</span></div></div>
+              {{ else if eq (len ($mediaPercent.JSON.Array "data.result")) 0 }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Not mounted</div></div><div class="resource-reading"><span>Capacity intentionally suppressed</span><span>Check USB device and mount</span></div></div>
               {{ else }}{{ range $mediaPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · removable media</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $mediaUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $mediaSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
-              {{ end }}{{ end }}{{ end }}
+              {{ end }}{{ end }}
               </div>
 
           - type: split-column
