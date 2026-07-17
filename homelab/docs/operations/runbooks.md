@@ -281,8 +281,8 @@ backlog item.)
 - **What:** the front-door operator dashboard — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only,
   **no auth**. Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config
   `/etc/glance/glance.yml` **rendered from the committed template `ansible/templates/glance/glance.yml.j2`**.
-  One `Homelab` page: host/VM-LXC metrics (live from Prometheus), service status, alert summary,
-  versions, releases, admin links. Stateless — nothing to back up.
+  `Overview` puts operational signals and host-grouped service links first; `Infrastructure` holds
+  visual host/workload resources, fleet baseline, and storage semantics. Stateless — nothing to back up.
 - **Manage:** edit the **template** (`glance.yml.j2`) and/or `glance_*` vars (`glance_prometheus_url`,
   `glance_hosts`, `glance_version`, service IP vars) in `group_vars`, then
   `ansible-playbook playbooks/provision-glance.yml --limit oneill`. Never edit the live config by
@@ -290,7 +290,8 @@ backlog item.)
   can't break the running dashboard) and overwrites the live file each run.
 - **Health/restart:** `pct exec 115 -- systemctl status glance`; `... journalctl -u glance -n 50`;
   `... curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/` (expect `200`); content:
-  `curl -fsS http://YOUR_GLANCE_IP:8080/api/pages/homelab/content/` (should have no `ERROR`).
+  `curl -fsS http://YOUR_GLANCE_IP:8080/api/pages/overview/content/` and
+  `curl -fsS http://YOUR_GLANCE_IP:8080/api/pages/infrastructure/content/` (neither should contain `ERROR`).
 - **A metric/status pane is empty or red:** a `custom-api` pane needs Prometheus (CT 114) reachable
   — check it first; a `monitor` tile red means that service is unreachable; for self-signed HTTPS
   tiles (Proxmox/PBS/UniFi) the template sets `allow-insecure: true` + `alt-status-codes`.
@@ -938,10 +939,13 @@ top-to-bottom; most monitoring is automatic, so the list is short.
       reports its state. Ordinary packages, Docker image changes, and reboots remain manual.
 
 **2. Monitoring — mostly automatic, confirm + register**
-- Automatic (no action): `GuestDown` (`pve_up`), Glance VM/LXC CPU/RAM/Disk (`pve_guest_info` +
-  `guest:*` recording rules), `PVEStorageFull` + Storage Pools for any new `storage/.*`.
-- [ ] Add a tile to **`glance_services`** (group_vars) — one entry; re-run `provision-glance.yml`.
+- Automatic (no action): `GuestDown` (`pve_up`) and Glance workload CPU/RAM/Disk
+  (`pve_guest_info` + `guest:*` recording rules). A new node's `local-zfs` joins Capacity Overview;
+  other physical/shared storage needs an explicit semantic decision so overlapping backends are not summed.
+- [ ] Add a tile to **`glance_services`** (group_vars), including `node` + `workload` placement;
+      re-run `provision-glance.yml`.
 - [ ] If it has GitHub releases, add to **`glance_release_repos`**.
+- [ ] If its configured pin is a reliable version tag, add it to **`glance_version_currency`**.
 - [ ] If it exposes its own metrics, add a `scrape_config` to `provision-monitoring.yml`
       (+ a Grafana dashboard under `files/monitoring/dashboards/`).
 - [ ] Update the `GuestDown` id-map comment in `alert-rules.yml`.

@@ -168,8 +168,8 @@ glance_disk_gb: 4
 glance_ip: YOUR_GLANCE_IP/24                                # verify free; reserve in UniFi
 glance_port: 8080
 glance_version: v0.8.5                                      # PINNED (pre-1.0 renames config keys; bump deliberately)
-# Single-page dashboard rendered from templates/glance/glance.yml.j2 (ADR-014). Service-tile URLs
-# are built in the template from monitoring_ip/ha_ip/technitium_ip/pbs_ip/gateway + the hosts below.
+# Two-page operator dashboard rendered from templates/glance/glance.yml.j2 (ADR-014). Service-tile
+# URLs are built from existing IP vars; placement metadata keeps the launcher grouped by host.
 glance_prometheus_url: "http://YOUR_MONITORING_IP:9090"     # monitoring CT — custom-api widgets query Prometheus here
 glance_hosts:                                               # Proxmox nodes — host CPU/RAM/updates panes + node links
   - { name: apophis, node_exporter_instance: "YOUR_PROXMOX_IP:9100", pve_instance: "YOUR_PROXMOX_IP" }
@@ -180,26 +180,33 @@ glance_hosts:                                               # Proxmox nodes — 
 # URLs reference the existing *_ip vars (IPs stay DRY); optional: check_url, allow_insecure,
 # alt_status_codes (for endpoints that answer 401/403 when healthy).
 glance_services:
-  - { title: "Home Assistant", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
-  - { title: "Jellyfin", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
-  - { title: "qBittorrent", url: "http://{{ qbittorrent_ip | regex_replace('/.*$','') }}:{{ qbittorrent_webui_port }}", icon: "di:qbittorrent" }
-  - { title: "Prowlarr", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
-  - { title: "Sonarr", url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}", check_url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}/ping", icon: "di:sonarr" }
-  - { title: "Radarr", url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}", check_url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}/ping", icon: "di:radarr" }
-  - { title: "Jellyseerr", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:jellyseerr" }
-  - { title: "Technitium DNS", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
-  - { title: "Technitium DNS 2", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
-  - { title: "Grafana", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
-  - { title: "Prometheus", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
-  - { title: "Alertmanager", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
-  - { title: "Proxmox Backup Server", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
+  - { title: "Home Assistant", node: apophis, workload: "VM 200", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
+  - { title: "Jellyfin", node: apophis, workload: "CT 120", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
+  - { title: "qBittorrent", node: apophis, workload: "CT 121", url: "http://{{ qbittorrent_ip | regex_replace('/.*$','') }}:{{ qbittorrent_webui_port }}", icon: "di:qbittorrent" }
+  - { title: "Prowlarr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
+  - { title: "Sonarr", node: apophis, workload: "CT 123", url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}", check_url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}/ping", icon: "di:sonarr" }
+  - { title: "Radarr", node: apophis, workload: "CT 124", url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}", check_url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}/ping", icon: "di:radarr" }
+  - { title: "Jellyseerr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:jellyseerr" }
+  - { title: "Technitium DNS", node: oneill, workload: "CT 111", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  - { title: "Technitium DNS 2", node: carter, workload: "CT 117", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  - { title: "Grafana", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
+  - { title: "Prometheus", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
+  - { title: "Alertmanager", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
+  - { title: "Proxmox Backup Server", node: oneill, workload: "CT 112", url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", check_url: "https://{{ pbs_ip | regex_replace('/.*$','') }}:8007", icon: "di:proxmox-backup-server", allow_insecure: true, alt_status_codes: [401, 403] }
   # Tailscale HA subnet-router pair: tiles link to the admin console; the HEALTH check hits each
   # router CT's own :9099 endpoint (200 iff tailscaled up AND advertising the approved LAN route) —
   # REAL per-router status (a broken router shows RED even when Tailscale's cloud is fine). The
   # endpoint is deployed by provision-tailscale.yml. tailscale = router #1; tailscale2 = router #2 (HA).
-  - { title: "Tailscale", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
-  - { title: "Tailscale2", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale2_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
-  - { title: "Infra Portal", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
+  - { title: "Tailscale", node: apophis, workload: "CT 110", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
+  - { title: "Tailscale2", node: oneill, workload: "CT 126", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale2_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
+  - { title: "Infra Portal", node: oneill, workload: "CT 116", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
+
+# Declared pins that can be compared directly with an upstream GitHub release tag.
+glance_version_currency:
+  - { key: glance, title: "Glance", configured: "{{ glance_version }}", repository: glanceapp/glance }
+  - { key: vaultwarden, title: "Vaultwarden", configured: "{{ vaultwarden_image | regex_replace('^.*:', '') }}", repository: dani-garcia/vaultwarden }
+  - { key: jellyseerr, title: "Jellyseerr", configured: "{{ jellyseerr_image | regex_replace('^.*:', '') }}", repository: fallenbagel/jellyseerr }
+  - { key: actual, title: "Actual Budget", configured: "{{ actual_image | regex_replace('^.*:', '') }}", repository: actualbudget/actual }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.
 glance_release_repos:

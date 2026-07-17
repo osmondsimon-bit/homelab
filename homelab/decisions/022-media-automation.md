@@ -97,7 +97,7 @@ under peak load — accepted (same as ADR-021; ext4-on-USB isn't ARC-cached anyw
    joined to it. **Do NOT re-run `provision-jellyfin.yml` until this lands** (it would clobber the
    manual chown).
 
-**Required at provisioning (per CT 122–125):** ADR-017 onboarding — Glance tiles + `glance_release_repos`,
+**Required at provisioning (per CT 122–125):** ADR-017 onboarding — placement-aware Glance tiles + `glance_release_repos`,
 GuestDown id-map, `docs/components/{prowlarr,sonarr,radarr,jellyseerr}.md`, backup-freshness exclusion
 (reproducible-from-playbook, not imaged), reprovision drill recorded. Enable **"Use Hardlinks"** in
 Sonarr/Radarr + verify the inode link-count (`= 2`, same inode) on first import. Reserve 4 UniFi IPs
