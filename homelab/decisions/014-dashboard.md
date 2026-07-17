@@ -72,3 +72,14 @@ The "Docker arrives only in the media phase" rule has a **deliberate, contained 
 **confined to its own dedicated VM (118)**, not on oneill and not on a Proxmox host. The
 no-Docker principle for the *service-LXC nodes* (oneill) is intact; Docker is isolated to
 single-purpose VMs (Vaultwarden now; the apophis media stack in Phase 6). See ADR-010.
+
+## Revision — 2026-07-17 (operator hierarchy and responsive layout)
+
+Keep Glance as the front-door, but replace the dense single-page presentation with two responsive
+pages. `Overview` leads with operational signals and service launchers grouped by physical host and
+VM/CT identity; `Infrastructure` holds visual host/workload utilisation and placement detail. Local
+ZFS capacity is shown once per node, overlapping logical storage is excluded, and the shared PBS
+datastore is deduplicated. Declared reproducible application pins are compared with upstream release
+tags; package-managed and uncollected runtime versions remain explicitly separate. A committed CSS
+asset supplies restrained progress meters and phone-specific layout without changing the dashboard's
+role: summary and navigation here, time-series investigation in Grafana.

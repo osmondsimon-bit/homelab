@@ -27,8 +27,9 @@ of provisioning — not as a later afterthought.** Concretely:
 
 1. **Monitoring.** Rely on the regex-based auto-coverage above. If the service
    exposes its own metrics, add a `scrape_config` (and a dashboard). Add the service
-   to the **data-driven** `glance_services` list (one group_vars entry) and, if it has
-   GitHub releases, `glance_release_repos`. Update the `GuestDown` id-map comment.
+   to the **data-driven** `glance_services` list with physical-node + VM/CT placement and, if it
+   has GitHub releases, `glance_release_repos`. Comparable declared pins also join
+   `glance_version_currency`. Update the `GuestDown` id-map comment.
 2. **Alerting.** Confirm `GuestDown`/`TargetDown` cover it; add service-specific
    alert rules only if there's a meaningful failure mode beyond "process down".
 3. **Backup — a deliberate decision** (keep the ADR-012 model; we do **not**
@@ -56,8 +57,8 @@ The step-by-step is the **"Onboarding a new guest / node / storage"** checklist 
 
 - New services are observable and recoverable from day one; silent backup failure is
   caught by `BackupStale`/`BackupAbsent` instead of at restore time.
-- Adding a service to the dashboards is now a one-line group_vars edit
-  (`glance_services` / `glance_release_repos`), not template surgery.
+- Adding a service to the dashboards remains a group_vars edit (`glance_services` with placement,
+  `glance_release_repos`, and optionally `glance_version_currency`), not template surgery.
 - The backup *decision* stays human (per ADR-012) — automation reports freshness, it
   does not silently start imaging guests. The cost is discipline: the checklist must
   be followed (CLAUDE.md points at it so agent-driven provisioning does too).

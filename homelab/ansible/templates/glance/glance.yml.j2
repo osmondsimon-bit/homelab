@@ -1,23 +1,15 @@
 #jinja2: variable_start_string:'<<', variable_end_string:'>>', block_start_string:'<%', block_end_string:'%>', trim_blocks:True, lstrip_blocks:True
-# MANAGED BY ANSIBLE — provision-glance.yml renders this from templates/glance/glance.yml.j2 (ADR-014).
-# Edit the template (and glance_* vars in group_vars), then re-run the playbook — NOT the live file.
-#
-# The header above sets custom Jinja delimiters (angle-double for vars, angle-percent for
-# blocks) so Glance's own Go-template braces pass through untouched; only those angle forms are
-# Ansible (angle-double avoids the regex char-class warning that bracket delimiters trigger).
-# Real LAN IPs come from gitignored group_vars
-# (glance_prometheus_url, glance_hosts, monitoring_ip, ha_ip, technitium_ip, pbs_ip, gateway);
-# committed files stay placeholder-only (ADR-006).
-#
-# Scope (deliberate): an operator *summary*, not a capacity-planning tool — Grafana stays the deep
-# time-series / alert-debugging surface. "Installed Versions" vs "Latest Releases" is a visual
-# comparison only (no automatic drift detection).
+# MANAGED BY ANSIBLE — provision-glance.yml renders this operator dashboard (ADR-014).
+# Edit this template and the glance_* data in group_vars, then re-run the playbook. Do not edit
+# the live file. Custom Jinja delimiters leave Glance's Go-template {{ }} expressions untouched.
+# Real LAN values come from gitignored group_vars; committed examples remain placeholder-only.
 <% set prom = glance_prometheus_url ~ '/api/v1/query' %>
 <% set unifi = gateway | regex_replace('/.*$', '') %>
 <% set glance_host_instances = glance_hosts | map(attribute='node_exporter_instance') | map('regex_escape') | join('|') %>
 server:
   host: 0.0.0.0
   port: << glance_port >>
+  assets-path: /etc/glance/assets
 
 branding:
   app-name: "Homelab"
@@ -30,123 +22,182 @@ theme:
   positive-color: 142 48 48
   negative-color: 4 70 58
   contrast-multiplier: 1.08
+  custom-css-file: /assets/operator.css
 
 pages:
-  - name: Homelab
+  # Daily operator surface: concerns first on every viewport, then service launchers, then detail.
+  - name: Overview
     width: wide
+    head-widgets:
+      - type: custom-api
+        title: Operational Signals
+        css-class: operator-summary
+        cache: 1m
+        url: << prom >>
+        parameters:
+          query: sum(ALERTS{alertstate="firing"})
+        subrequests:
+          targets:
+            url: << prom >>
+            parameters:
+              query: sum(up == 0)
+          backup_stale:
+            url: << prom >>
+            parameters:
+              query: sum((time() - homelab_backup_last_success_timestamp_seconds) > bool homelab_backup_max_age_seconds)
+          backup_total:
+            url: << prom >>
+            parameters:
+              query: count(homelab_backup_last_success_timestamp_seconds)
+          backup_fresh:
+            url: << prom >>
+            parameters:
+              query: sum((time() - homelab_backup_last_success_timestamp_seconds) <= bool homelab_backup_max_age_seconds)
+          security:
+            url: << prom >>
+            parameters:
+              query: sum(homelab_apt_security_upgrades_pending)
+          reboot:
+            url: << prom >>
+            parameters:
+              query: sum(homelab_reboot_required)
+          audit_age:
+            url: << prom >>
+            parameters:
+              query: max((time() - homelab_maintenance_last_check_timestamp_seconds) / 3600)
+          local_storage:
+            url: << prom >>
+            parameters:
+              query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"})
+          pbs_storage:
+            url: << prom >>
+            parameters:
+              query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"} / pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"})
+          media_storage:
+            url: << prom >>
+            parameters:
+              query: 100 * max(1 - (node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}))
+          host_cpu:
+            url: << prom >>
+            parameters:
+              query: max(instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`})
+          host_ram:
+            url: << prom >>
+            parameters:
+              query: max(instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`})
+        template: |
+          {{ $targets := .Subrequest "targets" }}
+          {{ $backupStale := .Subrequest "backup_stale" }}
+          {{ $backupTotal := .Subrequest "backup_total" }}
+          {{ $backupFresh := .Subrequest "backup_fresh" }}
+          {{ $security := .Subrequest "security" }}
+          {{ $reboot := .Subrequest "reboot" }}
+          {{ $auditAgeResult := .Subrequest "audit_age" }}
+          {{ $localStorage := .Subrequest "local_storage" }}
+          {{ $pbsStorage := .Subrequest "pbs_storage" }}
+          {{ $mediaStorage := .Subrequest "media_storage" }}
+          {{ $hostCPU := .Subrequest "host_cpu" }}
+          {{ $hostRAM := .Subrequest "host_ram" }}
+          {{ $alertsN := 0.0 }}{{ range .JSON.Array "data.result" }}{{ $alertsN = .Float "value.1" }}{{ end }}
+          {{ $targetsN := 0.0 }}{{ range $targets.JSON.Array "data.result" }}{{ $targetsN = .Float "value.1" }}{{ end }}
+          {{ $staleN := 0.0 }}{{ range $backupStale.JSON.Array "data.result" }}{{ $staleN = .Float "value.1" }}{{ end }}
+          {{ $backupN := 0.0 }}{{ range $backupTotal.JSON.Array "data.result" }}{{ $backupN = .Float "value.1" }}{{ end }}
+          {{ $freshN := 0.0 }}{{ range $backupFresh.JSON.Array "data.result" }}{{ $freshN = .Float "value.1" }}{{ end }}
+          {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ $securityN = .Float "value.1" }}{{ end }}
+          {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ $rebootN = .Float "value.1" }}{{ end }}
+          {{ $auditAge := 0.0 }}{{ range $auditAgeResult.JSON.Array "data.result" }}{{ $auditAge = .Float "value.1" }}{{ end }}
+          {{ $storageMax := 0.0 }}
+          {{ range $localStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
+          {{ range $pbsStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
+          {{ range $mediaStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
+          {{ $cpuMax := 0.0 }}{{ range $hostCPU.JSON.Array "data.result" }}{{ $cpuMax = .Float "value.1" }}{{ end }}
+          {{ $ramMax := 0.0 }}{{ range $hostRAM.JSON.Array "data.result" }}{{ $ramMax = .Float "value.1" }}{{ end }}
+          {{ $hasAudit := gt (len ($auditAgeResult.JSON.Array "data.result")) 0 }}
+          {{ $attention := or (gt $alertsN 0.0) (gt $targetsN 0.0) (gt $staleN 0.0) (eq $backupN 0.0) (gt $securityN 0.0) (gt $rebootN 0.0) (not $hasAudit) (ge $storageMax 85.0) (ge $cpuMax 90.0) (ge $ramMax 90.0) }}
+          <div class="signal-grid">
+            <div class="signal-card">
+              <div class="signal-label">Operational signals</div>
+              <div class="signal-value {{ if $attention }}color-negative{{ else }}color-positive{{ end }}">{{ if $attention }}Attention{{ else }}No concerns{{ end }}</div>
+              <div class="signal-detail">Service checks are immediately below</div>
+            </div>
+            <div class="signal-card">
+              <div class="signal-label">Monitoring</div>
+              <div class="signal-value {{ if or (gt $alertsN 0.0) (gt $targetsN 0.0) }}color-negative{{ else }}color-positive{{ end }}">{{ printf "%.0f alerts" $alertsN }}</div>
+              <div class="signal-detail">{{ printf "%.0f failed scrape targets" $targetsN }}</div>
+            </div>
+            <div class="signal-card">
+              <div class="signal-label">Backups</div>
+              <div class="signal-value {{ if or (gt $staleN 0.0) (eq $backupN 0.0) }}color-negative{{ else }}color-positive{{ end }}">{{ printf "%.0f / %.0f fresh" $freshN $backupN }}</div>
+              <div class="signal-detail">{{ printf "%.0f outside freshness budget" $staleN }}</div>
+            </div>
+            <div class="signal-card">
+              <div class="signal-label">Maintenance</div>
+              <div class="signal-value {{ if or (gt $securityN 0.0) (gt $rebootN 0.0) (not $hasAudit) }}color-negative{{ else }}color-positive{{ end }}">{{ printf "%.0f security" $securityN }}</div>
+              <div class="signal-detail">{{ printf "%.0f reboots · audit %.1fh" $rebootN $auditAge }}</div>
+            </div>
+            <div class="signal-card">
+              <div class="signal-label">Resource pressure</div>
+              <div class="signal-value {{ if or (ge $storageMax 85.0) (ge $cpuMax 90.0) (ge $ramMax 90.0) }}color-negative{{ else if or (ge $storageMax 70.0) (ge $cpuMax 75.0) (ge $ramMax 75.0) }}color-highlight{{ else }}color-positive{{ end }}">{{ printf "%.0f%% max RAM" $ramMax }}</div>
+              <div class="signal-detail">{{ printf "CPU %.0f%% · storage %.0f%%" $cpuMax $storageMax }}</div>
+            </div>
+          </div>
+
     columns:
+      - size: full
+        widgets:
+          - type: split-column
+            title: Service Directory
+            css-class: service-directory
+            max-columns: 3
+            widgets:
+              <% for h in glance_hosts %>
+              - type: monitor
+                title: << h.name >>
+                cache: 1m
+                sites:
+                  <% for s in glance_services if s.node == h.name %>
+                  - title: << s.title >> · << s.workload >>
+                    url: << s.url >>
+                  <% if s.check_url is defined %>
+                    check-url: << s.check_url >>
+                  <% endif %>
+                    icon: << s.icon >>
+                  <% if s.allow_insecure | default(false) %>
+                    allow-insecure: true
+                  <% endif %>
+                  <% if s.alt_status_codes is defined %>
+                    alt-status-codes: << s.alt_status_codes >>
+                  <% endif %>
+                  <% endfor %>
+              <% endfor %>
+
+          - type: monitor
+            title: Core Infrastructure
+            cache: 1m
+            sites:
+              <% for h in glance_hosts %>
+              - title: Proxmox << h.name >>
+                url: https://<< h.pve_instance >>:8006
+                check-url: https://<< h.pve_instance >>:8006
+                icon: di:proxmox
+                allow-insecure: true
+                alt-status-codes: [401, 403]
+              <% endfor %>
+              - title: UniFi
+                url: https://<< unifi >>
+                check-url: https://<< unifi >>
+                icon: di:unifi
+                allow-insecure: true
+                alt-status-codes: [401, 403]
+
       - size: small
         widgets:
-          - type: custom-api
-            title: Proxmox Hosts
-            cache: 30s
-            url: << prom >>
-            parameters:
-              query: instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}
-            subrequests:
-              cpu_peak:
-                url: << prom >>
-                parameters:
-                  query: max_over_time(instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
-              ram_now:
-                url: << prom >>
-                parameters:
-                  query: instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}
-              ram_peak:
-                url: << prom >>
-                parameters:
-                  query: max_over_time(instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
-              storage:
-                url: << prom >>
-                parameters:
-                  query: 100 * sum by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*"}, "node", "$1", "id", "storage/([^/]+)/.*")) / sum by(node) (label_replace(pve_disk_size_bytes{id=~"storage/.*"}, "node", "$1", "id", "storage/([^/]+)/.*"))
-              updates:
-                url: << prom >>
-                parameters:
-                  query: homelab_apt_upgrades_pending{kind="pve-host"}
-              reboot:
-                url: << prom >>
-                parameters:
-                  query: homelab_reboot_required{kind="pve-host"}
-            template: |
-              {{ $cpuPeak := .Subrequest "cpu_peak" }}
-              {{ $ramNow := .Subrequest "ram_now" }}
-              {{ $ramPeak := .Subrequest "ram_peak" }}
-              {{ $storage := .Subrequest "storage" }}
-              {{ $updates := .Subrequest "updates" }}
-              {{ $reboot := .Subrequest "reboot" }}
-              <div class="list list-gap-15">
-              {{ range .JSON.Array "data.result" }}
-                {{ $instance := .String "metric.instance" }}
-                {{ $host := "unknown" }}
-                <% for h in glance_hosts %>
-                {{ if eq $instance "<< h.node_exporter_instance >>" }}{{ $host = "<< h.name >>" }}{{ end }}
-                <% endfor %>
-                <div>
-                  <div class="color-highlight size-h4">{{ $host }}</div>
-                  <div class="list list-gap-5 margin-top-5">
-                    <div class="flex justify-between gap-10">
-                      <div>CPU now / 24h peak</div>
-                      <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $cpuPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                    </div>
-                    <div class="flex justify-between gap-10">
-                      <div>RAM now / 24h peak</div>
-                      <div>{{ range $ramNow.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $ramPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") $instance }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                    </div>
-                    <div class="flex justify-between gap-10">
-                      <div>Storage total</div>
-                      <div>{{ range $storage.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $host }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                    </div>
-                    <div class="flex justify-between gap-10">
-                      <div>Updates</div>
-                      <div>{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $host }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                    </div>
-                    <div class="flex justify-between gap-10">
-                      <div>Reboot required</div>
-                      <div{{ range $reboot.JSON.Array "data.result" }}{{ if and (eq (.String "metric.target") $host) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $host }}{{ if gt (.Float "value.1") 0.0 }}YES — deliberate reboot{{ else }}no{{ end }}{{ end }}{{ end }}</div>
-                    </div>
-                  </div>
-                </div>
-              {{ end }}
-              </div>
-
-          - type: custom-api
-            title: Storage Pools
-            cache: 30s
-            url: << prom >>
-            parameters:
-              query: sort_desc(max by(id) ((pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) * 100))
-            subrequests:
-              used:
-                url: << prom >>
-                parameters:
-                  query: max by(id) (pve_disk_usage_bytes{id=~"storage/.*"}) / 1e9
-              size:
-                url: << prom >>
-                parameters:
-                  query: max by(id) (pve_disk_size_bytes{id=~"storage/.*"}) / 1e9
-            template: |
-              {{ $used := .Subrequest "used" }}
-              {{ $size := .Subrequest "size" }}
-              <div class="list list-gap-10">
-              {{ range .JSON.Array "data.result" }}
-                {{ $id := .String "metric.id" }}
-                <div>
-                  <div class="flex justify-between gap-10">
-                    <div class="color-highlight text-truncate">{{ $id }}</div>
-                    <div>{{ printf "%.0f%%" (.Float "value.1") }}</div>
-                  </div>
-                  <div class="size-h6 color-subdue">{{ range $used.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $size.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.0f" (.Float "value.1") }}{{ end }}{{ end }} GB used</div>
-                </div>
-              {{ end }}
-              </div>
-
           - type: custom-api
             title: Maintenance State
             cache: 5m
             url: << prom >>
             parameters:
-              query: sort(homelab_apt_upgrades_pending{kind!="lxc"})
+              query: sort_desc(homelab_apt_upgrades_pending{kind!="lxc"})
             subrequests:
               security:
                 url: << prom >>
@@ -176,10 +227,6 @@ pages:
                 url: << prom >>
                 parameters:
                   query: sum(homelab_apt_upgrades_pending{kind="lxc"})
-              audit_age:
-                url: << prom >>
-                parameters:
-                  query: max((time() - homelab_maintenance_last_check_timestamp_seconds) / 3600)
             template: |
               {{ $security := .Subrequest "security" }}
               {{ $reboot := .Subrequest "reboot" }}
@@ -188,203 +235,29 @@ pages:
               {{ $lxcTotal := .Subrequest "lxc_total" }}
               {{ $lxcSecurity := .Subrequest "lxc_security" }}
               {{ $lxcPending := .Subrequest "lxc_pending" }}
-              {{ $auditAge := .Subrequest "audit_age" }}
-              <div class="list list-gap-12">
-              {{ if eq (len (.JSON.Array "data.result")) 0 }}
-                <div class="color-negative">No maintenance metrics — deploy/run the collector</div>
-              {{ end }}
+              <div class="list list-gap-12 collapsible-container" data-collapse-after="6">
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}<div class="color-negative">No maintenance metrics</div>{{ end }}
               {{ range .JSON.Array "data.result" }}
                 {{ $target := .String "metric.target" }}
+                {{ $pending := .Float "value.1" }}
+                {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ $securityN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ $rebootN = .Float "value.1" }}{{ end }}{{ end }}
                 <div>
-                  <div class="flex justify-between gap-10">
-                    <div class="color-highlight">{{ $target }}</div>
-                    <div>{{ printf "%.0f pending" (.Float "value.1") }}</div>
-                  </div>
-                  <div class="size-h6 color-subdue flex justify-between gap-10">
-                    <span>{{ range $patchAge.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "last package change %.0fd ago" (.Float "value.1") }}{{ end }}{{ end }}</span>
-                    <span{{ range $security.JSON.Array "data.result" }}{{ if and (eq (.String "metric.target") $target) (gt (.Float "value.1") 0.0) }} class="color-negative"{{ end }}{{ end }}>{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}{{ end }}</span>
-                  </div>
-                  {{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ if gt (.Float "value.1") 0.0 }}
-                    <div class="size-h6 color-negative">Reboot required — use the deliberate maintenance procedure</div>
-                  {{ end }}{{ end }}{{ end }}
+                  <div class="flex justify-between gap-10"><div class="color-highlight">{{ $target }}</div><div class="{{ if or (gt $securityN 0.0) (gt $rebootN 0.0) }}color-negative{{ else }}color-subdue{{ end }}">{{ printf "%.0f pending" $pending }}</div></div>
+                  <div class="size-h6 color-subdue">{{ range $patchAge.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "package change %.0fd ago" (.Float "value.1") }}{{ end }}{{ end }} · {{ printf "%.0f security" $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ end }}</div>
                 </div>
               {{ end }}
-              <hr class="margin-block-5">
               <div>
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight">Guest LXCs</div>
-                  <div{{ range $lxcMissing.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcMissing.JSON.Array "data.result" }}{{ printf "%.0f missing" (.Float "value.1") }}{{ end }} / {{ range $lxcTotal.JSON.Array "data.result" }}{{ printf "%.0f total" (.Float "value.1") }}{{ end }}</div>
-                </div>
-                <div class="size-h6 color-subdue flex justify-between gap-10">
-                  <span>{{ range $lxcPending.JSON.Array "data.result" }}{{ printf "%.0f total pending" (.Float "value.1") }}{{ end }}</span>
-                  <span{{ range $lxcSecurity.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcSecurity.JSON.Array "data.result" }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}</span>
-                </div>
+                <div class="flex justify-between gap-10"><div class="color-highlight">Guest LXCs</div><div{{ range $lxcMissing.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcMissing.JSON.Array "data.result" }}{{ printf "%.0f missing" (.Float "value.1") }}{{ end }} / {{ range $lxcTotal.JSON.Array "data.result" }}{{ printf "%.0f total" (.Float "value.1") }}{{ end }}</div></div>
+                <div class="size-h6 color-subdue">{{ range $lxcPending.JSON.Array "data.result" }}{{ printf "%.0f routine pending" (.Float "value.1") }}{{ end }} · {{ range $lxcSecurity.JSON.Array "data.result" }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}</div>
               </div>
-              <div class="size-h6 color-subdue">Audit age: {{ range $auditAge.JSON.Array "data.result" }}{{ printf "%.1fh" (.Float "value.1") }}{{ end }}</div>
-              </div>
-
-      - size: full
-        widgets:
-          - type: monitor
-            title: Service Status
-            cache: 1m
-            # Data-driven from glance_services (group_vars) — add a service THERE, not here (ADR-017).
-            sites:
-              <% for s in glance_services %>
-              - title: << s.title >>
-                url: << s.url >>
-              <% if s.check_url is defined %>
-                check-url: << s.check_url >>
-              <% endif %>
-                icon: << s.icon >>
-              <% if s.allow_insecure | default(false) %>
-                allow-insecure: true
-              <% endif %>
-              <% if s.alt_status_codes is defined %>
-                alt-status-codes: << s.alt_status_codes >>
-              <% endif %>
-              <% endfor %>
-
-          - type: monitor
-            title: Infrastructure
-            cache: 1m
-            sites:
-              <% for h in glance_hosts %>
-              - title: Proxmox << h.name >>
-                url: https://<< h.pve_instance >>:8006
-                check-url: https://<< h.pve_instance >>:8006
-                icon: di:proxmox
-                allow-insecure: true
-                alt-status-codes: [401, 403]
-              <% endfor %>
-              - title: UniFi
-                url: https://<< unifi >>
-                check-url: https://<< unifi >>
-                icon: di:unifi
-                allow-insecure: true
-                alt-status-codes: [401, 403]
-
-          - type: split-column
-            max-columns: 3
-            widgets:
-              - type: custom-api
-                title: VM/LXC CPU
-                cache: 30s
-                url: << prom >>
-                parameters:
-                  query: sort_desc(guest:pve_cpu_util:percent)
-                subrequests:
-                  peak:
-                    url: << prom >>
-                    parameters:
-                      query: max by(id) (max_over_time(guest:pve_cpu_util:percent[24h:5m]))
-                template: |
-                  {{ $peak := .Subrequest "peak" }}
-                  <div class="list list-gap-10">
-                  {{ range .JSON.Array "data.result" }}
-                    {{ $id := .String "metric.id" }}
-                    <div>
-                      <div class="flex justify-between gap-10">
-                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
-                        <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $peak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                      </div>
-                      <div class="size-h6 color-subdue">now / 24h peak - {{ .String "metric.node" }} / {{ $id }}</div>
-                    </div>
-                  {{ end }}
-                  </div>
-
-              - type: custom-api
-                title: VM/LXC RAM
-                cache: 30s
-                url: << prom >>
-                parameters:
-                  query: sort_desc(guest:pve_mem_util:percent)
-                subrequests:
-                  peak:
-                    url: << prom >>
-                    parameters:
-                      query: max by(id) (max_over_time(guest:pve_mem_util:percent[24h:5m]))
-                template: |
-                  {{ $peak := .Subrequest "peak" }}
-                  <div class="list list-gap-10">
-                  {{ range .JSON.Array "data.result" }}
-                    {{ $id := .String "metric.id" }}
-                    <div>
-                      <div class="flex justify-between gap-10">
-                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
-                        <div>{{ printf "%.1f%%" (.Float "value.1") }} / {{ range $peak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ printf "%.1f%%" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                      </div>
-                      <div class="size-h6 color-subdue">now / 24h peak - {{ .String "metric.node" }} / {{ $id }}</div>
-                    </div>
-                  {{ end }}
-                  </div>
-
-              - type: custom-api
-                title: VM/LXC Disk
-                cache: 30s
-                url: << prom >>
-                parameters:
-                  query: sort_desc(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info))
-                template: |
-                  <div class="list list-gap-10">
-                  {{ range .JSON.Array "data.result" }}
-                    <div>
-                      <div class="flex justify-between gap-10">
-                        <div class="color-highlight text-truncate">{{ .String "metric.name" }}</div>
-                        <div>{{ printf "%.1f%%" (.Float "value.1") }}</div>
-                      </div>
-                      <div class="size-h6 color-subdue">{{ .String "metric.node" }} / {{ .String "metric.id" }}</div>
-                    </div>
-                  {{ end }}
-                  </div>
-
-      - size: small
-        widgets:
-          - type: custom-api
-            title: Alert Summary
-            cache: 1m
-            url: << prom >>
-            parameters:
-              query: sum by (severity) (ALERTS{alertstate="firing"})
-            subrequests:
-              targets:
-                url: << prom >>
-                parameters:
-                  query: sum by(job) (up == 0)
-            template: |
-              {{ $targets := .Subrequest "targets" }}
-              <div class="list list-gap-10">
-                {{ if eq (len (.JSON.Array "data.result")) 0 }}
-                  <div class="color-positive">No firing alerts</div>
-                {{ else }}
-                  {{ range .JSON.Array "data.result" }}
-                    <div class="flex justify-between gap-10">
-                      <div class="color-highlight">{{ .String "metric.severity" }}</div>
-                      <div class="color-negative">{{ printf "%.0f" (.Float "value.1") }}</div>
-                    </div>
-                  {{ end }}
-                {{ end }}
-                {{ if eq (len ($targets.JSON.Array "data.result")) 0 }}
-                  <div class="color-positive">No failed scrape targets</div>
-                {{ else }}
-                  {{ range $targets.JSON.Array "data.result" }}
-                    <div class="flex justify-between gap-10">
-                      <div class="color-highlight">{{ .String "metric.job" }}</div>
-                      <div class="color-negative">{{ printf "%.0f down" (.Float "value.1") }}</div>
-                    </div>
-                  {{ end }}
-                {{ end }}
               </div>
 
           - type: custom-api
             title: Backup State
             cache: 1m
-            # Backup freshness from the hub textfile collector (backup-freshness.sh, ADR-017).
-            # Age + budget come pre-divided to hours in PromQL so the template needs no arithmetic.
             url: << prom >>
             parameters:
-              # Derive a pveid (qemu/<id> | lxc/<id>) from the PBS group so the template can
-              # resolve the guest alias from live pve_guest_info — no hardcoded VMID->name map.
               query: label_replace(label_replace((time() - homelab_backup_last_success_timestamp_seconds) / 3600, "pveid", "qemu/$1", "group", "vm/(.+)"), "pveid", "lxc/$1", "group", "ct/(.+)")
             subrequests:
               budget:
@@ -404,30 +277,244 @@ pages:
               {{ $count := .Subrequest "count" }}
               {{ $guests := .Subrequest "guests" }}
               <div class="list list-gap-10">
-              {{ if eq (len (.JSON.Array "data.result")) 0 }}
-                <div class="color-negative">No backup metrics — collector down?</div>
-              {{ end }}
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}<div class="color-negative">No backup metrics</div>{{ end }}
               {{ range .JSON.Array "data.result" }}
-                {{ $type := .String "metric.type" }}
-                {{ $group := .String "metric.group" }}
-                {{ $pveid := .String "metric.pveid" }}
-                {{ $age := .Float "value.1" }}
-                {{ $budgetH := 0.0 }}
+                {{ $type := .String "metric.type" }}{{ $group := .String "metric.group" }}{{ $pveid := .String "metric.pveid" }}{{ $age := .Float "value.1" }}{{ $budgetH := 0.0 }}
                 {{ range $budget.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ $budgetH = .Float "value.1" }}{{ end }}{{ end }}
-                {{ $label := $group }}
-                {{ if ne $pveid "" }}{{ range $guests.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $pveid }}{{ $label = .String "metric.name" }}{{ end }}{{ end }}{{ end }}
-                <div>
-                  <div class="flex justify-between gap-10">
-                    <div class="color-highlight text-truncate">{{ $label }}</div>
-                    <div{{ if gt $age $budgetH }} class="color-negative"{{ else }} class="color-positive"{{ end }}>{{ printf "%.1fh ago" $age }}</div>
-                  </div>
-                  <div class="size-h6 color-subdue">{{ if eq $type "pbs" }}PBS image restore{{ else if eq $type "ha" }}HA partial restore{{ else }}{{ $type }}{{ end }} · {{ range $count.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ printf "%.0f kept" (.Float "value.1") }}{{ end }}{{ end }}</div>
-                </div>
+                {{ $label := $group }}{{ if ne $pveid "" }}{{ range $guests.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $pveid }}{{ $label = .String "metric.name" }}{{ end }}{{ end }}{{ end }}
+                <div><div class="flex justify-between gap-10"><div class="color-highlight text-truncate">{{ $label }}</div><div class="{{ if gt $age $budgetH }}color-negative{{ else }}color-positive{{ end }}">{{ printf "%.1fh ago" $age }}</div></div><div class="size-h6 color-subdue">{{ if eq $type "pbs" }}PBS image{{ else if eq $type "ha" }}HA partial{{ else }}{{ $type }}{{ end }} · {{ range $count.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ printf "%.0f kept" (.Float "value.1") }}{{ end }}{{ end }}</div></div>
               {{ end }}
               </div>
 
           - type: custom-api
-            title: Installed Versions
+            title: Capacity Overview
+            cache: 1m
+            url: << prom >>
+            parameters:
+              query: sort_desc(100 * max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"}, "node", "$1", "id", "storage/([^/]+)/local-zfs")))
+            subrequests:
+              local_used:
+                url: << prom >>
+                parameters:
+                  query: max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              local_size:
+                url: << prom >>
+                parameters:
+                  query: max by(node) (label_replace(pve_disk_size_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              local_free:
+                url: << prom >>
+                parameters:
+                  query: max by(node) (label_replace((pve_disk_size_bytes{id=~"storage/.*/local-zfs"} - pve_disk_usage_bytes{id=~"storage/.*/local-zfs"}) / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              pbs_percent:
+                url: << prom >>
+                parameters:
+                  query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"} / pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"})
+              pbs_used:
+                url: << prom >>
+                parameters:
+                  query: max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
+              pbs_size:
+                url: << prom >>
+                parameters:
+                  query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
+              pbs_free:
+                url: << prom >>
+                parameters:
+                  query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"} - pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
+              media_percent:
+                url: << prom >>
+                parameters:
+                  query: 100 * max(1 - (node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}))
+              media_used:
+                url: << prom >>
+                parameters:
+                  query: max((node_filesystem_size_bytes{mountpoint="/mnt/usb-media"} - node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"}) / 1e9)
+              media_size:
+                url: << prom >>
+                parameters:
+                  query: max(node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}) / 1e9
+              media_free:
+                url: << prom >>
+                parameters:
+                  query: max(node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"}) / 1e9
+            template: |
+              {{ $localUsed := .Subrequest "local_used" }}{{ $localSize := .Subrequest "local_size" }}{{ $localFree := .Subrequest "local_free" }}
+              {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}{{ $pbsFree := .Subrequest "pbs_free" }}
+              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaFree := .Subrequest "media_free" }}
+              <div class="resource-list">
+              {{ range .JSON.Array "data.result" }}
+                {{ $node := .String "metric.node" }}{{ $value := .Float "value.1" }}
+                <div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">{{ $node }} local ZFS</div><div class="resource-label">Local physical</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $localUsed.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}{{ end }}</span><span>{{ range $localFree.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $localSize.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}{{ end }}</span></div></div>
+              {{ end }}
+              {{ range $pbsPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}<div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">PBS datastore</div><div class="resource-label">Shared backup · shown once</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $pbsUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $pbsFree.JSON.Array "data.result" }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }} / {{ range $pbsSize.JSON.Array "data.result" }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}</span></div></div>{{ end }}
+              {{ range $mediaPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}<div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">Media SSD</div><div class="resource-label">apophis · replaceable</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $mediaUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $mediaFree.JSON.Array "data.result" }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }} / {{ range $mediaSize.JSON.Array "data.result" }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}</span></div></div>{{ end }}
+              </div>
+
+          - type: custom-api
+            title: Version Currency
+            title-url: https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22
+            cache: 12h
+            url: https://api.github.com/repos/<< glance_version_currency[0].repository >>/releases/latest
+            headers:
+              Accept: application/vnd.github+json
+            subrequests:
+              <% for c in glance_version_currency[1:] %>
+              << c.key >>:
+                url: https://api.github.com/repos/<< c.repository >>/releases/latest
+                headers:
+                  Accept: application/vnd.github+json
+              <% endfor %>
+            template: |
+              <% for c in glance_version_currency %>
+              <% if loop.first %>
+              {{ $latest_<< c.key >> := .JSON.String "tag_name" }}
+              <% else %>
+              {{ $response_<< c.key >> := .Subrequest "<< c.key >>" }}
+              {{ $latest_<< c.key >> := $response_<< c.key >>.JSON.String "tag_name" }}
+              <% endif %>
+              <% endfor %>
+              <div>
+              <% for c in glance_version_currency %>
+                <div class="currency-row"><div><div class="color-highlight"><< c.title >></div><div class="size-h6 color-subdue">configured << c.configured >> · latest {{ $latest_<< c.key >> }}</div></div><div class="{{ if eq $latest_<< c.key >> "" }}color-subdue{{ else if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}color-positive{{ else }}color-negative{{ end }}">{{ if eq $latest_<< c.key >> "" }}Unknown{{ else if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}Current{{ else }}Review{{ end }}</div></div>
+              <% endfor %>
+              </div>
+
+          - type: bookmarks
+            title: Admin Links
+            groups:
+              - title: Operations
+                color: 205 65 58
+                links:
+                  - { title: Tailscale Admin, url: "https://login.tailscale.com/admin/machines", description: "Machines, routes, key expiry", icon: "di:tailscale" }
+                  - { title: Cloudflare Zero Trust, url: "https://one.dash.cloudflare.com/", description: "Home Assistant tunnel", icon: "di:cloudflare" }
+                  - { title: GitHub Repo, url: "https://github.com/osmondsimon-bit/homelab", description: "Infrastructure code and docs", icon: "di:github-light" }
+                  - { title: Dependency Updates, url: "https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22", description: "Renovate proposals", icon: "di:renovate" }
+              - title: Tailnet-only
+                color: 48 70 50
+                links:
+                  - { title: Vaultwarden, url: "<< vaultwarden_domain >>", description: "Password vault", icon: "di:vaultwarden" }
+                  <% if actual_enabled | default(false) %>
+                  - { title: Actual Budget, url: "<< actual_domain >>", description: "Personal finance", icon: "di:actual-budget" }
+                  <% endif %>
+
+  # Deeper resource and placement surface. Grafana remains the time-series/debugging destination.
+  - name: Infrastructure
+    width: wide
+    columns:
+      - size: full
+        widgets:
+          - type: custom-api
+            title: Proxmox Hosts
+            cache: 30s
+            url: << prom >>
+            parameters:
+              query: instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}
+            subrequests:
+              cpu_peak:
+                url: << prom >>
+                parameters:
+                  query: max_over_time(instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
+              ram:
+                url: << prom >>
+                parameters:
+                  query: instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}
+              ram_peak:
+                url: << prom >>
+                parameters:
+                  query: max_over_time(instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}[24h:5m])
+              storage:
+                url: << prom >>
+                parameters:
+                  query: 100 * max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"}, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              updates:
+                url: << prom >>
+                parameters:
+                  query: homelab_apt_upgrades_pending{kind="pve-host"}
+              security:
+                url: << prom >>
+                parameters:
+                  query: homelab_apt_security_upgrades_pending{kind="pve-host"}
+              reboot:
+                url: << prom >>
+                parameters:
+                  query: homelab_reboot_required{kind="pve-host"}
+            template: |
+              {{ $cpuPeak := .Subrequest "cpu_peak" }}{{ $ram := .Subrequest "ram" }}{{ $ramPeak := .Subrequest "ram_peak" }}{{ $storage := .Subrequest "storage" }}{{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
+              <div class="host-grid">
+              <% for h in glance_hosts %>
+                {{ $cpu := 0.0 }}{{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $cpu = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $cpuP := 0.0 }}{{ range $cpuPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $cpuP = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $ramN := 0.0 }}{{ range $ram.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $ramN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $ramP := 0.0 }}{{ range $ramPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $ramP = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $disk := 0.0 }}{{ range $storage.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}{{ $disk = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $pending := 0.0 }}{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $pending = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $securityN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $rebootN = .Float "value.1" }}{{ end }}{{ end }}
+                <div class="host-card">
+                  <div class="flex justify-between gap-10"><div class="color-highlight size-h3"><< h.name >></div><div class="{{ if or (gt $securityN 0.0) (gt $rebootN 0.0) }}color-negative{{ else }}color-positive{{ end }}">{{ if or (gt $securityN 0.0) (gt $rebootN 0.0) }}Attention{{ else }}Healthy{{ end }}</div></div>
+                  <div class="resource-row"><div class="resource-heading"><div class="resource-label">CPU</div><div>{{ printf "%.1f%%" $cpu }}</div></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter><div class="resource-reading"><span>now</span><span>{{ printf "%.1f%% 24h peak" $cpuP }}</span></div></div>
+                  <div class="resource-row"><div class="resource-heading"><div class="resource-label">RAM</div><div>{{ printf "%.1f%%" $ramN }}</div></div><meter class="resource-meter {{ if ge $ramN 90.0 }}is-critical{{ else if ge $ramN 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ramN }}"></meter><div class="resource-reading"><span>now</span><span>{{ printf "%.1f%% 24h peak" $ramP }}</span></div></div>
+                  <div class="resource-row"><div class="resource-heading"><div class="resource-label">Local ZFS</div><div>{{ printf "%.1f%%" $disk }}</div></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter></div>
+                  <div class="size-h6 color-subdue margin-top-10">{{ printf "%.0f routine updates · %.0f security · %.0f reboot" $pending $securityN $rebootN }}</div>
+                </div>
+              <% endfor %>
+              </div>
+
+          - type: custom-api
+            title: Workloads by Host
+            cache: 30s
+            url: << prom >>
+            parameters:
+              query: sort_desc(max without(resource) (label_replace(guest:pve_cpu_util:percent, "resource", "cpu", "__name__", ".*") or label_replace(guest:pve_mem_util:percent, "resource", "ram", "__name__", ".*") or label_replace(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info), "resource", "disk", "__name__", ".*")))
+            subrequests:
+              cpu:
+                url: << prom >>
+                parameters:
+                  query: guest:pve_cpu_util:percent
+              cpu_peak:
+                url: << prom >>
+                parameters:
+                  query: max by(id) (max_over_time(guest:pve_cpu_util:percent[24h:5m]))
+              ram:
+                url: << prom >>
+                parameters:
+                  query: guest:pve_mem_util:percent
+              ram_peak:
+                url: << prom >>
+                parameters:
+                  query: max by(id) (max_over_time(guest:pve_mem_util:percent[24h:5m]))
+              disk:
+                url: << prom >>
+                parameters:
+                  query: max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+            template: |
+              {{ $cpuResult := .Subrequest "cpu" }}{{ $cpuPeak := .Subrequest "cpu_peak" }}{{ $ramResult := .Subrequest "ram" }}{{ $ramPeak := .Subrequest "ram_peak" }}{{ $diskResult := .Subrequest "disk" }}
+              <div>
+              <% for h in glance_hosts %>
+                <section class="workload-host">
+                  <div class="color-highlight size-h3"><< h.name >></div>
+                  {{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}
+                    {{ $id := .String "metric.id" }}{{ $guestType := .String "metric.type" }}{{ $score := .Float "value.1" }}
+                    {{ $cpu := 0.0 }}{{ range $cpuResult.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ $cpu = .Float "value.1" }}{{ end }}{{ end }}
+                    {{ $cpuP := 0.0 }}{{ range $cpuPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ $cpuP = .Float "value.1" }}{{ end }}{{ end }}
+                    {{ $ram := 0.0 }}{{ range $ramResult.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ $ram = .Float "value.1" }}{{ end }}{{ end }}
+                    {{ $ramP := 0.0 }}{{ range $ramPeak.JSON.Array "data.result" }}{{ if eq (.String "metric.id") $id }}{{ $ramP = .Float "value.1" }}{{ end }}{{ end }}
+                    {{ $disk := 0.0 }}{{ $diskFound := false }}{{ range $diskResult.JSON.Array "data.result" }}{{ if and (ne $guestType "qemu") (eq (.String "metric.id") $id) }}{{ $disk = .Float "value.1" }}{{ $diskFound = true }}{{ end }}{{ end }}
+                    <div class="workload-row {{ if ge $score 90.0 }}color-negative{{ end }}">
+                      <div class="workload-identity"><div class="color-highlight text-truncate">{{ .String "metric.name" }}</div><div class="placement-label">{{ $id }} · highest resource {{ printf "%.0f%%" $score }}</div></div>
+                      <div class="workload-metric"><div class="resource-heading"><div class="resource-label">CPU</div><div>{{ printf "%.0f%%" $cpu }}</div></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter><div class="placement-label">peak {{ printf "%.0f%%" $cpuP }}</div></div>
+                      <div class="workload-metric"><div class="resource-heading"><div class="resource-label">RAM</div><div>{{ printf "%.0f%%" $ram }}</div></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter><div class="placement-label">peak {{ printf "%.0f%%" $ramP }}</div></div>
+                      <div class="workload-metric"><div class="resource-heading"><div class="resource-label">Disk</div><div>{{ if $diskFound }}{{ printf "%.0f%%" $disk }}{{ else }}N/A{{ end }}</div></div>{{ if $diskFound }}<meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter>{{ else }}<div class="placement-label">not reported</div>{{ end }}</div>
+                    </div>
+                  {{ end }}{{ end }}
+                </section>
+              <% endfor %>
+              </div>
+
+      - size: small
+        widgets:
+          - type: custom-api
+            title: Fleet Baseline
             cache: 5m
             url: << prom >>
             parameters:
@@ -442,78 +529,36 @@ pages:
                 parameters:
                   query: node_os_info
             template: |
-              {{ $os := .Subrequest "os" }}
-              {{ $prom := .Subrequest "prometheus" }}
+              {{ $os := .Subrequest "os" }}{{ $prom := .Subrequest "prometheus" }}
               <div class="list list-gap-10">
               <% for h in glance_hosts %>
-                {{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.job") "pve-<< h.name >>" }}
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight"><< h.name >>-pve</div>
-                  <div>{{ .String "metric.version" }}</div>
-                </div>
-                {{ end }}{{ end }}
-                {{ range $os.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight"><< h.name >>-{{ .String "metric.id" }}</div>
-                  <div>{{ .String "metric.version_id" }}</div>
-                </div>
-                {{ end }}{{ end }}
+                <div><div class="color-highlight"><< h.name >></div><div class="size-h6 color-subdue">PVE {{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.job") "pve-<< h.name >>" }}{{ .String "metric.version" }}{{ end }}{{ end }} · {{ range $os.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ .String "metric.name" }} {{ .String "metric.version_id" }}{{ end }}{{ end }}</div></div>
               <% endfor %>
-              <hr class="margin-block-10">
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight">prometheus</div>
-                  <div>{{ range $prom.JSON.Array "data.result" }}{{ .String "metric.version" }}{{ end }}</div>
-                </div>
-                <div class="flex justify-between gap-10">
-                  <div class="color-highlight">glance</div>
-                  <div><< glance_version >> pinned</div>
-                </div>
+                <hr class="margin-block-5">
+                <div class="flex justify-between gap-10"><div class="color-highlight">Prometheus</div><div>{{ range $prom.JSON.Array "data.result" }}{{ .String "metric.version" }}{{ end }}</div></div>
+                <div class="size-h6 color-subdue">Package-managed currency is represented by Maintenance State. Jellyfin, qBittorrent and native Servarr runtime versions are not collected.</div>
+              </div>
+
+          - type: custom-api
+            title: Storage Semantics
+            cache: 1m
+            url: << prom >>
+            parameters:
+              query: count(pve_disk_size_bytes{id=~"storage/.*/local-zfs"})
+            template: |
+              <div class="list list-gap-10">
+                <div><div class="color-highlight">Local ZFS</div><div class="size-h6 color-subdue">One physical-capacity signal per node. The overlapping local directory backend is intentionally excluded.</div></div>
+                <div><div class="color-highlight">PBS datastore</div><div class="size-h6 color-subdue">Shared remote capacity, deduplicated across cluster clients.</div></div>
+                <div><div class="color-highlight">Media SSD</div><div class="size-h6 color-subdue">Replaceable storage from the apophis filesystem metric; hidden automatically if not mounted.</div></div>
               </div>
 
           - type: releases
             title: Latest Releases
             cache: 12h
             limit: 8
-            collapse-after: 8
+            collapse-after: 5
             show-source-icon: true
-            # Data-driven from glance_release_repos (group_vars) — ADR-017.
             repositories:
               <% for r in glance_release_repos %>
               - << r >>
               <% endfor %>
-
-          - type: bookmarks
-            title: Admin Links
-            groups:
-              - title: External
-                color: 205 65 58
-                links:
-                  - title: Tailscale Admin
-                    url: https://login.tailscale.com/admin/machines
-                    description: Machines, routes, key expiry
-                    icon: di:tailscale
-                  - title: Cloudflare Zero Trust
-                    url: https://one.dash.cloudflare.com/
-                    description: Home Assistant tunnel
-                    icon: di:cloudflare
-                  - title: GitHub Repo
-                    url: https://github.com/osmondsimon-bit/homelab
-                    description: Public IaC and docs
-                    icon: di:github-light
-                  - title: Dependency Updates
-                    url: https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22
-                    description: Renovate proposals — review and deploy manually
-                    icon: di:renovate
-              - title: Tailnet-only
-                color: 48 70 50
-                links:
-                  - title: Vaultwarden
-                    url: << vaultwarden_domain >>
-                    description: Password vault (Tailscale Serve — no LAN/internet)
-                    icon: di:vaultwarden
-                  <% if actual_enabled | default(false) %>
-                  - title: Actual Budget
-                    url: << actual_domain >>
-                    description: Personal finance (Tailscale Serve — no LAN/internet)
-                    icon: di:actual-budget
-                  <% endif %>

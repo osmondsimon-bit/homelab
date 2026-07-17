@@ -109,6 +109,19 @@
         rm -f /tmp/glance.yml.rendered
       changed_when: true
 
+    - name: Stage the operator dashboard stylesheet on oneill
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/glance/operator.css"
+        dest: /tmp/glance-operator.css
+        mode: "0644"
+
+    - name: Install the operator dashboard stylesheet inside the CT
+      ansible.builtin.shell: |
+        pct exec {{ glance_ctid }} -- mkdir -p /etc/glance/assets
+        pct push {{ glance_ctid }} /tmp/glance-operator.css /etc/glance/assets/operator.css --perms 644
+        rm -f /tmp/glance-operator.css
+      changed_when: true
+
     - name: Install the Glance systemd unit (hardened, DynamicUser)
       ansible.builtin.shell: >
         echo '{{ glance_unit | b64encode }}' | base64 -d |

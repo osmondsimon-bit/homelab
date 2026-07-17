@@ -1,10 +1,10 @@
 # Glance dashboard (CT 115)
 
-The homelab **front-door**: a single-page operator dashboard — host & VM/LXC metrics (pulled
-live from Prometheus), service up/down status, an alert summary, installed-versions vs latest
-releases, and admin links. It is an at-a-glance **summary**, *not* a metrics/capacity tool
-(that's Grafana — the panels link to it) and *not* the wall-tablet home UI (that's Home
-Assistant). Admin launchpad across apophis + oneill (ADR-014).
+The homelab **front-door**: a responsive two-page operator dashboard for degradation, service
+launching, resource pressure, placement, backup/maintenance state, and version currency. It is an
+at-a-glance **summary**, *not* the deep time-series/debugging surface (that's Grafana) and *not* the
+wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Proxmox nodes
+(ADR-014).
 
 | | |
 |---|---|
@@ -13,7 +13,7 @@ Assistant). Admin launchpad across apophis + oneill (ADR-014).
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
 | Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent, alerts, versions |
-| Layout | One `Homelab` page, 3 columns — **left:** Proxmox hosts + storage pools + Maintenance State · **center:** service status + infrastructure + VM/LXC metrics · **right:** alert summary + installed versions + latest releases + admin links |
+| Layout | **Overview:** operational signals + host-grouped service launcher + maintenance/backups/capacity/currency · **Infrastructure:** visual host and guest resources + fleet/storage context |
 
 ## How it's managed
 
@@ -27,9 +27,10 @@ The playbook creates the LXC, downloads the **pinned** Glance release (`glance_v
 extracted from the `glance-linux-amd64.tar.gz` asset — a `.version` marker makes bumps
 idempotent), **renders `/etc/glance/glance.yml` from the committed Jinja template
 `ansible/templates/glance/glance.yml.j2`**, installs a hardened systemd unit (`DynamicUser`,
-`ProtectSystem=strict`), and starts it. The render is **staged + validated** (`glance … config:print`
-on a `.new` file) and only **promoted** into place if it parses — a bad render can't break the live
-dashboard. The template uses **custom Jinja delimiters** (`<< >>` / `<% %>`) so Glance's own
+`ProtectSystem=strict`), installs the committed `operator.css` stylesheet, and starts it. The render
+is **staged + validated** (`glance … config:print` on a `.new` file) and only **promoted** into place
+if it parses — a bad render can't break the live dashboard. The template uses **custom Jinja
+delimiters** (`<< >>` / `<% %>`) so Glance's own
 Go-template `{{ }}` pass through untouched; real LAN values come from gitignored `group_vars`
 (`glance_prometheus_url`, `glance_hosts`, `monitoring_ip`, `ha_ip`, `technitium_ip`, `pbs_ip`,
 `gateway`) and committed files use `YOUR_*` placeholders (ADR-006).
@@ -38,12 +39,16 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > the playbook — **not** the live `/etc/glance/glance.yml` (it's overwritten on the next run and
 > won't survive a reprovision).
 >
-> **Scope:** keep this an operator *summary*. Deep time-series, network throughput, alert
-> debugging, and capacity planning belong in **Grafana** (the panels link out to it). "Installed
-> Versions" vs "Latest Releases" remains a visual comparison. **Maintenance State** is the
-> actionable update surface: manual apt targets, PVE reboot need, LXC auto-patch enrollment,
-> security-pending counts, and audit age. Container version proposals arrive through Renovate;
-> they are always reviewed and deployed manually.
+> **Scope:** keep this an operator *summary*. Deep time-series, network throughput, alert debugging,
+> and capacity planning belong in **Grafana**. **Maintenance State** owns package-managed currency.
+> **Version Currency** compares declared reproducible pins with upstream GitHub release tags for
+> Glance, Vaultwarden, Jellyseerr, and Actual; uncollected runtime versions are explicitly described
+> as such. Container version proposals still arrive through Renovate and are deployed manually.
+>
+> **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
+> backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
+> replaceable media SSD appears only when its host filesystem metric exists. Bars show used + free
+> capacity and use 70% warning / 85% critical thresholds.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.
