@@ -205,7 +205,7 @@ glance_services:
 glance_version_currency:
   - { key: glance, title: "Glance", configured: "{{ glance_version }}", repository: glanceapp/glance }
   - { key: vaultwarden, title: "Vaultwarden", configured: "{{ vaultwarden_image | regex_replace('^.*:', '') }}", repository: dani-garcia/vaultwarden }
-  - { key: jellyseerr, title: "Jellyseerr", configured: "{{ jellyseerr_image | regex_replace('^.*:', '') }}", repository: fallenbagel/jellyseerr }
+  - { key: jellyseerr, title: "Jellyseerr", configured: "{{ jellyseerr_image | regex_replace('^.*:', '') }}", repository: seerr-team/seerr }
   - { key: actual, title: "Actual Budget", configured: "{{ actual_image | regex_replace('^.*:', '') }}", repository: actualbudget/actual }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.
@@ -222,7 +222,7 @@ glance_release_repos:
   - Prowlarr/Prowlarr
   - Sonarr/Sonarr
   - Radarr/Radarr
-  - fallenbagel/jellyseerr
+  - seerr-team/seerr
   - actualbudget/actual
 
 # --- Infra Portal (CT 116, oneill — ADR-020) ---------------------

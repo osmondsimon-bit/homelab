@@ -61,6 +61,60 @@
   text-overflow: clip;
 }
 
+.host-pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.host-pulse-card {
+  min-width: 0;
+  padding: 0.15rem 1rem;
+}
+
+.host-pulse-card + .host-pulse-card {
+  border-left: 1px solid var(--color-widget-content-border);
+}
+
+.host-pulse-heading,
+.host-pulse-reading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.host-pulse-heading {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.host-pulse-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.7rem;
+}
+
+.host-pulse-reading,
+.host-pulse-maintenance {
+  color: var(--color-text-base);
+  font-size: 0.72rem;
+  opacity: 0.72;
+}
+
+.host-pulse-reading span:first-child {
+  letter-spacing: 0.05em;
+}
+
+.host-pulse-metrics .resource-meter {
+  height: 0.38rem;
+  margin-top: 0.25rem;
+}
+
+.host-pulse-maintenance {
+  margin-top: 0.65rem;
+}
+
 .resource-list {
   display: grid;
   gap: 1rem;
@@ -216,13 +270,25 @@
 
 .version-currency-head .currency-row {
   min-width: 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--color-widget-content-border);
-  border-radius: var(--border-radius);
+  padding: 0.1rem 0.9rem;
+  border-left: 1px solid var(--color-widget-content-border);
 }
 
 .version-currency-head .currency-row + .currency-row {
   margin-top: 0;
+}
+
+.version-currency-head .currency-row:first-child {
+  border-left: 0;
+}
+
+.currency-unavailable {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-text-base);
+  font-size: 0.8rem;
+  opacity: 0.78;
 }
 
 @media (min-width: 1600px) {
@@ -233,7 +299,9 @@
   .operator-summary .signal-label,
   .resource-label,
   .placement-label,
-  .workload-note {
+  .workload-note,
+  .host-pulse-reading,
+  .host-pulse-maintenance {
     font-size: 0.8rem;
   }
 
@@ -253,6 +321,10 @@
   .workload-metric .resource-meter,
   .resource-meter-spacer {
     height: 0.52rem;
+  }
+
+  .host-pulse-metrics .resource-meter {
+    height: 0.46rem;
   }
 }
 
@@ -300,5 +372,34 @@
 
   .version-currency-head .currency-grid {
     grid-template-columns: 1fr;
+  }
+
+  .version-currency-head .currency-row {
+    padding: 0.65rem 0;
+    border-top: 1px solid var(--color-widget-content-border);
+    border-left: 0;
+  }
+
+  .version-currency-head .currency-row:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .host-pulse-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-pulse-card {
+    padding: 0.75rem 0;
+  }
+
+  .host-pulse-card + .host-pulse-card {
+    border-top: 1px solid var(--color-widget-content-border);
+    border-left: 0;
+  }
+
+  .currency-unavailable {
+    flex-direction: column;
+    gap: 0.25rem;
   }
 }

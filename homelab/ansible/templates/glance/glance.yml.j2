@@ -156,12 +156,16 @@ pages:
         url: https://api.github.com/repos/<< glance_version_currency[0].repository >>/releases/latest
         headers:
           Accept: application/vnd.github+json
+          User-Agent: homelab-glance-dashboard
+          X-GitHub-Api-Version: 2022-11-28
         subrequests:
           <% for c in glance_version_currency[1:] %>
           << c.key >>:
             url: https://api.github.com/repos/<< c.repository >>/releases/latest
             headers:
               Accept: application/vnd.github+json
+              User-Agent: homelab-glance-dashboard
+              X-GitHub-Api-Version: 2022-11-28
           <% endfor %>
         template: |
           <% for c in glance_version_currency %>
@@ -172,15 +176,77 @@ pages:
           {{ $latest_<< c.key >> := $response_<< c.key >>.JSON.String "tag_name" }}
           <% endif %>
           <% endfor %>
+          {{ $currencyAvailable := true }}
+          <% for c in glance_version_currency %>
+          {{ if eq $latest_<< c.key >> "" }}{{ $currencyAvailable = false }}{{ end }}
+          <% endfor %>
+          {{ if $currencyAvailable }}
           <div class="currency-grid">
           <% for c in glance_version_currency %>
-            <div class="currency-row"><div><div class="color-highlight"><< c.title >></div><div class="size-h6 color-subdue">configured << c.configured >> · latest {{ $latest_<< c.key >> }}</div></div><div class="{{ if eq $latest_<< c.key >> "" }}color-subdue{{ else if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}color-positive{{ else }}color-negative{{ end }}">{{ if eq $latest_<< c.key >> "" }}Unknown{{ else if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}Current{{ else }}Review{{ end }}</div></div>
+            <div class="currency-row"><div><div class="color-highlight"><< c.title >></div><div class="size-h6 color-subdue">configured << c.configured >> · latest {{ $latest_<< c.key >> }}</div></div><div class="{{ if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}color-positive{{ else }}color-negative{{ end }}">{{ if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}Current{{ else }}Review{{ end }}</div></div>
           <% endfor %>
           </div>
+          {{ else }}
+          <div class="currency-unavailable"><span class="color-subdue">Release checks temporarily unavailable</span><span>Configured pins remain authoritative; Glance will retry after the cache expires.</span></div>
+          {{ end }}
 
     columns:
       - size: full
         widgets:
+          - type: custom-api
+            title: Host Pulse
+            css-class: host-pulse
+            cache: 30s
+            url: << prom >>
+            parameters:
+              query: instance:node_cpu_util:percent{instance=~`<< glance_host_instances >>`}
+            subrequests:
+              ram:
+                url: << prom >>
+                parameters:
+                  query: instance:node_mem_util:percent{instance=~`<< glance_host_instances >>`}
+              storage:
+                url: << prom >>
+                parameters:
+                  query: 100 * max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"}, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              updates:
+                url: << prom >>
+                parameters:
+                  query: homelab_apt_upgrades_pending{kind="pve-host"}
+              security:
+                url: << prom >>
+                parameters:
+                  query: homelab_apt_security_upgrades_pending{kind="pve-host"}
+              reboot:
+                url: << prom >>
+                parameters:
+                  query: homelab_reboot_required{kind="pve-host"}
+            template: |
+              {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
+              <div class="host-pulse-grid">
+              <% for h in glance_hosts %>
+                {{ $hasTelemetry := false }}{{ $cpu := 0.0 }}{{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $cpu = .Float "value.1" }}{{ $hasTelemetry = true }}{{ end }}{{ end }}
+                {{ $ram := 0.0 }}{{ range $ramResult.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $ram = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $disk := 0.0 }}{{ range $storage.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}{{ $disk = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $pending := 0.0 }}{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $pending = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $securityN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $rebootN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $critical := or (ge $cpu 90.0) (ge $ram 90.0) (ge $disk 85.0) (gt $securityN 0.0) (gt $rebootN 0.0) }}
+                {{ $warning := or (ge $cpu 75.0) (ge $ram 75.0) (ge $disk 70.0) }}
+                <div class="host-pulse-card">
+                  <div class="host-pulse-heading"><a class="color-highlight" href="https://<< h.pve_instance >>:8006" target="_blank" rel="noreferrer"><< h.name >></a><span class="{{ if not $hasTelemetry }}color-negative{{ else if $critical }}color-negative{{ else if $warning }}color-highlight{{ else }}color-positive{{ end }}">{{ if not $hasTelemetry }}No telemetry{{ else if $critical }}Attention{{ else if $warning }}Watch{{ else }}Healthy{{ end }}</span></div>
+                  {{ if $hasTelemetry }}
+                  <div class="host-pulse-metrics">
+                    <div><div class="host-pulse-reading"><span>CPU</span><span>{{ printf "%.0f%%" $cpu }}</span></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter></div>
+                    <div><div class="host-pulse-reading"><span>RAM</span><span>{{ printf "%.0f%%" $ram }}</span></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter></div>
+                    <div><div class="host-pulse-reading"><span>ZFS</span><span>{{ printf "%.0f%%" $disk }}</span></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter></div>
+                  </div>
+                  <div class="host-pulse-maintenance">{{ printf "%.0f routine · %.0f security" $pending $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ else }} · no reboot{{ end }}</div>
+                  {{ else }}<div class="host-pulse-maintenance">Prometheus host series unavailable</div>{{ end }}
+                </div>
+              <% endfor %>
+              </div>
+
           - type: split-column
             title: Service Directory
             css-class: service-directory
