@@ -30,9 +30,19 @@ if grep -Fq -- 'No concerns' "$template"; then
   fail 'summary must not claim that native service checks and version currency are healthy'
 fi
 require_text "$template" 'title: Service Directory' 'service launcher must be retained on Overview'
+require_text "$template" 'title: Host Pulse' 'Overview must attribute resource pressure to each physical host'
+require_text "$template" 'css-class: host-pulse' 'host pulse must have a stable responsive styling hook'
+require_text "$template" 'class="host-pulse-grid"' 'host pulse must render as a compact comparison grid'
+require_text "$template" 'homelab_apt_upgrades_pending{kind="pve-host"}' 'host pulse must include routine host maintenance'
 require_text "$template" 'low="70" high="85"' 'resource meters must encode warning and critical thresholds'
 require_text "$template" 'title: Version Currency' 'configured-versus-latest currency signal is missing'
 [[ "$(grep -Fc -- 'title: Version Currency' "$template")" -eq 1 ]] || fail 'version currency must render exactly once'
+require_text "$template" 'User-Agent: homelab-glance-dashboard' 'GitHub release checks require a valid User-Agent'
+require_text "$template" 'X-GitHub-Api-Version: 2022-11-28' 'GitHub release checks must pin an API version'
+require_text "$template" 'Release checks temporarily unavailable' 'currency API failures must collapse to one honest message'
+if grep -Fq -- '>Unknown<' "$template"; then
+  fail 'version currency must not render a row of ambiguous Unknown statuses'
+fi
 require_text "$template" 'title: Workloads by Host' 'guest resources must be consolidated and grouped by host'
 require_text "$template" 'data-collapse-after="5"' 'resource-ranked workloads must collapse after five rows per host'
 require_text "$template" '&lt;1%' 'fractional workload CPU must not be rounded down to zero'
@@ -55,9 +65,12 @@ sidebar_line="$(grep -n -m1 -- '- size: small' "$template" | cut -d: -f1)"
 version_line="$(grep -n -m1 'title: Version Currency' "$template" | cut -d: -f1)"
 maintenance_line="$(grep -n -m1 'title: Maintenance State' "$template" | cut -d: -f1)"
 columns_line="$(grep -n -m1 '^    columns:' "$template" | cut -d: -f1)"
+pulse_line="$(grep -n -m1 'title: Host Pulse' "$template" | cut -d: -f1)"
+services_line="$(grep -n -m1 'title: Service Directory' "$template" | cut -d: -f1)"
 (( capacity_line < sidebar_line )) || fail 'capacity must use the full-width Overview column'
 (( version_line < maintenance_line )) || fail 'version currency must be visible before maintenance detail'
 (( version_line < columns_line )) || fail 'version currency must remain above the fold and first on phones'
+(( pulse_line < services_line )) || fail 'host pulse must sit immediately before the host-grouped services'
 
 awk '
   /^glance_services:/ { in_services = 1; next }
@@ -70,6 +83,7 @@ awk '
 ' "$vars" || fail 'every monitored service must declare its physical node and VM/CT identity'
 
 require_text "$vars" 'glance_version_currency:' 'version-currency targets must be data-driven'
+require_text "$vars" 'repository: seerr-team/seerr' 'Jellyseerr currency must follow its current upstream repository'
 require_text "$playbook" 'operator.css' 'the Glance playbook must deploy the operator stylesheet'
 require_text "$template" 'custom-css-file: /assets/operator.css' 'Glance must load the operator stylesheet'
 
@@ -79,6 +93,8 @@ require_text "$stylesheet" '@media (min-width: 1600px)' 'stylesheet must improve
 require_text "$stylesheet" '.resource-meter' 'stylesheet must style visual resource meters'
 require_text "$stylesheet" '.capacity-overview .resource-list' 'capacity must use a wide comparison grid'
 require_text "$stylesheet" '.version-currency-head .currency-grid' 'version currency must use a compact responsive grid'
+require_text "$stylesheet" '.host-pulse-grid' 'host pulse must have responsive grid styling'
+require_text "$stylesheet" '.currency-unavailable' 'currency failures must have compact fallback styling'
 require_text "$stylesheet" 'content: "Service Directory"' 'service launcher needs a visible section heading'
 if grep -Fq -- 'hsl(var(--color-' "$stylesheet"; then
   fail 'Glance color variables already contain complete color values'

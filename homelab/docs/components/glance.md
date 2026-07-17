@@ -12,8 +12,8 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
-| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent, alerts, versions |
-| Layout | **Overview:** core telemetry + host-grouped service launcher + wide capacity comparison + currency/maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
+| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent and alerts; GitHub Releases for declared-pin currency |
+| Layout | **Overview:** core telemetry + version currency + three-host pulse + host-grouped service launcher + wide capacity comparison + maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
 
 ## How it's managed
 
@@ -43,9 +43,13 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > and capacity planning belong in **Grafana**. **Maintenance State** owns package-managed currency.
 > **Version Currency** compares declared reproducible pins with upstream GitHub release tags for
 > Glance, Vaultwarden, Jellyseerr, and Actual; uncollected runtime versions are explicitly described
-> as such. Container version proposals still arrive through Renovate and are deployed manually.
+> as such. Requests use GitHub's required API headers and a 12-hour cache; if any release check fails,
+> the widget shows one compact unavailable message instead of ambiguous partial results. Container
+> version proposals still arrive through Renovate and are deployed manually.
 > The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
 > service checks remain visible in the Service Directory and are not implied by that headline.
+> **Host Pulse** attributes current CPU, RAM, local-ZFS pressure, and host maintenance state before
+> the service columns. Historical peaks remain on Infrastructure rather than expanding Overview.
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
