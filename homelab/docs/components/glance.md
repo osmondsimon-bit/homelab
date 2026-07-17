@@ -55,10 +55,11 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
-> removable Media USB always has a card. It shows capacity when its host filesystem metric exists,
-> or a visible `Not reported` concern when the mount/exporter series is absent. Capacity meters use
-> 70% warning / 85% critical thresholds. Infrastructure workloads remain resource-ranked and
-> collapse after five entries per host.
+> removable Media USB always has a card. A five-minute textfile collector on apophis reports the
+> expected mount separately from its capacity, preventing the host root filesystem from being shown
+> when the USB drive is absent. The card distinguishes `Not mounted` from `Monitoring unavailable`.
+> Capacity meters use 70% warning / 85% critical thresholds. Infrastructure workloads remain
+> resource-ranked and collapse after five entries per host.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.
