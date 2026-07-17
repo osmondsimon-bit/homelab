@@ -126,11 +126,6 @@ monitoring_tsdb_mount: /var/lib/prometheus                  # bind-mount path (P
 monitoring_retention_days: 30
 monitoring_scrape_interval: 30s
 backup_stale_max_age_seconds: 129600                        # 36h — BackupStale/freshness budget (ADR-017)
-monitoring_node_targets:                                    # node_exporter on the PVE hosts (:9100)
-  - "YOUR_PROXMOX_IP:9100"                                  # apophis
-  - "YOUR_NUC_IP:9100"                                      # oneill
-  - "YOUR_CARTER_IP:9100"                                   # carter
-
 # Blackbox exporter (:9115) TCP-connect probe targets — black-box reachability of
 # devices we can't scrape. SLZB-06 Zigbee coordinator: probing its Z2MQTT TCP port
 # catches the coordinator dropping off-network (the root cause of Zigbee outages),

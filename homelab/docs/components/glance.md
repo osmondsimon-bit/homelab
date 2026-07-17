@@ -55,9 +55,10 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
-> removable Media USB always has a card. A five-minute textfile collector on apophis reports the
-> expected mount separately from its capacity, preventing the host root filesystem from being shown
-> when the USB drive is absent. The card distinguishes `Not mounted` from `Monitoring unavailable`.
+> removable Media USB always has a card. Prometheus reads node_exporter's native filesystem series
+> from a target labelled `node="apophis"`: an available target with no `/mnt/usb-media` series means
+> `Not mounted`, while a failed target means `Monitoring unavailable`. The host root filesystem is
+> never substituted for the removable drive's capacity.
 > Capacity meters use 70% warning / 85% critical thresholds. Infrastructure workloads remain
 > resource-ranked and collapse after five entries per host.
 >
