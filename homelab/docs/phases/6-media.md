@@ -16,17 +16,17 @@
 - **Unprivileged LXC for Jellyfin** (not a VM) — iGPU passthrough proven via single-GID idmap carve-out (GID 993 mapped 1:1). Avoids the VM overhead.
 - **Shared media group** (host gid 101000 = in-CT gid 1000, setgid `02775`, `UMask=0002`) so Jellyfin can read what qBittorrent writes without permission conflicts — and hardlinks work (same filesystem, same inode across mounts).
 - **USB SSD not backed up** by design — media is re-downloadable; NAS deferred to new house. Risk explicitly accepted.
-- **USB mount monitoring** uses node_exporter's native filesystem series. Prometheus combines the
-  apophis target's stable `node` label with mount-series presence, so a missing mount is distinct
-  from an unavailable host; Glance never falls through to reporting the host root filesystem as
-  media capacity.
+- **USB mount monitoring** uses node_exporter's built-in systemd collector, narrowly restricted to
+  the generated Media USB mount unit. Prometheus combines the apophis target's stable `node` label
+  with the unit's active state, so a missing mount is distinct from an unavailable host. Capacity
+  is deliberately not probed after the 2026-07-17 host-lock incident.
 
 ## Verification
 
 - Jellyfin WebUI: HTTP 200; `vainfo` inside CT confirms H264/HEVC decode+encode via VA-API (iGPU, jellyfin user).
 - qBittorrent leak-test ✅ 2026-06-27: egress IP = ProtonVPN; `wg0` brought down → curl + DNS both blocked (killswitch holds; no fallback to home WAN).
-- Media storage metrics: native `node_filesystem_size_bytes` and
-  `node_filesystem_avail_bytes` for `node="apophis",mountpoint="/mnt/usb-media"`.
+- Media storage state: `node_systemd_unit_state` for
+  `node="apophis",name="mnt-usb\x2dmedia.mount",state="active"`.
 
 ## Carry-forwards
 

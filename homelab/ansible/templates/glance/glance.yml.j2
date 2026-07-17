@@ -77,10 +77,6 @@ pages:
             url: << prom >>
             parameters:
               query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"} / pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"})
-          media_storage:
-            url: << prom >>
-            parameters:
-              query: 100 * (1 - (node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}))
           host_cpu:
             url: << prom >>
             parameters:
@@ -100,7 +96,6 @@ pages:
           {{ $auditAgeResult := .Subrequest "audit_age" }}
           {{ $localStorage := .Subrequest "local_storage" }}
           {{ $pbsStorage := .Subrequest "pbs_storage" }}
-          {{ $mediaStorage := .Subrequest "media_storage" }}
           {{ $hostCPU := .Subrequest "host_cpu" }}
           {{ $hostRAM := .Subrequest "host_ram" }}
           {{ $alertsN := 0.0 }}{{ range .JSON.Array "data.result" }}{{ $alertsN = .Float "value.1" }}{{ end }}
@@ -115,7 +110,6 @@ pages:
           {{ $storageMax := 0.0 }}
           {{ range $localStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
           {{ range $pbsStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
-          {{ range $mediaStorage.JSON.Array "data.result" }}{{ if gt (.Float "value.1") $storageMax }}{{ $storageMax = .Float "value.1" }}{{ end }}{{ end }}
           {{ $cpuMax := 0.0 }}{{ range $hostCPU.JSON.Array "data.result" }}{{ $cpuMax = .Float "value.1" }}{{ end }}
           {{ $ramMax := 0.0 }}{{ range $hostRAM.JSON.Array "data.result" }}{{ $ramMax = .Float "value.1" }}{{ end }}
           {{ $hasAudit := gt (len ($auditAgeResult.JSON.Array "data.result")) 0 }}
@@ -229,18 +223,10 @@ pages:
                 url: << prom >>
                 parameters:
                   query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
-              media_percent:
+              media_mounted:
                 url: << prom >>
                 parameters:
-                  query: 100 * (1 - (node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}))
-              media_used:
-                url: << prom >>
-                parameters:
-                  query: (node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} - node_filesystem_avail_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}) / 1e9
-              media_size:
-                url: << prom >>
-                parameters:
-                  query: node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"} / 1e9
+                  query: node_systemd_unit_state{job="node",node="apophis",name="mnt-usb\\x2dmedia.mount",state="active"}
               media_up:
                 url: << prom >>
                 parameters:
@@ -260,7 +246,7 @@ pages:
             template: |
               {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $storageUsed := .Subrequest "storage_used" }}{{ $storageSize := .Subrequest "storage_size" }}
               {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}
-              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaUp := .Subrequest "media_up" }}
+              {{ $mediaMounted := .Subrequest "media_mounted" }}{{ $mediaUp := .Subrequest "media_up" }}
               {{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
               <div class="host-pulse-grid">
               <% for h in glance_hosts %>
@@ -291,13 +277,13 @@ pages:
               {{ range $pbsPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">PBS datastore</div><div class="resource-label">Shared backup · shown once</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $pbsUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $pbsSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
               {{ end }}
-              {{ $mediaUpN := 0.0 }}{{ range $mediaUp.JSON.Array "data.result" }}{{ $mediaUpN = .Float "value.1" }}{{ end }}{{ if eq $mediaUpN 0.0 }}
+              {{ $mediaUpN := 0.0 }}{{ range $mediaUp.JSON.Array "data.result" }}{{ $mediaUpN = .Float "value.1" }}{{ end }}{{ $mediaMountedN := 0.0 }}{{ range $mediaMounted.JSON.Array "data.result" }}{{ $mediaMountedN = .Float "value.1" }}{{ end }}{{ if eq $mediaUpN 0.0 }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Monitoring unavailable</div></div><div class="resource-reading"><span>Apophis node_exporter unavailable</span><span>Check host and exporter</span></div></div>
-              {{ else if eq (len ($mediaPercent.JSON.Array "data.result")) 0 }}
+              {{ else if eq $mediaMountedN 0.0 }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Not mounted</div></div><div class="resource-reading"><span>Capacity intentionally suppressed</span><span>Check USB device and mount</span></div></div>
-              {{ else }}{{ range $mediaPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
-                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · removable media</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $mediaUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $mediaSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
-              {{ end }}{{ end }}
+              {{ else }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-positive">Mounted</div></div><div class="resource-reading"><span>Capacity not probed</span><span>Mount state only</span></div></div>
+              {{ end }}
               </div>
 
           - type: split-column

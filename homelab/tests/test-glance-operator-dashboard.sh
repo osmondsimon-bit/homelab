@@ -59,11 +59,12 @@ if grep -Fq -- 'title: Storage Semantics' "$template"; then
 fi
 require_text "$template" 'id=~"storage/.*/local-zfs"' 'physical storage must use node-local ZFS backends only'
 require_text "$template" 'id=~"storage/.*/pbs-oneill"' 'PBS shared capacity must be queried separately for deduplication'
-require_text "$template" 'node_filesystem_size_bytes{job="node",node="apophis",mountpoint="/mnt/usb-media"}' 'Media USB capacity must use native node_exporter telemetry'
+require_text "$template" 'node_systemd_unit_state{job="node",node="apophis",name="mnt-usb\\x2dmedia.mount",state="active"}' 'Media USB state must use the generated systemd mount unit'
 require_text "$template" 'up{job="node",node="apophis"}' 'Media USB state must distinguish host telemetry loss from mount loss'
 require_text "$template" 'Media USB' 'attached media storage must be labelled by its physical role'
 require_text "$template" 'Monitoring unavailable' 'missing Media USB telemetry must remain visible as an operator concern'
 require_text "$template" 'Not mounted' 'an absent expected Media USB mount must remain visible as an operator concern'
+require_text "$template" 'Capacity not probed' 'the deliberate Media USB capacity omission must be visible'
 require_text "$template" 'ne $guestType "qemu"' 'QEMU block allocation must not be presented as guest filesystem usage'
 if grep -Fq -- 'title: Capacity Overview' "$template"; then
   fail 'redundant capacity overview must be removed after storage moves into host pulse'

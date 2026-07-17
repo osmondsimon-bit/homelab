@@ -33,29 +33,19 @@ groups:
 
       # The media tree must be a distinct USB filesystem. If the mount disappears, media services
       # can otherwise see an empty directory on apophis's root filesystem and the loss is easy to
-      # miss. Native node_exporter state distinguishes that condition from apophis itself being down.
+      # miss. The narrowly filtered node_exporter systemd collector reports the generated mount unit
+      # without probing the USB filesystem and distinguishes mount loss from apophis itself being down.
       - alert: MediaStorageNotMounted
         expr: >
           (up{job="node", node="apophis"} == 1)
           unless on(node)
-          node_filesystem_size_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}
+          (node_systemd_unit_state{job="node", node="apophis", name="mnt-usb\\x2dmedia.mount", state="active"} == 1)
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Media USB is not mounted on apophis"
           description: "Expected filesystem /mnt/usb-media has been absent for 5m while apophis node_exporter remains reachable. Stop media writes and check the USB device plus mount before using the services."
-
-      - alert: MediaStorageSpaceLow
-        expr: >
-          (node_filesystem_avail_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}
-           / node_filesystem_size_bytes{job="node", node="apophis", mountpoint="/mnt/usb-media"}) < 0.15
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Media USB on apophis is over 85% used"
-          description: "{{ $labels.mountpoint }} has less than 15% capacity available."
 
       # Host memory nearly exhausted.
       - alert: NodeMemoryHigh
