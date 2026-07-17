@@ -13,7 +13,7 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
 | Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent and alerts; GitHub Releases for declared-pin currency |
-| Layout | **Overview:** core telemetry + version currency + three-host pulse + host-grouped service launcher + wide capacity comparison + maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
+| Layout | **Overview:** core telemetry + version currency + three-host pulse with physical/shared storage + host-grouped service launcher + maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
 
 ## How it's managed
 
@@ -48,14 +48,17 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > version proposals still arrive through Renovate and are deployed manually.
 > The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
 > service checks remain visible in the Service Directory and are not implied by that headline.
-> **Host Pulse** attributes current CPU, RAM, local-ZFS pressure, and host maintenance state before
-> the service columns. Historical peaks remain on Infrastructure rather than expanding Overview.
+> **Host Pulse** attributes current CPU, RAM, local-ZFS pressure and used/total GB, and host
+> maintenance state before the service columns. The same compact panel keeps the deduplicated PBS
+> datastore and apophis Media USB visible without a second capacity section. Historical peaks remain
+> on Infrastructure rather than expanding Overview.
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
-> replaceable media SSD appears only when its host filesystem metric exists. Bars show used + free
-> capacity in a wide comparison grid and use 70% warning / 85% critical thresholds. Infrastructure
-> workloads remain resource-ranked and collapse after five entries per host.
+> removable Media USB always has a card. It shows capacity when its host filesystem metric exists,
+> or a visible `Not reported` concern when the mount/exporter series is absent. Capacity meters use
+> 70% warning / 85% critical thresholds. Infrastructure workloads remain resource-ranked and
+> collapse after five entries per host.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.

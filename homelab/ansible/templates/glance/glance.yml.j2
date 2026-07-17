@@ -209,6 +209,38 @@ pages:
                 url: << prom >>
                 parameters:
                   query: 100 * max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"}, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              storage_used:
+                url: << prom >>
+                parameters:
+                  query: max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              storage_size:
+                url: << prom >>
+                parameters:
+                  query: max by(node) (label_replace(pve_disk_size_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
+              pbs_percent:
+                url: << prom >>
+                parameters:
+                  query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"} / pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"})
+              pbs_used:
+                url: << prom >>
+                parameters:
+                  query: max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
+              pbs_size:
+                url: << prom >>
+                parameters:
+                  query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
+              media_percent:
+                url: << prom >>
+                parameters:
+                  query: 100 * max(1 - (node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}))
+              media_used:
+                url: << prom >>
+                parameters:
+                  query: max((node_filesystem_size_bytes{mountpoint="/mnt/usb-media"} - node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"}) / 1e9)
+              media_size:
+                url: << prom >>
+                parameters:
+                  query: max(node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}) / 1e9
               updates:
                 url: << prom >>
                 parameters:
@@ -222,12 +254,17 @@ pages:
                 parameters:
                   query: homelab_reboot_required{kind="pve-host"}
             template: |
-              {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
+              {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $storageUsed := .Subrequest "storage_used" }}{{ $storageSize := .Subrequest "storage_size" }}
+              {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}
+              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}
+              {{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
               <div class="host-pulse-grid">
               <% for h in glance_hosts %>
                 {{ $hasTelemetry := false }}{{ $cpu := 0.0 }}{{ range $.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $cpu = .Float "value.1" }}{{ $hasTelemetry = true }}{{ end }}{{ end }}
                 {{ $ram := 0.0 }}{{ range $ramResult.JSON.Array "data.result" }}{{ if eq (.String "metric.instance") "<< h.node_exporter_instance >>" }}{{ $ram = .Float "value.1" }}{{ end }}{{ end }}
                 {{ $disk := 0.0 }}{{ range $storage.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}{{ $disk = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $diskUsed := 0.0 }}{{ range $storageUsed.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}{{ $diskUsed = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $diskSize := 0.0 }}{{ range $storageSize.JSON.Array "data.result" }}{{ if eq (.String "metric.node") "<< h.name >>" }}{{ $diskSize = .Float "value.1" }}{{ end }}{{ end }}
                 {{ $pending := 0.0 }}{{ range $updates.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $pending = .Float "value.1" }}{{ end }}{{ end }}
                 {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $securityN = .Float "value.1" }}{{ end }}{{ end }}
                 {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") "<< h.name >>" }}{{ $rebootN = .Float "value.1" }}{{ end }}{{ end }}
@@ -239,12 +276,22 @@ pages:
                   <div class="host-pulse-metrics">
                     <div><div class="host-pulse-reading"><span>CPU</span><span>{{ printf "%.0f%%" $cpu }}</span></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter></div>
                     <div><div class="host-pulse-reading"><span>RAM</span><span>{{ printf "%.0f%%" $ram }}</span></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter></div>
-                    <div><div class="host-pulse-reading"><span>ZFS</span><span>{{ printf "%.0f%%" $disk }}</span></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter></div>
+                    <div><div class="host-pulse-reading"><span>ZFS</span><span>{{ printf "%.0f%%" $disk }}</span></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter><div class="host-pulse-capacity">{{ printf "%.0f / %.0f GB" $diskUsed $diskSize }}</div></div>
                   </div>
                   <div class="host-pulse-maintenance">{{ printf "%.0f routine · %.0f security" $pending $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ else }} · no reboot{{ end }}</div>
                   {{ else }}<div class="host-pulse-maintenance">Prometheus host series unavailable</div>{{ end }}
                 </div>
               <% endfor %>
+              </div>
+              <div class="host-pulse-storage-grid">
+              {{ range $pbsPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">PBS datastore</div><div class="resource-label">Shared backup · shown once</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $pbsUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $pbsSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
+              {{ end }}
+              {{ if eq (len ($mediaPercent.JSON.Array "data.result")) 0 }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Not reported</div></div><div class="resource-reading"><span>Filesystem metric unavailable</span><span>Check mount and exporter</span></div></div>
+              {{ else }}{{ range $mediaPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · removable media</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $mediaUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $mediaSize.JSON.Array "data.result" }}{{ printf "%.0f GB total" (.Float "value.1") }}{{ end }}</span></div></div>
+              {{ end }}{{ end }}
               </div>
 
           - type: split-column
@@ -291,71 +338,6 @@ pages:
                 icon: di:unifi
                 allow-insecure: true
                 alt-status-codes: [401, 403]
-
-          - type: custom-api
-            title: Capacity Overview
-            css-class: capacity-overview
-            cache: 1m
-            url: << prom >>
-            parameters:
-              query: sort_desc(100 * max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / pve_disk_size_bytes{id=~"storage/.*/local-zfs"}, "node", "$1", "id", "storage/([^/]+)/local-zfs")))
-            subrequests:
-              local_used:
-                url: << prom >>
-                parameters:
-                  query: max by(node) (label_replace(pve_disk_usage_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
-              local_size:
-                url: << prom >>
-                parameters:
-                  query: max by(node) (label_replace(pve_disk_size_bytes{id=~"storage/.*/local-zfs"} / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
-              local_free:
-                url: << prom >>
-                parameters:
-                  query: max by(node) (label_replace((pve_disk_size_bytes{id=~"storage/.*/local-zfs"} - pve_disk_usage_bytes{id=~"storage/.*/local-zfs"}) / 1e9, "node", "$1", "id", "storage/([^/]+)/local-zfs"))
-              pbs_percent:
-                url: << prom >>
-                parameters:
-                  query: 100 * max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"} / pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"})
-              pbs_used:
-                url: << prom >>
-                parameters:
-                  query: max(pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
-              pbs_size:
-                url: << prom >>
-                parameters:
-                  query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
-              pbs_free:
-                url: << prom >>
-                parameters:
-                  query: max(pve_disk_size_bytes{id=~"storage/.*/pbs-oneill"} - pve_disk_usage_bytes{id=~"storage/.*/pbs-oneill"}) / 1e9
-              media_percent:
-                url: << prom >>
-                parameters:
-                  query: 100 * max(1 - (node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"} / node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}))
-              media_used:
-                url: << prom >>
-                parameters:
-                  query: max((node_filesystem_size_bytes{mountpoint="/mnt/usb-media"} - node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"}) / 1e9)
-              media_size:
-                url: << prom >>
-                parameters:
-                  query: max(node_filesystem_size_bytes{mountpoint="/mnt/usb-media"}) / 1e9
-              media_free:
-                url: << prom >>
-                parameters:
-                  query: max(node_filesystem_avail_bytes{mountpoint="/mnt/usb-media"}) / 1e9
-            template: |
-              {{ $localUsed := .Subrequest "local_used" }}{{ $localSize := .Subrequest "local_size" }}{{ $localFree := .Subrequest "local_free" }}
-              {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}{{ $pbsFree := .Subrequest "pbs_free" }}
-              {{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaFree := .Subrequest "media_free" }}
-              <div class="resource-list">
-              {{ range .JSON.Array "data.result" }}
-                {{ $node := .String "metric.node" }}{{ $value := .Float "value.1" }}
-                <div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">{{ $node }} local ZFS</div><div class="resource-label">Local physical</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $localUsed.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}{{ end }}</span><span>{{ range $localFree.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }}{{ end }} / {{ range $localSize.JSON.Array "data.result" }}{{ if eq (.String "metric.node") $node }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}{{ end }}</span></div></div>
-              {{ end }}
-              {{ range $pbsPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}<div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">PBS datastore</div><div class="resource-label">Shared backup · shown once</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $pbsUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $pbsFree.JSON.Array "data.result" }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }} / {{ range $pbsSize.JSON.Array "data.result" }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}</span></div></div>{{ end }}
-              {{ range $mediaPercent.JSON.Array "data.result" }}{{ $value := .Float "value.1" }}<div class="resource-row"><div class="resource-heading"><div><div class="color-highlight">Media SSD</div><div class="resource-label">apophis · replaceable</div></div><div>{{ printf "%.0f%%" $value }}</div></div><meter class="resource-meter {{ if ge $value 85.0 }}is-critical{{ else if ge $value 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $value }}"></meter><div class="resource-reading"><span>{{ range $mediaUsed.JSON.Array "data.result" }}{{ printf "%.0f GB used" (.Float "value.1") }}{{ end }}</span><span>{{ range $mediaFree.JSON.Array "data.result" }}{{ printf "%.0f GB free" (.Float "value.1") }}{{ end }} / {{ range $mediaSize.JSON.Array "data.result" }}{{ printf "%.0f GB" (.Float "value.1") }}{{ end }}</span></div></div>{{ end }}
-              </div>
 
       - size: small
         widgets:

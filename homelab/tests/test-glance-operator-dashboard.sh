@@ -33,8 +33,12 @@ require_text "$template" 'title: Service Directory' 'service launcher must be re
 require_text "$template" 'title: Host Pulse' 'Overview must attribute resource pressure to each physical host'
 require_text "$template" 'css-class: host-pulse' 'host pulse must have a stable responsive styling hook'
 require_text "$template" 'class="host-pulse-grid"' 'host pulse must render as a compact comparison grid'
+require_text "$template" 'class="host-pulse-storage-grid"' 'shared and attached storage must remain visible in host pulse'
 require_text "$template" 'homelab_apt_upgrades_pending{kind="pve-host"}' 'host pulse must include routine host maintenance'
 require_text "$template" 'low="70" high="85"' 'resource meters must encode warning and critical thresholds'
+require_text "$template" 'storage_used:' 'host pulse must query local ZFS usage in GB'
+require_text "$template" 'storage_size:' 'host pulse must query local ZFS capacity in GB'
+require_text "$template" 'class="host-pulse-capacity"' 'host pulse must display local ZFS usage and capacity'
 require_text "$template" 'title: Version Currency' 'configured-versus-latest currency signal is missing'
 [[ "$(grep -Fc -- 'title: Version Currency' "$template")" -eq 1 ]] || fail 'version currency must render exactly once'
 require_text "$template" 'User-Agent: homelab-glance-dashboard' 'GitHub release checks require a valid User-Agent'
@@ -54,20 +58,20 @@ if grep -Fq -- 'title: Storage Semantics' "$template"; then
   fail 'storage implementation notes belong in documentation, not the operator surface'
 fi
 require_text "$template" 'id=~"storage/.*/local-zfs"' 'physical storage must use node-local ZFS backends only'
-require_text "$template" 'sort_desc(100 * max by(node)' 'capacity rows must put the most-consumed node first'
 require_text "$template" 'id=~"storage/.*/pbs-oneill"' 'PBS shared capacity must be queried separately for deduplication'
 require_text "$template" 'mountpoint="/mnt/usb-media"' 'media SSD capacity must be shown when its metric is available'
+require_text "$template" 'Media USB' 'attached media storage must be labelled by its physical role'
+require_text "$template" 'Filesystem metric unavailable' 'missing media telemetry must remain visible as an operator concern'
 require_text "$template" 'ne $guestType "qemu"' 'QEMU block allocation must not be presented as guest filesystem usage'
-[[ "$(grep -Fc -- 'title: Capacity Overview' "$template")" -eq 1 ]] || fail 'capacity overview must render exactly once'
+if grep -Fq -- 'title: Capacity Overview' "$template"; then
+  fail 'redundant capacity overview must be removed after storage moves into host pulse'
+fi
 
-capacity_line="$(grep -n -m1 'title: Capacity Overview' "$template" | cut -d: -f1)"
-sidebar_line="$(grep -n -m1 -- '- size: small' "$template" | cut -d: -f1)"
 version_line="$(grep -n -m1 'title: Version Currency' "$template" | cut -d: -f1)"
 maintenance_line="$(grep -n -m1 'title: Maintenance State' "$template" | cut -d: -f1)"
 columns_line="$(grep -n -m1 '^    columns:' "$template" | cut -d: -f1)"
 pulse_line="$(grep -n -m1 'title: Host Pulse' "$template" | cut -d: -f1)"
 services_line="$(grep -n -m1 'title: Service Directory' "$template" | cut -d: -f1)"
-(( capacity_line < sidebar_line )) || fail 'capacity must use the full-width Overview column'
 (( version_line < maintenance_line )) || fail 'version currency must be visible before maintenance detail'
 (( version_line < columns_line )) || fail 'version currency must remain above the fold and first on phones'
 (( pulse_line < services_line )) || fail 'host pulse must sit immediately before the host-grouped services'
@@ -91,11 +95,14 @@ require_text "$template" 'custom-css-file: /assets/operator.css' 'Glance must lo
 require_text "$stylesheet" '@media (max-width: 700px)' 'stylesheet must include explicit phone treatment'
 require_text "$stylesheet" '@media (min-width: 1600px)' 'stylesheet must improve readability on large displays'
 require_text "$stylesheet" '.resource-meter' 'stylesheet must style visual resource meters'
-require_text "$stylesheet" '.capacity-overview .resource-list' 'capacity must use a wide comparison grid'
 require_text "$stylesheet" '.version-currency-head .currency-grid' 'version currency must use a compact responsive grid'
 require_text "$stylesheet" '.host-pulse-grid' 'host pulse must have responsive grid styling'
+require_text "$stylesheet" '.host-pulse-storage-grid' 'host pulse must style shared and attached storage responsively'
+require_text "$stylesheet" '.host-pulse-capacity' 'host pulse must style local ZFS GB detail'
 require_text "$stylesheet" '.currency-unavailable' 'currency failures must have compact fallback styling'
 require_text "$stylesheet" 'content: "Service Directory"' 'service launcher needs a visible section heading'
+require_text "$stylesheet" 'font-size: 1rem;' 'section heading must remain readable'
+require_text "$stylesheet" '.service-directory + .widget-type-monitor' 'core infrastructure must be separated from the service directory'
 if grep -Fq -- 'hsl(var(--color-' "$stylesheet"; then
   fail 'Glance color variables already contain complete color values'
 fi

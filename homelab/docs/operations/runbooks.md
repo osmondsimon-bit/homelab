@@ -281,9 +281,9 @@ backlog item.)
 - **What:** the front-door operator dashboard — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only,
   **no auth**. Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config
   `/etc/glance/glance.yml` **rendered from the committed template `ansible/templates/glance/glance.yml.j2`**.
-  `Overview` puts core telemetry, version currency, a three-host CPU/RAM/ZFS pulse, host-grouped
-  service links, and wide capacity comparison first; `Infrastructure` holds visual host/workload
-  resources and the fleet baseline.
+  `Overview` puts core telemetry, version currency, a three-host CPU/RAM/ZFS pulse with local-ZFS
+  GB detail plus compact PBS/Media USB capacity, and host-grouped service links first;
+  `Infrastructure` holds visual host/workload resources and the fleet baseline.
   Stateless — nothing to back up.
 - **Manage:** edit the **template** (`glance.yml.j2`) and/or `glance_*` vars (`glance_prometheus_url`,
   `glance_hosts`, `glance_version`, service IP vars) in `group_vars`, then
@@ -942,7 +942,7 @@ top-to-bottom; most monitoring is automatic, so the list is short.
 
 **2. Monitoring — mostly automatic, confirm + register**
 - Automatic (no action): `GuestDown` (`pve_up`) and Glance workload CPU/RAM/Disk
-  (`pve_guest_info` + `guest:*` recording rules). A new node's `local-zfs` joins Capacity Overview;
+  (`pve_guest_info` + `guest:*` recording rules). A new node's `local-zfs` joins Host Pulse;
   other physical/shared storage needs an explicit semantic decision so overlapping backends are not summed.
 - [ ] Add a tile to **`glance_services`** (group_vars), including `node` + `workload` placement;
       re-run `provision-glance.yml`.
