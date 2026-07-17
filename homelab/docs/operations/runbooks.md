@@ -987,6 +987,8 @@ The media stack expects a distinct filesystem at `/mnt/usb-media`. Debian's node
 all `/mnt` paths from its filesystem collector. On apophis, `install-node-exporter.yml` therefore
 enables the built-in systemd collector and restricts it to the generated
 `mnt-usb\x2dmedia.mount` unit. This reports mount state without calling `statfs` on the USB disk.
+The configuration clears node_exporter's default `.mount` exclusion; the anchored include still
+restricts per-unit collection to this one mount.
 An inactive or absent active-state series means the mount is absent; an unavailable
 `node="apophis"` target is host/exporter loss. Capacity is deliberately not collected.
 

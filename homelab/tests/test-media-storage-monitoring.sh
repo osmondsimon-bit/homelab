@@ -41,6 +41,8 @@ require_text "$node_exporter_playbook" '--collector.systemd' \
   'apophis node_exporter must enable the built-in systemd collector'
 require_text "$node_exporter_playbook" '--collector.systemd.unit-include=^mnt-usb.*media[.]mount$' \
   'the systemd collector must include only the Media USB mount unit'
+require_text "$node_exporter_playbook" '--collector.systemd.unit-exclude=^$' \
+  'the systemd collector default exclusion of mount units must be cleared'
 
 require_text "$alerts" 'alert: MediaStorageNotMounted' 'missing media mount alert is required'
 require_text "$alerts" 'up{job="node", node="apophis"} == 1' \
