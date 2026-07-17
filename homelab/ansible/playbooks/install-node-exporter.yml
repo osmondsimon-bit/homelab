@@ -29,8 +29,9 @@
         mode: "0644"
         content: |
           # Managed by Ansible. Keep the default filesystem exclusions, including /mnt.
-          # Collect only the generated Media USB mount unit from systemd.
-          ARGS="--collector.systemd --collector.systemd.unit-include=^mnt-usb.*media[.]mount$"
+          # The include keeps collection to one unit. Clear node_exporter's default exclusion of
+          # all .mount units, which otherwise also wins over an explicit include.
+          ARGS="--collector.systemd --collector.systemd.unit-include=^mnt-usb.*media[.]mount$ --collector.systemd.unit-exclude=^$"
       when: inventory_hostname == "apophis"
       notify: Restart node_exporter
 
