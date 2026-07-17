@@ -59,9 +59,10 @@ if grep -Fq -- 'title: Storage Semantics' "$template"; then
 fi
 require_text "$template" 'id=~"storage/.*/local-zfs"' 'physical storage must use node-local ZFS backends only'
 require_text "$template" 'id=~"storage/.*/pbs-oneill"' 'PBS shared capacity must be queried separately for deduplication'
-require_text "$template" 'mountpoint="/mnt/usb-media"' 'media SSD capacity must be shown when its metric is available'
+require_text "$template" 'homelab_media_storage_size_bytes' 'Media USB capacity must use its dedicated collector metric'
 require_text "$template" 'Media USB' 'attached media storage must be labelled by its physical role'
-require_text "$template" 'Filesystem metric unavailable' 'missing media telemetry must remain visible as an operator concern'
+require_text "$template" 'Monitoring unavailable' 'missing Media USB telemetry must remain visible as an operator concern'
+require_text "$template" 'Not mounted' 'an absent expected Media USB mount must remain visible as an operator concern'
 require_text "$template" 'ne $guestType "qemu"' 'QEMU block allocation must not be presented as guest filesystem usage'
 if grep -Fq -- 'title: Capacity Overview' "$template"; then
   fail 'redundant capacity overview must be removed after storage moves into host pulse'

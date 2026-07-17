@@ -799,7 +799,7 @@ Vaultwarden at the prompt where noted):
 
 | Node | Run after base |
 |------|----------------|
-| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) |
+| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) · `provision-media-storage-monitoring.yml` |
 | **carter** | `provision-technitium.yml --limit carter` (admin pw) · restore stateful VM 127 from PBS (or `provision-actual.yml` only for a clean deployment with no finance data) · `provision-patching.yml` |
 | **oneill** | `provision-monitoring.yml` (Grafana pw) · `provision-tailscale.yml --limit oneill -e tailscale_ctid=126 …` (see [tailscale.md](../components/tailscale.md)) · `provision-technitium.yml --limit oneill` · `provision-pbs.yml` · `provision-ha-backup-share.yml` |
 
@@ -978,6 +978,43 @@ top-to-bottom; most monitoring is automatic, so the list is short.
 `provision-monitoring.yml`, no `--limit`). **Storage-specific:** `PVEStorageFull` +
 Storage Pools cover it automatically; if it's a new backup datastore, extend
 `backup-freshness.sh`.
+
+---
+
+## Media USB monitoring — apophis
+
+The media stack expects a distinct filesystem at `/mnt/usb-media`. A five-minute node_exporter
+textfile collector reports mounted state, used/available/total bytes, and its last check time. It
+tests the exact mount before calling `df`, so a missing USB drive can never be mistaken for free
+space on apophis's root filesystem.
+
+Deploy or refresh all three consumers from `~/homelab/ansible`:
+
+```bash
+ansible-playbook playbooks/provision-media-storage-monitoring.yml
+ansible-playbook playbooks/provision-monitoring.yml
+ansible-playbook playbooks/provision-glance.yml --limit oneill
+```
+
+The monitoring play reloads these alerts: `MediaStorageNotMounted` (critical after 5m),
+`MediaStorageMetricsAbsent` (warning when absent or stale), and `MediaStorageSpaceLow` (warning
+above 85% used). Glance shows capacity when mounted and a distinct concern when the mount or
+collector is unavailable.
+
+Useful checks on apophis:
+
+```bash
+mountpoint /mnt/usb-media
+findmnt /mnt/usb-media
+systemctl status homelab-media-storage.timer
+systemctl start homelab-media-storage.service
+cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
+```
+
+If `mounted` is `0`, stop media writes and correct the USB device/mount first. The collector
+intentionally emits zero byte capacity in this state. If the mount is present but the metrics are
+absent or stale, inspect `journalctl -u homelab-media-storage.service` and confirm node_exporter is
+running with its textfile collector enabled.
 
 ---
 

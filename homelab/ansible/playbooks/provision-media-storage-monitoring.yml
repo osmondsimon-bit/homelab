@@ -1,0 +1,84 @@
+---
+# Media USB monitoring on apophis. Installs a five-minute node_exporter textfile collector that
+# distinguishes the expected USB mount from the host root filesystem and reports mounted state plus
+# byte capacity. Prometheus alerts and Glance consume the resulting homelab_media_storage_* metrics.
+#
+# Run from the mgmt-vm, inside homelab/ansible/:
+#   ansible-playbook playbooks/provision-media-storage-monitoring.yml
+
+- name: Install Media USB monitoring on apophis
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    - name: Install the Media USB collector
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/media-storage-collector.sh"
+        dest: /usr/local/bin/homelab-media-storage-collector
+        mode: "0755"
+
+    - name: Configure the expected media mount
+      ansible.builtin.copy:
+        dest: /etc/default/homelab-media-storage
+        mode: "0644"
+        content: |
+          NODE_NAME={{ inventory_hostname }}
+          MOUNT_PATH={{ media_host_root }}
+          TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+
+    - name: Ensure the node_exporter textfile directory exists
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter
+        state: directory
+        mode: "0755"
+
+    - name: Install the Media USB collector service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-storage.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Write Media USB state for Prometheus
+          After=local-fs.target
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/homelab-media-storage
+          ExecStart=/usr/local/bin/homelab-media-storage-collector
+          Nice=10
+
+    - name: Install the five-minute Media USB collector timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-storage.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Refresh Media USB state every five minutes
+
+          [Timer]
+          OnBootSec=2m
+          OnUnitActiveSec=5m
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Enable the Media USB timer
+      ansible.builtin.systemd:
+        name: homelab-media-storage.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Run the Media USB collector now
+      ansible.builtin.command: systemctl start homelab-media-storage.service
+      changed_when: true
+
+    - name: Confirm the Media USB metrics were written
+      ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
+      register: media_storage_metrics
+      changed_when: false
+
+    - name: Report the Media USB metrics
+      ansible.builtin.debug:
+        var: media_storage_metrics.stdout_lines
