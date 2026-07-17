@@ -18,3 +18,24 @@
       vars:
         maintenance_target_name: "{{ inventory_hostname }}"
         maintenance_target_kind: pve-host
+
+    # Debian's node_exporter deliberately excludes /mnt from the filesystem collector. Monitor the
+    # generated mount unit instead: this checks systemd state without calling statfs on the USB disk.
+    - name: Configure safe Media USB mount-state monitoring on apophis
+      ansible.builtin.copy:
+        dest: /etc/default/prometheus-node-exporter
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible. Keep the default filesystem exclusions, including /mnt.
+          # Collect only the generated Media USB mount unit from systemd.
+          ARGS="--collector.systemd --collector.systemd.unit-include=^mnt-usb.*media[.]mount$"
+      when: inventory_hostname == "apophis"
+      notify: Restart node_exporter
+
+  handlers:
+    - name: Restart node_exporter
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: restarted

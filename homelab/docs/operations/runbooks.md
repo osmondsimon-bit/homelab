@@ -282,7 +282,7 @@ backlog item.)
   **no auth**. Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config
   `/etc/glance/glance.yml` **rendered from the committed template `ansible/templates/glance/glance.yml.j2`**.
   `Overview` puts core telemetry, version currency, a three-host CPU/RAM/ZFS pulse with local-ZFS
-  GB detail plus compact PBS/Media USB capacity, and host-grouped service links first;
+  GB detail plus compact PBS capacity and Media USB mount state, and host-grouped service links first;
   `Infrastructure` holds visual host/workload resources and the fleet baseline.
   Stateless — nothing to back up.
 - **Manage:** edit the **template** (`glance.yml.j2`) and/or `glance_*` vars (`glance_prometheus_url`,
@@ -983,22 +983,25 @@ Storage Pools cover it automatically; if it's a new backup datastore, extend
 
 ## Media USB monitoring — apophis
 
-The media stack expects a distinct filesystem at `/mnt/usb-media`. Prometheus uses node_exporter's
-native `node_filesystem_*` series for capacity and labels each PVE target with its stable node name.
-An available `node="apophis"` target with no `/mnt/usb-media` series means the mount is absent; an
-unavailable target is host/exporter loss. No additional service probes the USB filesystem.
+The media stack expects a distinct filesystem at `/mnt/usb-media`. Debian's node_exporter excludes
+all `/mnt` paths from its filesystem collector. On apophis, `install-node-exporter.yml` therefore
+enables the built-in systemd collector and restricts it to the generated
+`mnt-usb\x2dmedia.mount` unit. This reports mount state without calling `statfs` on the USB disk.
+An inactive or absent active-state series means the mount is absent; an unavailable
+`node="apophis"` target is host/exporter loss. Capacity is deliberately not collected.
 
 Deploy or refresh both consumers from `~/homelab/ansible`:
 
 ```bash
+ansible-playbook playbooks/install-node-exporter.yml --limit apophis
 ansible-playbook playbooks/provision-monitoring.yml
 ansible-playbook playbooks/provision-glance.yml --limit oneill
 ```
 
-The monitoring play reloads `MediaStorageNotMounted` (critical after 5m while apophis remains
-reachable) and `MediaStorageSpaceLow` (warning above 85% used). The existing `TargetDown` alert
-covers host/exporter loss. Glance shows capacity when mounted and distinct `Not mounted` versus
-`Monitoring unavailable` states.
+The node_exporter play restarts only apophis's exporter when its arguments change. The monitoring
+play reloads `MediaStorageNotMounted` (critical after 5m while apophis remains reachable). The
+existing `TargetDown` alert covers host/exporter loss. Glance shows `Mounted`, `Not mounted`, or
+`Monitoring unavailable`; it states explicitly that capacity is not probed.
 
 Useful checks on apophis:
 
@@ -1008,8 +1011,9 @@ findmnt /mnt/usb-media
 ```
 
 If the mount is absent, stop media writes and correct the USB device/mount first. If the mount is
-present but Prometheus has no filesystem series, confirm `prometheus-node-exporter` is running and
-inspect the `node` target on Prometheus's Targets page.
+present but Prometheus has no active-state series, confirm `prometheus-node-exporter` is running,
+check its metrics for `node_systemd_unit_state`, and inspect the `node` target on Prometheus's
+Targets page.
 
 ### Retired collector incident — 2026-07-17
 
@@ -1018,9 +1022,10 @@ lock at 18:54 AEST during timer enablement or the immediate service run. The pre
 without USB, UAS, xHCI, NIC, OOM, panic, or hung-task diagnostics; after a physical power cycle the
 Samsung T5 mounted cleanly. The deployment is the prime suspect, but the kernel/firmware root cause
 is unproven. The custom collector was retired rather than wrapped in a timeout: a userspace timeout
-cannot contain uninterruptible kernel I/O, and node_exporter already supplies the required data.
+cannot contain uninterruptible kernel I/O, and node_exporter's systemd collector supplies the
+required mount state without a filesystem capacity probe.
 
-The failed deployment left inert files on apophis. After native monitoring is deployed, remove them
+The failed deployment left inert files on apophis. After the replacement monitoring is deployed, remove them
 once from an apophis root shell:
 
 ```bash

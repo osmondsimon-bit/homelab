@@ -50,15 +50,15 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > service checks remain visible in the Service Directory and are not implied by that headline.
 > **Host Pulse** attributes current CPU, RAM, local-ZFS pressure and used/total GB, and host
 > maintenance state before the service columns. The same compact panel keeps the deduplicated PBS
-> datastore and apophis Media USB visible without a second capacity section. Historical peaks remain
+> datastore and apophis Media USB mount state visible without a second capacity section. Historical peaks remain
 > on Infrastructure rather than expanding Overview.
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
-> removable Media USB always has a card. Prometheus reads node_exporter's native filesystem series
-> from a target labelled `node="apophis"`: an available target with no `/mnt/usb-media` series means
-> `Not mounted`, while a failed target means `Monitoring unavailable`. The host root filesystem is
-> never substituted for the removable drive's capacity.
+> removable Media USB always has a card. Prometheus reads the narrowly filtered systemd mount-unit
+> state from a target labelled `node="apophis"`: an available target without an active unit means
+> `Not mounted`, while a failed target means `Monitoring unavailable`. Capacity is deliberately not
+> probed, and the host root filesystem is never substituted for the removable drive.
 > Capacity meters use 70% warning / 85% critical thresholds. Infrastructure workloads remain
 > resource-ranked and collapse after five entries per host.
 >
