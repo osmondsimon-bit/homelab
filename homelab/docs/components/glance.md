@@ -13,7 +13,7 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
 | Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent, alerts, versions |
-| Layout | **Overview:** operational signals + host-grouped service launcher + maintenance/backups/capacity/currency · **Infrastructure:** visual host and guest resources + fleet/storage context |
+| Layout | **Overview:** core telemetry + host-grouped service launcher + wide capacity comparison + currency/maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
 
 ## How it's managed
 
@@ -44,11 +44,14 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > **Version Currency** compares declared reproducible pins with upstream GitHub release tags for
 > Glance, Vaultwarden, Jellyseerr, and Actual; uncollected runtime versions are explicitly described
 > as such. Container version proposals still arrive through Renovate and are deployed manually.
+> The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
+> service checks remain visible in the Service Directory and are not implied by that headline.
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
 > replaceable media SSD appears only when its host filesystem metric exists. Bars show used + free
-> capacity and use 70% warning / 85% critical thresholds.
+> capacity in a wide comparison grid and use 70% warning / 85% critical thresholds. Infrastructure
+> workloads remain resource-ranked and collapse after five entries per host.
 >
 > **Pinned, deliberately:** Glance is pre-1.0 and renames config keys between minor releases.
 > Bump `glance_version`, re-run, eyeball the page — don't track `latest`.
