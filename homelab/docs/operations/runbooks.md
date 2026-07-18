@@ -414,10 +414,20 @@ ansible-playbook playbooks/update-pve-host.yml --limit apophis                  
 #      /etc/pve becomes read-only. Carter GUI/TOTP login also FAILS while quorum is absent, but its
 #      running guests (incl. CT 117 DNS) keep serving, and DNS stays up on oneill.
 #   2. when it's back:   ssh root@apophis 'pvecm status | grep Quorate'   # auto-restores to 2 votes
+# RECOVERY ACCESS (verified 2026-07-18):
+#   - mgmt-vm normally reaches Carter as root, but mgmt-vm is hosted by apophis and disappears with it.
+#   - Carter has an independent operator-desktop key in root's node-local authorized_keys. Direct
+#     desktop-to-Carter root SSH was tested successfully on 2026-07-18. Recheck with:
+#     ssh root@carter 'hostname; pvecm status'
+#   - Away from home, the LAN remains reachable through the HA subnet router CT 126 on oneill if
+#     CT 110/apophis is down. Subnet routing does not provide SSH authentication: the remote client
+#     still needs its own Carter-authorized key. Never copy the desktop private key to another device.
+#   - Proposed keyless remote recovery is Tailscale directly on Carter with operator-only Tailscale
+#     SSH policy. It is not deployed; treat it as a separate security/host change and test before use.
 # NOTE: do NOT run `pvecm expected 1` as a pre-step — corosync rejects lowering expected below the
 #       live vote count (CS_ERR_INVALID_PARAM). It is a RECOVERY step ONLY, valid once apophis is
 #       actually down (carter = 1 live vote): if apophis does not return promptly or you need the
-#       Carter GUI, SSH from another machine and run `ssh root@carter 'pvecm expected 1'`. Confirm
+#       Carter GUI, SSH from the operator desktop and run `ssh root@carter 'pvecm expected 1'`. Confirm
 #       apophis is truly down first; never do this for an uncertain network partition.
 # ACCEPTED: manual quorum recovery is the intended 2-node operating model. No QDevice is planned.
 ```
