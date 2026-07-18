@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 install_tasks="${repo_root}/homelab/ansible/playbooks/tasks/install-maintenance-collector.yml"
 update_playbook="${repo_root}/homelab/ansible/playbooks/update-pve-host.yml"
 maintenance_playbook="${repo_root}/homelab/ansible/playbooks/provision-maintenance-monitoring.yml"
+runbook="${repo_root}/homelab/docs/operations/runbooks.md"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -33,11 +34,23 @@ grep -Fq 'Carter GUI/TOTP login will fail while /etc/pve is read-only.' "$update
 grep -Fq "ssh root@carter 'pvecm expected 1'" "$update_playbook" \
   || fail 'the apophis update path must print the Carter SSH quorum-recovery command'
 
+grep -Fq 'pre-authorized operator desktop' "$update_playbook" \
+  || fail 'the apophis update path must identify the independent Carter recovery client'
+
 grep -Fq 'only AFTER confirming apophis is actually down' "$update_playbook" \
   || fail 'the quorum-recovery command must include its split-brain safety condition'
 
 grep -Fq 'inventory_hostname == "apophis"' "$update_playbook" \
   || fail 'the Carter quorum warning must be scoped to apophis'
+
+grep -Fq 'independent operator-desktop key' "$runbook" \
+  || fail 'the runbook must record Carter access that survives loss of mgmt-vm'
+
+grep -Fq 'CT 126 on oneill' "$runbook" \
+  || fail 'the runbook must identify the Apophis-independent remote network path'
+
+grep -Fq 'does not provide SSH authentication' "$runbook" \
+  || fail 'the runbook must distinguish Tailscale routing from Carter SSH authentication'
 
 grep -Fq 'ansible-playbook playbooks/provision-maintenance-monitoring.yml --ask-become-pass' \
   "$maintenance_playbook" \

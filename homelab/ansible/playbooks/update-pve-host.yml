@@ -89,7 +89,7 @@
         msg:
           - "APOPHIS REBOOT: Carter will lose quorum when apophis leaves the two-node cluster."
           - "Carter GUI/TOTP login will fail while /etc/pve is read-only."
-          - "If Carter management is needed before apophis returns, SSH from another machine and run: ssh root@carter 'pvecm expected 1'"
+          - "If Carter management is needed before apophis returns, use the pre-authorized operator desktop and run: ssh root@carter 'pvecm expected 1'"
           - "Run that command only AFTER confirming apophis is actually down; never run it before the reboot or for an uncertain network partition."
       when:
         - inventory_hostname == "apophis"
