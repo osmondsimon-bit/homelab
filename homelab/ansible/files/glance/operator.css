@@ -286,29 +286,18 @@
   margin-top: 0.75rem;
 }
 
-.version-currency-head .currency-grid {
+.update-review .currency-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
-.version-currency-head .currency-row {
+.update-review .currency-row {
   min-width: 0;
-  padding: 0.1rem 0.9rem;
-  border-left: 1px solid var(--color-widget-content-border);
-}
-
-.version-currency-head .currency-row + .currency-row {
   margin-top: 0;
 }
 
-.version-currency-head .currency-row:first-child {
-  border-left: 0;
-}
-
 .currency-unavailable {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 1rem;
   color: var(--color-text-base);
   font-size: 0.8rem;
@@ -364,9 +353,6 @@
     gap: 0.65rem;
   }
 
-  .version-currency-head .currency-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 700px) {
@@ -389,21 +375,6 @@
 
   .workload-host {
     padding: 0.85rem;
-  }
-
-  .version-currency-head .currency-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .version-currency-head .currency-row {
-    padding: 0.65rem 0;
-    border-top: 1px solid var(--color-widget-content-border);
-    border-left: 0;
-  }
-
-  .version-currency-head .currency-row:first-child {
-    padding-top: 0;
-    border-top: 0;
   }
 
   .host-pulse-grid {

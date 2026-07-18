@@ -83,3 +83,12 @@ datastore is deduplicated. Declared reproducible application pins are compared w
 tags; package-managed and uncollected runtime versions remain explicitly separate. A committed CSS
 asset supplies restrained progress meters and phone-specific layout without changing the dashboard's
 role: summary and navigation here, time-series investigation in Grafana.
+
+## Revision — 2026-07-18 (action-oriented maintenance)
+
+Reserve red for work that needs intervention: overdue automatic patching, missing enrollment,
+required reboots, outages, and failed/stale protection. Maintenance rows explicitly distinguish
+daily automatic security updates from ordinary monthly work, while configured-pin currency moves
+below operational state and lists exceptions only. Media USB capacity uses a cached six-hour sample;
+mount state remains an independent systemd signal so stale capacity can never masquerade as a
+healthy mount.

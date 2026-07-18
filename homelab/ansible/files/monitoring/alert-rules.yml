@@ -47,6 +47,35 @@ groups:
           summary: "Media USB is not mounted on apophis"
           description: "Expected filesystem /mnt/usb-media has been absent for 5m while apophis node_exporter remains reachable. Stop media writes and check the USB device plus mount before using the services."
 
+      # Capacity is cached by a six-hour textfile collector rather than queried on every Prometheus
+      # scrape. Mount state above remains authoritative when the USB filesystem is absent.
+      - alert: MediaStorageSpaceLow
+        expr: >
+          (homelab_media_storage_available_bytes / homelab_media_storage_size_bytes) < 0.15
+          and on(node)
+          (node_systemd_unit_state{job="node", node="apophis", name="mnt-usb\\x2dmedia.mount", state="active"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Media USB on {{ $labels.node }} is over 85% used"
+          description: "{{ $labels.mountpoint }} has less than 15% cached available capacity. Review the latest sample in Glance and free space deliberately."
+
+      - alert: MediaStorageCapacityStale
+        expr: >
+          (
+            absent(homelab_media_storage_last_check_timestamp_seconds{node="apophis"})
+            or (time() - homelab_media_storage_last_check_timestamp_seconds{node="apophis"}) > 64800
+          )
+          and on(node)
+          (node_systemd_unit_state{job="node", node="apophis", name="mnt-usb\\x2dmedia.mount", state="active"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Media USB capacity sample is stale"
+          description: "The low-frequency Media USB capacity collector on {{ $labels.node }} has not completed for more than 18 hours. Check homelab-media-storage.timer; mount state is monitored separately."
+
       # Host memory nearly exhausted.
       - alert: NodeMemoryHigh
         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10

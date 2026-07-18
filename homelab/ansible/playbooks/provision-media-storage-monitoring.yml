@@ -1,0 +1,85 @@
+---
+# Cache Media USB capacity on apophis every six hours. Mount availability remains independently
+# monitored through node_exporter's narrowly scoped systemd collector.
+# Run from the mgmt-vm: ansible-playbook playbooks/provision-media-storage-monitoring.yml
+
+- name: Install low-frequency Media USB capacity monitoring on apophis
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    - name: Install the Media USB capacity collector
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/media-storage-collector.sh"
+        dest: /usr/local/bin/homelab-media-storage-collector
+        mode: "0755"
+
+    - name: Configure the Media USB capacity collector
+      ansible.builtin.copy:
+        dest: /etc/default/homelab-media-storage
+        mode: "0644"
+        content: |
+          NODE_NAME={{ inventory_hostname }}
+          MOUNT_PATH={{ media_host_root }}
+          TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+
+    - name: Install the Media USB capacity service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-storage.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Cache Media USB capacity for Prometheus
+          After=mnt-usb\x2dmedia.mount
+          ConditionPathIsMountPoint={{ media_host_root }}
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/homelab-media-storage
+          ExecStart=/usr/local/bin/homelab-media-storage-collector
+          Nice=10
+
+    - name: Install the six-hour Media USB capacity timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-storage.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Sample Media USB capacity every six hours
+
+          [Timer]
+          OnBootSec=15m
+          OnUnitActiveSec=6h
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Enable the Media USB capacity timer
+      ansible.builtin.systemd:
+        name: homelab-media-storage.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Check whether the Media USB is mounted for the initial sample
+      ansible.builtin.command: "mountpoint -q {{ media_host_root }}"
+      register: media_mount
+      changed_when: false
+      failed_when: false
+
+    - name: Sample Media USB capacity now
+      ansible.builtin.command: systemctl start homelab-media-storage.service
+      changed_when: true
+      when: media_mount.rc == 0
+
+    - name: Confirm cached Media USB capacity metrics
+      ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
+      register: media_storage_metrics
+      changed_when: false
+      when: media_mount.rc == 0
+
+    - name: Report cached Media USB capacity metrics
+      ansible.builtin.debug:
+        var: media_storage_metrics.stdout_lines
+      when: media_mount.rc == 0
