@@ -118,6 +118,19 @@ agent, clean checkout, and Ansible `pong` from Apophis/Carter/Oneill. It returne
 state after the test. ZFS actual use was 2.28 GB; `refreservation=none` prevents a cold VM from
 reserving its full virtual size.
 
+### Commissioning status (2026-07-18)
+
+- VM 128 `mgmt-vm2` is live on Carter and deliberately left `stopped`, with `onboot=0`,
+  `protection=1`, and tags `cold-standby;recovery`.
+- Operator SSH, passwordless sudo, DNS, QEMU guest agent, the clean repository checkout, security
+  patching, and Ansible access to all three PVE hosts have been tested successfully.
+- Public HTTPS fetches work. Before the first push, display `~/.ssh/id_ed25519_github.pub` and add
+  that repo-scoped key under the GitHub repository's **Settings → Deploy keys** with write access.
+  Do not copy or register the primary management VM's account key.
+- A cold VM cannot start itself. When the operator is away from the authorized desktop, Carter
+  still needs a separate authenticated access path before `qm start 128`; direct operator-only
+  Tailscale SSH to Carter remains a backlog item.
+
 The checkout is `/home/simon/src/homelab`; the real gitignored `hosts.ini` and `group_vars/all.yml`
 are copied there during provisioning. Its distinct automation public key is authorized on all PVE
 hosts. The checkout uses public HTTPS for credential-free fetches. A separate

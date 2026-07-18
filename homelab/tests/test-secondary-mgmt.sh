@@ -68,6 +68,12 @@ grep -Fq 'Cold secondary management VM' "$runbook" \
   || fail 'the activation and shutdown procedure must be documented'
 grep -Fq 'Never run both management VMs from the same working branch' "$runbook" \
   || fail 'the runbook must guard against divergent infrastructure edits'
+grep -Fq 'Commissioning status (2026-07-18)' "$runbook" \
+  || fail 'the runbook must preserve the final live commissioning state'
+grep -Fq 'Settings → Deploy keys' "$runbook" \
+  || fail 'the runbook must retain the one-time GitHub deploy-key step'
+grep -Fq 'A cold VM cannot start itself' "$runbook" \
+  || fail 'the runbook must state the remaining remote bootstrap limitation'
 
 grep -Fq 'id!="qemu/128"' "$alert_rules" \
   || fail 'the intentionally stopped cold VM must be excluded from GuestDown'
