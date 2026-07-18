@@ -11,7 +11,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Notes |
 |------------|------|-------|
-| AI coding agent | Claude Code | Primary tool, runs on mgmt-vm |
+| AI coding agent | Claude Code | Primary tool on mgmt-vm; independent cold control node `mgmt-vm2` on Carter provides an Ansible/Git recovery workspace without copying agent credentials |
 | On-demand infra review | `infra-designer` agent | Invoked before any new VM/LXC/network change |
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
 | Provisioning (create + configure) | Ansible (`pct` in playbooks) | Interim mechanism — `provision-*.yml` pct-create + configure the LXCs and recover cleanly (ADR-005) |

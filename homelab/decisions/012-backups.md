@@ -23,6 +23,10 @@ Constraints:
 - Some guests are **stateless / Ansible-reproducible** (Technitium CT 111, Tailscale CT 110) —
   low backup priority. The crown jewel is **home-assistant** (irreplaceable config + the
   Zigbee2MQTT coordinator/device DB — losing it means re-pairing every Zigbee device).
+- Cold secondary management VM 128 is likewise **reproducible and intentionally not imaged**:
+  `provision-secondary-mgmt.yml` rebuilds it, recopies the local-only inventory from the primary,
+  rolls a new revocable automation key, proves PVE access, and shuts it down. VM 100 remains the
+  stateful management workstation protected by PBS.
 - HAOS is a sealed appliance — no OS-level backup agent; use its own Supervisor backup system.
 
 ## Decision

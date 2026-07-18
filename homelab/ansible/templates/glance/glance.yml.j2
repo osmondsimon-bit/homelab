@@ -559,28 +559,28 @@ pages:
             cache: 30s
             url: << prom >>
             parameters:
-              query: sort_desc(max without(resource) (label_replace(guest:pve_cpu_util:percent, "resource", "cpu", "__name__", ".*") or label_replace(guest:pve_mem_util:percent, "resource", "ram", "__name__", ".*") or label_replace(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info), "resource", "disk", "__name__", ".*")))
+              query: sort_desc(max without(resource) (label_replace(guest:pve_cpu_util:percent{id!="qemu/128"}, "resource", "cpu", "__name__", ".*") or label_replace(guest:pve_mem_util:percent{id!="qemu/128"}, "resource", "ram", "__name__", ".*") or label_replace(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info), "resource", "disk", "__name__", ".*")))
             subrequests:
               cpu:
                 url: << prom >>
                 parameters:
-                  query: guest:pve_cpu_util:percent
+                  query: guest:pve_cpu_util:percent{id!="qemu/128"}
               cpu_peak:
                 url: << prom >>
                 parameters:
-                  query: max by(id) (max_over_time(guest:pve_cpu_util:percent[24h:5m]))
+                  query: max by(id) (max_over_time(guest:pve_cpu_util:percent{id!="qemu/128"}[24h:5m]))
               ram:
                 url: << prom >>
                 parameters:
-                  query: guest:pve_mem_util:percent
+                  query: guest:pve_mem_util:percent{id!="qemu/128"}
               ram_peak:
                 url: << prom >>
                 parameters:
-                  query: max by(id) (max_over_time(guest:pve_mem_util:percent[24h:5m]))
+                  query: max by(id) (max_over_time(guest:pve_mem_util:percent{id!="qemu/128"}[24h:5m]))
               disk:
                 url: << prom >>
                 parameters:
-                  query: max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
+                  query: max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info)
             template: |
               {{ $cpuResult := .Subrequest "cpu" }}{{ $cpuPeak := .Subrequest "cpu_peak" }}{{ $ramResult := .Subrequest "ram" }}{{ $ramPeak := .Subrequest "ram_peak" }}{{ $diskResult := .Subrequest "disk" }}
               <div>

@@ -24,6 +24,7 @@ recovery stays non-circular.
 | **carter** (failover target + Actual host) dies | HA/Vaultwarden continue on apophis, but Actual is down → restore VM 127's PBS image temporarily to apophis or rebuild + rejoin Carter → restore 127 → recreate replication jobs 200-0 + 118-0 → reprovision CT 117 | ⚠️ runbook written; live host drill deferred (apophis 4b is the symmetric proof) | [Rebuild carter — DR runbook](#rebuild-carter-the-failover-target--dr-runbook) |
 | **oneill** (standalone services hub) dies | DNS/monitoring/backup outage only — CT 117 covers DNS; production unaffected if apophis is up → fresh PVE+ZFS → no-sub repo → re-run the oneill playbooks | ⚠️ not drilled | [Recovery model → "oneill dies"](#recovery-model--what-recovers-what-avoid-doubling-up) |
 | **mgmt-vm** (VM 100) dies | not recreatable from code → `qmrestore` its PBS image to a new VMID | ✅ 2026-06-17 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
+| **mgmt-vm2** (cold VM 128) is lost | reproducible → re-run `provision-secondary-mgmt.yml` from VM 100; a fresh distinct automation key is rolled out automatically | n/a — deliberately not imaged | [Cold secondary management VM](#cold-secondary-management-vm) |
 | **Home Assistant** (VM 200) dies | restore the native partial backup onto a fresh HAOS, **or** fail over to carter's replica | ✅ HA restore 2026-06-18 · ✅ failover 2026-06-25 | [HA native partial backup](#home-assistant--native-partial-backup-primary-for-ha) · [Manual failover](#manual-failover-vm-200-when-apophis-is-truly-dead--adr-009) |
 | **Vaultwarden** (VM 118) dies | playbook rebuilds VM+container; vault **data** comes from the PBS image (or carter replica) → `qmrestore` | ✅ 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Restore drills](#restore-drills-a-backup-you-havent-restored-is-a-hypothesis) |
 | **Actual Budget** (VM 127) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ✅ PBS restore 2026-07-15 | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
@@ -101,6 +102,72 @@ ping -c 3 YOUR_MGMT_VM_IP
 ### SSH to mgmt-vm
 ```bash
 ssh simon@YOUR_MGMT_VM_IP
+```
+
+## Cold secondary management VM
+
+VM 128 `mgmt-vm2` is an independent Ubuntu control node on Carter at
+`YOUR_SECONDARY_MGMT_IP`. It is not a clone of VM 100. Its own hostname, MAC, machine identity, SSH
+host keys and automation key allow a controlled test alongside the primary without an address or
+identity collision. It is normally `stopped`, has `onboot=0`, and is protected against accidental
+deletion.
+
+**Build validation passed 2026-07-18:** Ubuntu 24.04.4, 2 cores / 8 GB / 64 GB thin zvol, unique
+machine and SSH host identity, both operator login keys, key-only SSH, passwordless sudo, DNS, guest
+agent, clean checkout, and Ansible `pong` from Apophis/Carter/Oneill. It returned to stopped/protected
+state after the test. ZFS actual use was 2.28 GB; `refreservation=none` prevents a cold VM from
+reserving its full virtual size.
+
+The checkout is `/home/simon/src/homelab`; the real gitignored `hosts.ini` and `group_vars/all.yml`
+are copied there during provisioning. Its distinct automation public key is authorized on all PVE
+hosts. The checkout uses public HTTPS for credential-free fetches. A separate
+`~/.ssh/id_ed25519_github` is generated for SSH pushes without copying the primary's account key;
+register its `.pub` once under the repository's **Settings → Deploy keys** with write access. Agent
+sign-in is deliberately not copied from the primary.
+
+### Activate during a planned primary-management outage
+
+```bash
+ssh root@YOUR_CARTER_IP 'qm start 128'
+ssh simon@YOUR_SECONDARY_MGMT_IP
+cd ~/src/homelab/homelab/ansible
+ansible proxmox -m ping
+```
+
+If Apophis is actually down, Carter first loses quorum. Confirm this is a real node outage rather
+than a network partition, then use the already-authorized operator desktop path:
+
+```bash
+ssh root@YOUR_CARTER_IP 'pvecm expected 1 && pvecm status && qm start 128'
+```
+
+Never lower expected votes while Apophis might still be running. A remote Tailscale client retains
+the network route through CT 126 on Oneill, but it still needs an authorized way to SSH to Carter;
+the cold VM cannot start itself.
+
+### Working and shutdown rules
+
+- Pull with `git pull --ff-only` before editing. Register the generated repo-scoped deploy key once
+  before the first push; no `gh auth login` is used.
+- Never run both management VMs from the same working branch. Finish, commit and push from one
+  control node before continuing that branch on the other.
+- Treat the copied inventory as a point-in-time recovery copy. Re-run the provisioning playbook
+  after meaningful local-only inventory changes to refresh and revalidate the standby.
+- Do not add VM 128 to normal autostart or GuestDown alerting; powered off is its healthy state.
+
+Return it to cold state from inside the VM, then verify from Carter:
+
+```bash
+sudo poweroff
+ssh root@YOUR_CARTER_IP 'qm status 128; qm config 128 | grep -E "^(onboot|protection):"'
+# expect: stopped, onboot: 0, protection: 1
+```
+
+Build or refresh deliberately from the primary control node:
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/provision-secondary-mgmt.yml
 ```
 
 ---
@@ -256,9 +323,10 @@ backlog item.)
   app). The topic is a secret — gitignored `group_vars/all.yml` (`ntfy_topic`), never committed; the
   bridge reads it from `/etc/am-ntfy/env` (0600). AM's cluster port (`:9094`) is disabled (single
   instance). Rules: `TargetDown`, `NodeFilesystemSpaceLow`, `NodeMemoryHigh`, `PVEStorageFull`,
-  **`GuestDown`** (`pve_up{id=~"lxc/.*|qemu/.*"} == 0` — a guest stopped/crashed while its host is up;
+  **`GuestDown`** (`pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128"} == 0` — a guest stopped/crashed while its host is up;
   `up`/TargetDown only covers *scraped* targets, so this is what catches a service LXC like Tailscale
-  or Technitium dying on its own. A whole-host outage makes these go *absent*, caught by TargetDown).
+  or Technitium dying on its own. VM 128 is excluded because powered off is the cold standby's
+  healthy state. A whole-host outage makes these go *absent*, caught by TargetDown).
   - **Test the pipeline:** `pct exec 114 -- amtool --alertmanager.url=http://localhost:9093 alert add
     alertname=PipelineTest severity=critical --annotation=summary="test"` → ntfy push after the 30s
     group_wait (auto-resolves ~5 min later). Confirm delivery without a phone:
