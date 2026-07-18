@@ -281,8 +281,9 @@ backlog item.)
 - **What:** the front-door operator dashboard — `http://YOUR_GLANCE_IP:8080`, LAN/Tailscale only,
   **no auth**. Single Go binary at `/opt/glance/glance` (pinned `glance_version`), config
   `/etc/glance/glance.yml` **rendered from the committed template `ansible/templates/glance/glance.yml.j2`**.
-  `Overview` puts core telemetry, version currency, a three-host CPU/RAM/ZFS pulse with local-ZFS
-  GB detail plus compact PBS capacity and Media USB mount state, and host-grouped service links first;
+  `Overview` puts core telemetry, a three-host CPU/RAM/ZFS pulse with local-ZFS GB detail plus compact
+  PBS/Media USB capacity, and host-grouped service links first. Maintenance explicitly separates
+  automatic, monthly, and immediate action; update review is exception-only and sits lower down.
   `Infrastructure` holds visual host/workload resources and the fleet baseline.
   Stateless — nothing to back up.
 - **Manage:** edit the **template** (`glance.yml.j2`) and/or `glance_*` vars (`glance_prometheus_url`,
@@ -324,6 +325,11 @@ backlog item.)
     packages, security-classified pending packages, and last unattended-upgrades activity. A new
     CT that was not enrolled turns the Glance Maintenance State pane red and raises
     `GuestPatchEnrollmentMissing` after one hour.
+  - Glance semantics: **Automatic at daily patch window** means leave security updates to
+    `unattended-upgrades`; **Monthly action** means ordinary packages or a PVE-host update should be
+    handled in the planned window; **Action required** means automatic patching is overdue, enrollment
+    is missing, or a deliberate reboot is outstanding. Security updates become overdue only after the
+    existing three-day alert threshold, avoiding a false emergency before the next daily run.
 - **PVE hosts + remaining Ubuntu work (manual):** deliberate **monthly window — last day of month,
   12:00 AEST** (be present for fallout). One node at a time via
   **`update-pve-host.yml --limit <host>`** (upgrades +
@@ -990,26 +996,33 @@ enables the built-in systemd collector and restricts it to the generated
 The configuration clears node_exporter's default `.mount` exclusion; the anchored include still
 restricts per-unit collection to this one mount.
 An inactive or absent active-state series means the mount is absent; an unavailable
-`node="apophis"` target is host/exporter loss. Capacity is deliberately not collected.
+`node="apophis"` target is host/exporter loss. A separate textfile collector runs every six hours,
+caches exact used/total/available bytes plus its successful-sample timestamp, and leaves its last
+good sample untouched when the mount is absent. Prometheus scrapes only the cached file, so neither
+Prometheus nor a dashboard refresh calls `statfs` on the USB filesystem.
 
 Deploy or refresh both consumers from `~/homelab/ansible`:
 
 ```bash
 ansible-playbook playbooks/install-node-exporter.yml --limit apophis
+ansible-playbook playbooks/provision-media-storage-monitoring.yml
 ansible-playbook playbooks/provision-monitoring.yml
 ansible-playbook playbooks/provision-glance.yml --limit oneill
 ```
 
 The node_exporter play restarts only apophis's exporter when its arguments change. The monitoring
-play reloads `MediaStorageNotMounted` (critical after 5m while apophis remains reachable). The
-existing `TargetDown` alert covers host/exporter loss. Glance shows `Mounted`, `Not mounted`, or
-`Monitoring unavailable`; it states explicitly that capacity is not probed.
+play reloads `MediaStorageNotMounted` (critical after 5m while apophis remains reachable),
+`MediaStorageSpaceLow` (warning above 85% used), and `MediaStorageCapacityStale` (warning when no
+successful sample exists for 18h). The existing `TargetDown` alert covers host/exporter loss.
+Glance shows mount state, cached used/total capacity, and sample age.
 
 Useful checks on apophis:
 
 ```bash
 mountpoint /mnt/usb-media
 findmnt /mnt/usb-media
+systemctl status homelab-media-storage.timer
+cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
 ```
 
 If the mount is absent, stop media writes and correct the USB device/mount first. If the mount is
@@ -1017,28 +1030,18 @@ present but Prometheus has no active-state series, confirm `prometheus-node-expo
 check its metrics for `node_systemd_unit_state`, and inspect the `node` target on Prometheus's
 Targets page.
 
-### Retired collector incident — 2026-07-17
+### Capacity collector incident and revised cadence — 2026-07-17/18
 
 The first deployment of a dedicated `df`-based textfile collector coincided with a complete apophis
 lock at 18:54 AEST during timer enablement or the immediate service run. The previous boot ended
 without USB, UAS, xHCI, NIC, OOM, panic, or hung-task diagnostics; after a physical power cycle the
-Samsung T5 mounted cleanly. The deployment is the prime suspect, but the kernel/firmware root cause
-is unproven. The custom collector was retired rather than wrapped in a timeout: a userspace timeout
-cannot contain uninterruptible kernel I/O, and node_exporter's systemd collector supplies the
-required mount state without a filesystem capacity probe.
-
-The failed deployment left inert files on apophis. After the replacement monitoring is deployed, remove them
-once from an apophis root shell:
-
-```bash
-systemctl disable --now homelab-media-storage.timer 2>/dev/null || true
-rm -f /etc/systemd/system/homelab-media-storage.service \
-  /etc/systemd/system/homelab-media-storage.timer \
-  /etc/default/homelab-media-storage \
-  /usr/local/bin/homelab-media-storage-collector \
-  /var/lib/prometheus/node-exporter/homelab_media_storage.prom
-systemctl daemon-reload
-```
+Samsung T5 mounted cleanly. The deployment remains correlated with the incident, but no evidence
+proved that one filesystem-allocation query caused it; the active media services also access this
+filesystem continuously. The original five-minute collector was therefore not restored. Capacity
+sampling returned at a deliberately low six-hour cadence, starts 15 minutes after boot, records its
+age, and is never used to determine mount state. A userspace timeout is still not claimed as a kernel
+I/O safeguard. Keep the Lenovo firmware investigation open and retire capacity sampling again if
+USB/UAS/xHCI or repeat lock evidence appears.
 
 ---
 

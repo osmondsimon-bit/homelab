@@ -1,7 +1,7 @@
 # Glance dashboard (CT 115)
 
 The homelab **front-door**: a responsive two-page operator dashboard for degradation, service
-launching, resource pressure, placement, backup/maintenance state, and version currency. It is an
+launching, resource pressure, placement, backup/maintenance state, and update exceptions. It is an
 at-a-glance **summary**, *not* the deep time-series/debugging surface (that's Grafana) and *not* the
 wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Proxmox nodes
 (ADR-014).
@@ -13,7 +13,7 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
 | Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent and alerts; GitHub Releases for declared-pin currency |
-| Layout | **Overview:** core telemetry + version currency + three-host pulse with physical/shared storage + host-grouped service launcher + maintenance/backups · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
+| Layout | **Overview:** operational signals + three-host pulse with physical/shared storage + host-grouped service launcher + action-oriented maintenance/backups + exception-only update review · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
 
 ## How it's managed
 
@@ -40,25 +40,28 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > won't survive a reprovision).
 >
 > **Scope:** keep this an operator *summary*. Deep time-series, network throughput, alert debugging,
-> and capacity planning belong in **Grafana**. **Maintenance State** owns package-managed currency.
-> **Version Currency** compares declared reproducible pins with upstream GitHub release tags for
-> Glance, Vaultwarden, Jellyseerr, and Actual; uncollected runtime versions are explicitly described
-> as such. Requests use GitHub's required API headers and a 12-hour cache; if any release check fails,
-> the widget shows one compact unavailable message instead of ambiguous partial results. Container
-> version proposals still arrive through Renovate and are deployed manually.
+> and capacity planning belong in **Grafana**. **Maintenance State** labels each queue as
+> `Automatic at daily patch window`, `Monthly action`, or `Action required`; security updates on
+> enrolled guests are not presented as manual emergencies unless the three-day overdue alert fires.
+> **Update Review** sits below operational state and shows only declared pins that differ from the
+> latest upstream GitHub release for Glance, Vaultwarden, Jellyseerr, and Actual. Current pins
+> collapse to one subdued no-action message. Requests use GitHub's required API headers and a
+> 12-hour cache; if any release check fails, the widget shows one compact unavailable message.
+> Container version proposals still arrive through Renovate and are deployed manually.
 > The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
 > service checks remain visible in the Service Directory and are not implied by that headline.
 > **Host Pulse** attributes current CPU, RAM, local-ZFS pressure and used/total GB, and host
 > maintenance state before the service columns. The same compact panel keeps the deduplicated PBS
-> datastore and apophis Media USB mount state visible without a second capacity section. Historical peaks remain
+> datastore and apophis Media USB mount/cached-capacity state visible without a second capacity section. Historical peaks remain
 > on Infrastructure rather than expanding Overview.
 >
 > **Capacity semantics:** local ZFS is shown once per node; the overlapping Proxmox `local` directory
 > backend is excluded; the shared PBS datastore is deduplicated across cluster clients; and the
 > removable Media USB always has a card. Prometheus reads the narrowly filtered systemd mount-unit
 > state from a target labelled `node="apophis"`: an available target without an active unit means
-> `Not mounted`, while a failed target means `Monitoring unavailable`. Capacity is deliberately not
-> probed, and the host root filesystem is never substituted for the removable drive.
+> `Not mounted`, while a failed target means `Monitoring unavailable`. A separate textfile collector
+> samples used/total bytes every six hours, exposes the sample age, and preserves the last successful
+> value rather than substituting the host root filesystem when the mount is absent.
 > Capacity meters use 70% warning / 85% critical thresholds. Infrastructure workloads remain
 > resource-ranked and collapse after five entries per host.
 >

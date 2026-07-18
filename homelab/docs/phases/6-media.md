@@ -18,8 +18,9 @@
 - **USB SSD not backed up** by design — media is re-downloadable; NAS deferred to new house. Risk explicitly accepted.
 - **USB mount monitoring** uses node_exporter's built-in systemd collector, narrowly restricted to
   the generated Media USB mount unit. Prometheus combines the apophis target's stable `node` label
-  with the unit's active state, so a missing mount is distinct from an unavailable host. Capacity
-  is deliberately not probed after the 2026-07-17 host-lock incident.
+  with the unit's active state, so a missing mount is distinct from an unavailable host. A separate
+  six-hour textfile collector caches capacity and sample age; it replaces the aggressive five-minute
+  cadence that coincided with the unproven 2026-07-17 host-lock incident.
 
 ## Verification
 
@@ -27,6 +28,8 @@
 - qBittorrent leak-test ✅ 2026-06-27: egress IP = ProtonVPN; `wg0` brought down → curl + DNS both blocked (killswitch holds; no fallback to home WAN).
 - Media storage state: `node_systemd_unit_state` for
   `node="apophis",name="mnt-usb\x2dmedia.mount",state="active"`.
+- Media capacity: cached `homelab_media_storage_{used,size,available}_bytes` plus
+  `homelab_media_storage_last_check_timestamp_seconds` (six-hour cadence).
 
 ## Carry-forwards
 

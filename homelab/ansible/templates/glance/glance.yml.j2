@@ -57,10 +57,22 @@ pages:
             url: << prom >>
             parameters:
               query: sum(homelab_apt_security_upgrades_pending)
+          automatic_security:
+            url: << prom >>
+            parameters:
+              query: sum(homelab_apt_security_upgrades_pending{kind=~"ubuntu-vm|lxc"})
+          manual_security:
+            url: << prom >>
+            parameters:
+              query: sum(homelab_apt_security_upgrades_pending{kind="pve-host"})
+          security_overdue:
+            url: << prom >>
+            parameters:
+              query: count(ALERTS{alertname="SecurityUpdatesPending",alertstate="firing"})
           routine:
             url: << prom >>
             parameters:
-              query: sum(homelab_apt_upgrades_pending)
+              query: sum(clamp_min(homelab_apt_upgrades_pending - ignoring(policy) homelab_apt_security_upgrades_pending, 0))
           reboot:
             url: << prom >>
             parameters:
@@ -91,6 +103,9 @@ pages:
           {{ $backupTotal := .Subrequest "backup_total" }}
           {{ $backupFresh := .Subrequest "backup_fresh" }}
           {{ $security := .Subrequest "security" }}
+          {{ $automaticSecurity := .Subrequest "automatic_security" }}
+          {{ $manualSecurity := .Subrequest "manual_security" }}
+          {{ $securityOverdue := .Subrequest "security_overdue" }}
           {{ $routine := .Subrequest "routine" }}
           {{ $reboot := .Subrequest "reboot" }}
           {{ $auditAgeResult := .Subrequest "audit_age" }}
@@ -104,6 +119,9 @@ pages:
           {{ $backupN := 0.0 }}{{ range $backupTotal.JSON.Array "data.result" }}{{ $backupN = .Float "value.1" }}{{ end }}
           {{ $freshN := 0.0 }}{{ range $backupFresh.JSON.Array "data.result" }}{{ $freshN = .Float "value.1" }}{{ end }}
           {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ $securityN = .Float "value.1" }}{{ end }}
+          {{ $automaticSecurityN := 0.0 }}{{ range $automaticSecurity.JSON.Array "data.result" }}{{ $automaticSecurityN = .Float "value.1" }}{{ end }}
+          {{ $manualSecurityN := 0.0 }}{{ range $manualSecurity.JSON.Array "data.result" }}{{ $manualSecurityN = .Float "value.1" }}{{ end }}
+          {{ $securityOverdueN := 0.0 }}{{ range $securityOverdue.JSON.Array "data.result" }}{{ $securityOverdueN = .Float "value.1" }}{{ end }}
           {{ $routineN := 0.0 }}{{ range $routine.JSON.Array "data.result" }}{{ $routineN = .Float "value.1" }}{{ end }}
           {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ $rebootN = .Float "value.1" }}{{ end }}
           {{ $auditAge := 0.0 }}{{ range $auditAgeResult.JSON.Array "data.result" }}{{ $auditAge = .Float "value.1" }}{{ end }}
@@ -113,7 +131,7 @@ pages:
           {{ $cpuMax := 0.0 }}{{ range $hostCPU.JSON.Array "data.result" }}{{ $cpuMax = .Float "value.1" }}{{ end }}
           {{ $ramMax := 0.0 }}{{ range $hostRAM.JSON.Array "data.result" }}{{ $ramMax = .Float "value.1" }}{{ end }}
           {{ $hasAudit := gt (len ($auditAgeResult.JSON.Array "data.result")) 0 }}
-          {{ $attention := or (gt $alertsN 0.0) (gt $targetsN 0.0) (gt $staleN 0.0) (eq $backupN 0.0) (gt $securityN 0.0) (gt $rebootN 0.0) (not $hasAudit) (ge $storageMax 85.0) (ge $cpuMax 90.0) (ge $ramMax 90.0) }}
+          {{ $attention := or (gt $alertsN 0.0) (gt $targetsN 0.0) (gt $staleN 0.0) (eq $backupN 0.0) (gt $securityOverdueN 0.0) (gt $rebootN 0.0) (not $hasAudit) (ge $storageMax 85.0) (ge $cpuMax 90.0) (ge $ramMax 90.0) }}
           <div class="signal-grid">
             <div class="signal-card">
               <div class="signal-label">Core telemetry</div>
@@ -132,8 +150,8 @@ pages:
             </div>
             <div class="signal-card">
               <div class="signal-label">Maintenance</div>
-              <div class="signal-value {{ if or (gt $securityN 0.0) (gt $rebootN 0.0) (not $hasAudit) }}color-negative{{ else if gt $routineN 0.0 }}color-highlight{{ else }}color-positive{{ end }}">{{ printf "%.0f routine" $routineN }}</div>
-              <div class="signal-detail">{{ printf "%.0f security · %.0f reboots · audit %.1fh" $securityN $rebootN $auditAge }}</div>
+              <div class="signal-value {{ if or (gt $securityOverdueN 0.0) (gt $rebootN 0.0) (not $hasAudit) }}color-negative{{ else if or (gt $manualSecurityN 0.0) (gt $routineN 0.0) }}color-highlight{{ else }}color-positive{{ end }}">{{ if not $hasAudit }}Audit stale{{ else if gt $rebootN 0.0 }}{{ printf "%.0f reboots" $rebootN }}{{ else if gt $securityOverdueN 0.0 }}{{ printf "%.0f security overdue" $securityN }}{{ else if gt $routineN 0.0 }}{{ printf "%.0f routine monthly" $routineN }}{{ else if gt $manualSecurityN 0.0 }}{{ printf "%.0f security monthly" $manualSecurityN }}{{ else if gt $securityN 0.0 }}{{ printf "%.0f security automatic" $securityN }}{{ else }}Clear{{ end }}</div>
+              <div class="signal-detail">{{ printf "%.0f automatic · %.0f manual · %.0f routine monthly" $automaticSecurityN $manualSecurityN $routineN }}</div>
             </div>
             <div class="signal-card">
               <div class="signal-label">Resource pressure</div>
@@ -141,48 +159,6 @@ pages:
               <div class="signal-detail">{{ printf "CPU %.0f%% · storage %.0f%%" $cpuMax $storageMax }}</div>
             </div>
           </div>
-
-      - type: custom-api
-        title: Version Currency
-        css-class: version-currency-head
-        title-url: https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22
-        cache: 12h
-        url: https://api.github.com/repos/<< glance_version_currency[0].repository >>/releases/latest
-        headers:
-          Accept: application/vnd.github+json
-          User-Agent: homelab-glance-dashboard
-          X-GitHub-Api-Version: 2022-11-28
-        subrequests:
-          <% for c in glance_version_currency[1:] %>
-          << c.key >>:
-            url: https://api.github.com/repos/<< c.repository >>/releases/latest
-            headers:
-              Accept: application/vnd.github+json
-              User-Agent: homelab-glance-dashboard
-              X-GitHub-Api-Version: 2022-11-28
-          <% endfor %>
-        template: |
-          <% for c in glance_version_currency %>
-          <% if loop.first %>
-          {{ $latest_<< c.key >> := .JSON.String "tag_name" }}
-          <% else %>
-          {{ $response_<< c.key >> := .Subrequest "<< c.key >>" }}
-          {{ $latest_<< c.key >> := $response_<< c.key >>.JSON.String "tag_name" }}
-          <% endif %>
-          <% endfor %>
-          {{ $currencyAvailable := true }}
-          <% for c in glance_version_currency %>
-          {{ if eq $latest_<< c.key >> "" }}{{ $currencyAvailable = false }}{{ end }}
-          <% endfor %>
-          {{ if $currencyAvailable }}
-          <div class="currency-grid">
-          <% for c in glance_version_currency %>
-            <div class="currency-row"><div><div class="color-highlight"><< c.title >></div><div class="size-h6 color-subdue">configured << c.configured >> · latest {{ $latest_<< c.key >> }}</div></div><div class="{{ if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}color-positive{{ else }}color-negative{{ end }}">{{ if or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}Current{{ else }}Review{{ end }}</div></div>
-          <% endfor %>
-          </div>
-          {{ else }}
-          <div class="currency-unavailable"><span class="color-subdue">Release checks temporarily unavailable</span><span>Configured pins remain authoritative; Glance will retry after the cache expires.</span></div>
-          {{ end }}
 
     columns:
       - size: full
@@ -231,10 +207,26 @@ pages:
                 url: << prom >>
                 parameters:
                   query: up{job="node",node="apophis"}
+              media_used:
+                url: << prom >>
+                parameters:
+                  query: homelab_media_storage_used_bytes{node="apophis"} / 1e9
+              media_size:
+                url: << prom >>
+                parameters:
+                  query: homelab_media_storage_size_bytes{node="apophis"} / 1e9
+              media_percent:
+                url: << prom >>
+                parameters:
+                  query: 100 * homelab_media_storage_used_bytes{node="apophis"} / homelab_media_storage_size_bytes{node="apophis"}
+              media_sample_age:
+                url: << prom >>
+                parameters:
+                  query: (time() - homelab_media_storage_last_check_timestamp_seconds{node="apophis"}) / 3600
               updates:
                 url: << prom >>
                 parameters:
-                  query: homelab_apt_upgrades_pending{kind="pve-host"}
+                  query: clamp_min(homelab_apt_upgrades_pending{kind="pve-host"} - ignoring(policy) homelab_apt_security_upgrades_pending{kind="pve-host"}, 0)
               security:
                 url: << prom >>
                 parameters:
@@ -246,7 +238,7 @@ pages:
             template: |
               {{ $ramResult := .Subrequest "ram" }}{{ $storage := .Subrequest "storage" }}{{ $storageUsed := .Subrequest "storage_used" }}{{ $storageSize := .Subrequest "storage_size" }}
               {{ $pbsPercent := .Subrequest "pbs_percent" }}{{ $pbsUsed := .Subrequest "pbs_used" }}{{ $pbsSize := .Subrequest "pbs_size" }}
-              {{ $mediaMounted := .Subrequest "media_mounted" }}{{ $mediaUp := .Subrequest "media_up" }}
+              {{ $mediaMounted := .Subrequest "media_mounted" }}{{ $mediaUp := .Subrequest "media_up" }}{{ $mediaUsed := .Subrequest "media_used" }}{{ $mediaSize := .Subrequest "media_size" }}{{ $mediaPercent := .Subrequest "media_percent" }}{{ $mediaSampleAge := .Subrequest "media_sample_age" }}
               {{ $updates := .Subrequest "updates" }}{{ $security := .Subrequest "security" }}{{ $reboot := .Subrequest "reboot" }}
               <div class="host-pulse-grid">
               <% for h in glance_hosts %>
@@ -268,7 +260,7 @@ pages:
                     <div><div class="host-pulse-reading"><span>RAM</span><span>{{ printf "%.0f%%" $ram }}</span></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter></div>
                     <div><div class="host-pulse-reading"><span>ZFS</span><span>{{ printf "%.0f%%" $disk }}</span></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter><div class="host-pulse-capacity">{{ printf "%.0f / %.0f GB" $diskUsed $diskSize }}</div></div>
                   </div>
-                  <div class="host-pulse-maintenance">{{ printf "%.0f routine · %.0f security" $pending $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ else }} · no reboot{{ end }}</div>
+                  <div class="host-pulse-maintenance">{{ printf "%.0f monthly · %.0f security manual" $pending $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ else }} · no reboot{{ end }}</div>
                   {{ else }}<div class="host-pulse-maintenance">Prometheus host series unavailable</div>{{ end }}
                 </div>
               <% endfor %>
@@ -281,8 +273,11 @@ pages:
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Monitoring unavailable</div></div><div class="resource-reading"><span>Apophis node_exporter unavailable</span><span>Check host and exporter</span></div></div>
               {{ else if eq $mediaMountedN 0.0 }}
                 <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-negative">Not mounted</div></div><div class="resource-reading"><span>Capacity intentionally suppressed</span><span>Check USB device and mount</span></div></div>
+              {{ else if eq (len ($mediaSize.JSON.Array "data.result")) 0 }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-positive">Mounted</div></div><div class="resource-reading"><span>Capacity sample pending</span><span>Six-hour cached collector</span></div></div>
               {{ else }}
-                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="color-positive">Mounted</div></div><div class="resource-reading"><span>Capacity not probed</span><span>Mount state only</span></div></div>
+                {{ $mediaUsedN := 0.0 }}{{ range $mediaUsed.JSON.Array "data.result" }}{{ $mediaUsedN = .Float "value.1" }}{{ end }}{{ $mediaSizeN := 0.0 }}{{ range $mediaSize.JSON.Array "data.result" }}{{ $mediaSizeN = .Float "value.1" }}{{ end }}{{ $mediaAgeN := 0.0 }}{{ range $mediaSampleAge.JSON.Array "data.result" }}{{ $mediaAgeN = .Float "value.1" }}{{ end }}{{ $mediaPercentN := 0.0 }}{{ range $mediaPercent.JSON.Array "data.result" }}{{ $mediaPercentN = .Float "value.1" }}{{ end }}
+                <div class="host-pulse-storage-card"><div class="resource-heading"><div><div class="color-highlight">Media USB</div><div class="resource-label">apophis · /mnt/usb-media</div></div><div class="{{ if ge $mediaPercentN 85.0 }}color-negative{{ else if ge $mediaPercentN 70.0 }}color-highlight{{ else }}color-positive{{ end }}">{{ printf "%.0f%%" $mediaPercentN }}</div></div><meter class="resource-meter {{ if ge $mediaPercentN 85.0 }}is-critical{{ else if ge $mediaPercentN 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $mediaPercentN }}"></meter><div class="resource-reading"><span>{{ printf "%.0f / %.0f GB" $mediaUsedN $mediaSizeN }}</span><span>{{ printf "sampled %.0fh ago" $mediaAgeN }}</span></div></div>
               {{ end }}
               </div>
 
@@ -338,7 +333,7 @@ pages:
             cache: 5m
             url: << prom >>
             parameters:
-              query: sort_desc(homelab_apt_upgrades_pending{kind!="lxc"})
+              query: sort_desc(clamp_min(homelab_apt_upgrades_pending{kind!="lxc"} - ignoring(policy) homelab_apt_security_upgrades_pending{kind!="lxc"}, 0))
             subrequests:
               security:
                 url: << prom >>
@@ -348,6 +343,10 @@ pages:
                 url: << prom >>
                 parameters:
                   query: homelab_reboot_required{kind!="lxc"}
+              security_overdue:
+                url: << prom >>
+                parameters:
+                  query: ALERTS{alertname="SecurityUpdatesPending",alertstate="firing",kind!="lxc"}
               patch_age:
                 url: << prom >>
                 parameters:
@@ -367,10 +366,11 @@ pages:
               lxc_pending:
                 url: << prom >>
                 parameters:
-                  query: sum(homelab_apt_upgrades_pending{kind="lxc"})
+                  query: sum(clamp_min(homelab_apt_upgrades_pending{kind="lxc"} - ignoring(policy) homelab_apt_security_upgrades_pending{kind="lxc"}, 0))
             template: |
               {{ $security := .Subrequest "security" }}
               {{ $reboot := .Subrequest "reboot" }}
+              {{ $securityOverdue := .Subrequest "security_overdue" }}
               {{ $patchAge := .Subrequest "patch_age" }}
               {{ $lxcMissing := .Subrequest "lxc_missing" }}
               {{ $lxcTotal := .Subrequest "lxc_total" }}
@@ -380,17 +380,20 @@ pages:
               {{ if eq (len (.JSON.Array "data.result")) 0 }}<div class="color-negative">No maintenance metrics</div>{{ end }}
               {{ range .JSON.Array "data.result" }}
                 {{ $target := .String "metric.target" }}
-                {{ $pending := .Float "value.1" }}
+                {{ $routineN := .Float "value.1" }}
+                {{ $policy := .String "metric.policy" }}
                 {{ $securityN := 0.0 }}{{ range $security.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ $securityN = .Float "value.1" }}{{ end }}{{ end }}
                 {{ $rebootN := 0.0 }}{{ range $reboot.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ $rebootN = .Float "value.1" }}{{ end }}{{ end }}
+                {{ $securityOverdueN := 0.0 }}{{ range $securityOverdue.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ $securityOverdueN = .Float "value.1" }}{{ end }}{{ end }}
                 <div>
-                  <div class="flex justify-between gap-10"><div class="color-highlight">{{ $target }}</div><div class="{{ if or (gt $securityN 0.0) (gt $rebootN 0.0) }}color-negative{{ else }}color-subdue{{ end }}">{{ printf "%.0f pending" $pending }}</div></div>
-                  <div class="size-h6 color-subdue">{{ range $patchAge.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "package change %.0fd ago" (.Float "value.1") }}{{ end }}{{ end }} · {{ printf "%.0f security" $securityN }}{{ if gt $rebootN 0.0 }} · reboot required{{ end }}</div>
+                  <div class="flex justify-between gap-10"><div class="color-highlight">{{ $target }}</div>{{ if gt $rebootN 0.0 }}<div class="color-negative">Action required: reboot</div>{{ else if gt $securityOverdueN 0.0 }}<div class="color-negative">Action required: patch overdue</div>{{ else if or (gt $routineN 0.0) (and (eq $policy "manual-monthly") (gt $securityN 0.0)) }}<div class="color-highlight">Monthly action</div>{{ else if gt $securityN 0.0 }}<div class="color-positive">Automatic at daily patch window</div>{{ else }}<div class="color-positive">No action</div>{{ end }}</div>
+                  <div class="size-h6 color-subdue">{{ if eq $policy "auto-security-manual-other" }}{{ printf "%.0f security automatic · %.0f routine monthly" $securityN $routineN }}{{ else }}{{ printf "%.0f security · %.0f routine · manual monthly" $securityN $routineN }}{{ end }} · {{ range $patchAge.JSON.Array "data.result" }}{{ if eq (.String "metric.target") $target }}{{ printf "last package change %.0fd ago" (.Float "value.1") }}{{ end }}{{ end }}</div>
                 </div>
               {{ end }}
               <div>
-                <div class="flex justify-between gap-10"><div class="color-highlight">Guest LXCs</div><div{{ range $lxcMissing.JSON.Array "data.result" }}{{ if gt (.Float "value.1") 0.0 }} class="color-negative"{{ end }}{{ end }}>{{ range $lxcMissing.JSON.Array "data.result" }}{{ printf "%.0f missing" (.Float "value.1") }}{{ end }} / {{ range $lxcTotal.JSON.Array "data.result" }}{{ printf "%.0f total" (.Float "value.1") }}{{ end }}</div></div>
-                <div class="size-h6 color-subdue">{{ range $lxcPending.JSON.Array "data.result" }}{{ printf "%.0f routine pending" (.Float "value.1") }}{{ end }} · {{ range $lxcSecurity.JSON.Array "data.result" }}{{ printf "%.0f security" (.Float "value.1") }}{{ end }}</div>
+                {{ $lxcMissingN := 0.0 }}{{ range $lxcMissing.JSON.Array "data.result" }}{{ $lxcMissingN = .Float "value.1" }}{{ end }}{{ $lxcTotalN := 0.0 }}{{ range $lxcTotal.JSON.Array "data.result" }}{{ $lxcTotalN = .Float "value.1" }}{{ end }}{{ $lxcRoutineN := 0.0 }}{{ range $lxcPending.JSON.Array "data.result" }}{{ $lxcRoutineN = .Float "value.1" }}{{ end }}{{ $lxcSecurityN := 0.0 }}{{ range $lxcSecurity.JSON.Array "data.result" }}{{ $lxcSecurityN = .Float "value.1" }}{{ end }}
+                <div class="flex justify-between gap-10"><div class="color-highlight">Guest LXCs</div>{{ if gt $lxcMissingN 0.0 }}<div class="color-negative">Action required: enroll</div>{{ else if gt $lxcRoutineN 0.0 }}<div class="color-highlight">Monthly action</div>{{ else if gt $lxcSecurityN 0.0 }}<div class="color-positive">Automatic at daily patch window</div>{{ else }}<div class="color-positive">No action</div>{{ end }}</div>
+                <div class="size-h6 color-subdue">{{ printf "%.0f security automatic · %.0f routine monthly" $lxcSecurityN $lxcRoutineN }} · {{ printf "%.0f total · %.0f missing" $lxcTotalN $lxcMissingN }}</div>
               </div>
               </div>
 
@@ -426,6 +429,49 @@ pages:
                 <div><div class="flex justify-between gap-10"><div class="color-highlight text-truncate">{{ $label }}</div><div class="{{ if gt $age $budgetH }}color-negative{{ else }}color-positive{{ end }}">{{ printf "%.1fh ago" $age }}</div></div><div class="size-h6 color-subdue">{{ if eq $type "pbs" }}PBS image{{ else if eq $type "ha" }}HA partial{{ else }}{{ $type }}{{ end }} · {{ range $count.JSON.Array "data.result" }}{{ if and (eq (.String "metric.type") $type) (eq (.String "metric.group") $group) }}{{ printf "%.0f kept" (.Float "value.1") }}{{ end }}{{ end }}</div></div>
               {{ end }}
               </div>
+
+          - type: custom-api
+            title: Update Review
+            css-class: update-review
+            title-url: https://github.com/osmondsimon-bit/homelab/issues?q=is%3Aissue%20is%3Aopen%20%22Dependency%20Dashboard%22
+            cache: 12h
+            url: https://api.github.com/repos/<< glance_version_currency[0].repository >>/releases/latest
+            headers:
+              Accept: application/vnd.github+json
+              User-Agent: homelab-glance-dashboard
+              X-GitHub-Api-Version: 2022-11-28
+            subrequests:
+              <% for c in glance_version_currency[1:] %>
+              << c.key >>:
+                url: https://api.github.com/repos/<< c.repository >>/releases/latest
+                headers:
+                  Accept: application/vnd.github+json
+                  User-Agent: homelab-glance-dashboard
+                  X-GitHub-Api-Version: 2022-11-28
+              <% endfor %>
+            template: |
+              <% for c in glance_version_currency %>
+              <% if loop.first %>
+              {{ $latest_<< c.key >> := .JSON.String "tag_name" }}
+              <% else %>
+              {{ $response_<< c.key >> := .Subrequest "<< c.key >>" }}
+              {{ $latest_<< c.key >> := $response_<< c.key >>.JSON.String "tag_name" }}
+              <% endif %>
+              {{ $current_<< c.key >> := or (eq $latest_<< c.key >> "<< c.configured >>") (eq $latest_<< c.key >> "v<< c.configured | regex_replace('^v', '') >>") }}
+              <% endfor %>
+              {{ $currencyAvailable := true }}{{ $hasUpdates := false }}
+              <% for c in glance_version_currency %>
+              {{ if eq $latest_<< c.key >> "" }}{{ $currencyAvailable = false }}{{ end }}{{ if not $current_<< c.key >> }}{{ $hasUpdates = true }}{{ end }}
+              <% endfor %>
+              {{ if $currencyAvailable }}
+                {{ if $hasUpdates }}<div class="currency-grid">
+                <% for c in glance_version_currency %>
+                  {{ if not $current_<< c.key >> }}<div class="currency-row"><div><div class="color-highlight"><< c.title >></div><div class="size-h6 color-subdue">configured << c.configured >> · latest {{ $latest_<< c.key >> }}</div></div><div class="color-highlight">Review</div></div>{{ end }}
+                <% endfor %>
+                </div>{{ else }}<div class="color-subdue">No application updates to review</div>{{ end }}
+              {{ else }}
+                <div class="currency-unavailable"><span class="color-subdue">Release checks temporarily unavailable</span><span>Configured pins remain authoritative; Glance will retry.</span></div>
+              {{ end }}
 
           - type: bookmarks
             title: Admin Links
@@ -477,7 +523,7 @@ pages:
               updates:
                 url: << prom >>
                 parameters:
-                  query: homelab_apt_upgrades_pending{kind="pve-host"}
+                  query: clamp_min(homelab_apt_upgrades_pending{kind="pve-host"} - ignoring(policy) homelab_apt_security_upgrades_pending{kind="pve-host"}, 0)
               security:
                 url: << prom >>
                 parameters:
@@ -503,7 +549,7 @@ pages:
                   <div class="resource-row"><div class="resource-heading"><div class="resource-label">CPU</div><div>{{ printf "%.1f%%" $cpu }}</div></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter><div class="resource-reading"><span>now</span><span>{{ printf "%.1f%% 24h peak" $cpuP }}</span></div></div>
                   <div class="resource-row"><div class="resource-heading"><div class="resource-label">RAM</div><div>{{ printf "%.1f%%" $ramN }}</div></div><meter class="resource-meter {{ if ge $ramN 90.0 }}is-critical{{ else if ge $ramN 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ramN }}"></meter><div class="resource-reading"><span>now</span><span>{{ printf "%.1f%% 24h peak" $ramP }}</span></div></div>
                   <div class="resource-row"><div class="resource-heading"><div class="resource-label">Local ZFS</div><div>{{ printf "%.1f%%" $disk }}</div></div><meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter></div>
-                  <div class="size-h6 color-subdue margin-top-10">{{ printf "%.0f routine updates · %.0f security · %.0f reboot" $pending $securityN $rebootN }}</div>
+                  <div class="size-h6 color-subdue margin-top-10">{{ printf "%.0f monthly updates · %.0f security manual · %.0f reboot" $pending $securityN $rebootN }}</div>
                 </div>
               <% endfor %>
               </div>
