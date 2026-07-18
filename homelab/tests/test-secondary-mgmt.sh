@@ -74,6 +74,12 @@ grep -Fq 'Settings → Deploy keys' "$runbook" \
   || fail 'the runbook must retain the one-time GitHub deploy-key step'
 grep -Fq 'A cold VM cannot start itself' "$runbook" \
   || fail 'the runbook must state the remaining remote bootstrap limitation'
+grep -Fq '### Use the recovery VM' "$runbook" \
+  || fail 'the runbook must explain when and how to use the recovery VM'
+grep -Fq 'git status --short --branch' "$runbook" \
+  || fail 'the recovery workflow must check repository state before making changes'
+grep -Fq 'ansible proxmox -m ping' "$runbook" \
+  || fail 'the recovery workflow must verify managed-host access'
 
 grep -Fq 'id!="qemu/128"' "$alert_rules" \
   || fail 'the intentionally stopped cold VM must be excluded from GuestDown'
