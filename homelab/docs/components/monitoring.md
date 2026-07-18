@@ -31,6 +31,11 @@ prompt (blank = keep current). Reset: `pct exec 114 -- grafana-cli admin reset-a
 > **Invariant:** dashboards + alert rules are code. Grafana has `allowUiUpdates: true` for live
 > tweaks, but **export edits back to the repo** or they're lost on the next Ansible run.
 
+`GuestDown` deliberately excludes `qemu/128`: `mgmt-vm2` is a cold secondary whose healthy state is
+powered off. The Glance workload resource queries omit it for the same reason. VM 128's existence,
+`onboot=0`, protection flag and activation test are verified by its provisioning playbook/runbook,
+not by an always-up alert.
+
 ## Operations
 
 Health checks, the alert-pipeline test (`amtool alert add …`), exporter/target troubleshooting,

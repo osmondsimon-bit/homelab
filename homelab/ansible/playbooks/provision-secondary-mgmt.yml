@@ -1,0 +1,402 @@
+---
+# Build and validate an independent cold management VM on Carter.
+#
+# This is deliberately NOT a clone of VM 100: it gets a unique hostname, MAC, machine ID,
+# SSH host keys, and automation key. The public repository is cloned over HTTPS and the
+# controller's gitignored inventory files are copied separately. The build boots the VM,
+# proves that it can control every PVE host, then shuts it down and enables VM protection.
+#
+# Run from the primary mgmt-vm, inside homelab/ansible/:
+#   ansible-playbook playbooks/provision-secondary-mgmt.yml
+
+- name: Create and boot the secondary management VM on Carter
+  hosts: carter
+  gather_facts: false
+  vars:
+    secondary_mgmt_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    secondary_mgmt_cloud_image: /var/lib/vz/template/cache/noble-server-cloudimg-amd64.img
+    secondary_mgmt_ip_bare: "{{ secondary_mgmt_ip | regex_replace('/.*$', '') }}"
+
+  tasks:
+    - name: Validate the cold-standby identity and sizing
+      ansible.builtin.assert:
+        that:
+          - secondary_mgmt_vmid | int > 0
+          - secondary_mgmt_vmid != 100
+          - secondary_mgmt_hostname != 'mgmt-vm'
+          - "'YOUR_' not in secondary_mgmt_ip"
+          - secondary_mgmt_ram_mb | int >= 4096
+          - secondary_mgmt_disk_gb | int >= 32
+        fail_msg: "The secondary must have a unique VMID, hostname and real local-only address."
+        quiet: true
+
+    - name: Check whether VM {{ secondary_mgmt_vmid }} already exists
+      ansible.builtin.command: "qm status {{ secondary_mgmt_vmid }}"
+      register: secondary_mgmt_vm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse a new build when the proposed address answers
+      ansible.builtin.command: >-
+        ping -c 1 -W 1 {{ secondary_mgmt_ip_bare }}
+      register: secondary_mgmt_ip_probe
+      changed_when: false
+      failed_when: secondary_mgmt_ip_probe.rc == 0
+      when: secondary_mgmt_vm_status.rc != 0
+
+    - name: Download the Ubuntu 24.04 cloud image when absent
+      ansible.builtin.get_url:
+        url: "{{ secondary_mgmt_cloud_image_url }}"
+        dest: "{{ secondary_mgmt_cloud_image }}"
+        mode: "0644"
+      when: secondary_mgmt_vm_status.rc != 0
+
+    - name: Stage the primary management key for cloud-init
+      ansible.builtin.copy:
+        dest: /tmp/primary-mgmt-cloudinit.pub
+        content: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') | trim }}\n"
+        mode: "0644"
+      when: secondary_mgmt_vm_status.rc != 0
+
+    - name: Stage the independent operator desktop key for cloud-init
+      ansible.builtin.copy:
+        dest: /tmp/operator-desktop-cloudinit.pub
+        content: >-
+          {{ lookup('file', lookup('env', 'HOME') + '/.ssh/authorized_keys')
+             | regex_replace('\r', '') | trim }}
+        mode: "0644"
+      when: secondary_mgmt_vm_status.rc != 0
+
+    - name: Combine the independent login keys
+      ansible.builtin.shell: |
+        set -e
+        cat /tmp/primary-mgmt-cloudinit.pub /tmp/operator-desktop-cloudinit.pub \
+          | awk 'NF && !seen[$0]++' > /tmp/secondary-mgmt-cloudinit.pub
+        chmod 0644 /tmp/secondary-mgmt-cloudinit.pub
+      when: secondary_mgmt_vm_status.rc != 0
+      changed_when: true
+
+    - name: Create the independent cold-standby VM
+      ansible.builtin.shell: |
+        set -e
+        qm create {{ secondary_mgmt_vmid }} --name {{ secondary_mgmt_hostname }} \
+          --memory {{ secondary_mgmt_ram_mb }} --cores {{ secondary_mgmt_cores }} \
+          --cpu {{ secondary_mgmt_cpu }} --machine q35 --ostype l26 \
+          --net0 virtio,bridge={{ bridge }},firewall=1 \
+          --scsihw virtio-scsi-single --agent enabled=1,fstrim_cloned_disks=1 \
+          --serial0 socket --vga serial0 --onboot 0 \
+          --description 'Cold secondary management control node; activate only by runbook.'
+        qm set {{ secondary_mgmt_vmid }} --scsi0 \
+          {{ rootfs_storage }}:0,import-from={{ secondary_mgmt_cloud_image }},discard=on,iothread=1,ssd=1
+        qm set {{ secondary_mgmt_vmid }} --ide2 {{ rootfs_storage }}:cloudinit --boot order=scsi0
+        qm disk resize {{ secondary_mgmt_vmid }} scsi0 {{ secondary_mgmt_disk_gb }}G
+        qm set {{ secondary_mgmt_vmid }} --ciuser simon \
+          --sshkeys /tmp/secondary-mgmt-cloudinit.pub \
+          --ipconfig0 ip={{ secondary_mgmt_ip }},gw={{ gateway }} --nameserver {{ gateway }}
+        rm -f /tmp/primary-mgmt-cloudinit.pub /tmp/operator-desktop-cloudinit.pub \
+          /tmp/secondary-mgmt-cloudinit.pub
+      when: secondary_mgmt_vm_status.rc != 0
+      changed_when: true
+
+    - name: Read the current secondary VM state
+      ansible.builtin.command: "qm status {{ secondary_mgmt_vmid }}"
+      register: secondary_mgmt_current_state
+      changed_when: false
+
+    - name: Start the secondary for convergence and validation
+      ansible.builtin.command: "qm start {{ secondary_mgmt_vmid }}"
+      when: "'status: stopped' in secondary_mgmt_current_state.stdout"
+
+    - name: Wait for cloud-init SSH
+      ansible.builtin.wait_for:
+        host: "{{ secondary_mgmt_ip_bare }}"
+        port: 22
+        timeout: 300
+      delegate_to: localhost
+
+    - name: Register the secondary for configuration
+      ansible.builtin.add_host:
+        name: secondary-mgmt-vm
+        ansible_host: "{{ secondary_mgmt_ip_bare }}"
+        ansible_user: simon
+        ansible_python_interpreter: /usr/bin/python3
+        groups: _secondary_mgmt_target
+      changed_when: false
+
+- name: Configure the independent secondary management VM
+  hosts: _secondary_mgmt_target
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Wait for first-boot cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait --long
+      register: secondary_mgmt_cloud_init
+      changed_when: false
+      failed_when: >-
+        secondary_mgmt_cloud_init.rc not in [0, 2] or
+        'status: done' not in secondary_mgmt_cloud_init.stdout or
+        'errors: []' not in secondary_mgmt_cloud_init.stdout
+
+    - name: Install management workstation packages
+      ansible.builtin.apt:
+        name:
+          - ansible
+          - ca-certificates
+          - curl
+          - git
+          - jq
+          - nodejs
+          - npm
+          - openssh-client
+          - qemu-guest-agent
+          - ripgrep
+          - rsync
+          - tmux
+          - unattended-upgrades
+        state: present
+        update_cache: true
+        lock_timeout: 300
+      register: secondary_mgmt_packages
+      retries: 3
+      delay: 10
+      until: secondary_mgmt_packages is succeeded
+
+    - name: Enable the guest agent
+      ansible.builtin.systemd_service:
+        name: qemu-guest-agent
+        enabled: true
+        state: started
+
+    - name: Configure security-only catch-up patching
+      ansible.builtin.script:
+        cmd: >-
+          {{ playbook_dir }}/../files/patching/setup-unattended.sh
+          {{ (ntfy_base_url ~ '/' ~ ntfy_topic) | quote }}
+          {{ patching_timezone | default('') | quote }}
+      no_log: true
+      changed_when: true
+
+    - name: Keep SSH key-only on the secondary
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/60-homelab-key-only.conf
+        mode: "0644"
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin no
+      notify: Restart SSH
+
+    - name: Create the source checkout parent
+      ansible.builtin.file:
+        path: /home/simon/src
+        state: directory
+        owner: simon
+        group: simon
+        mode: "0755"
+
+    - name: Clone the public infrastructure repository without credentials
+      ansible.builtin.git:
+        repo: https://github.com/osmondsimon-bit/homelab.git
+        dest: /home/simon/src/homelab
+        version: master
+        update: true
+      become_user: simon
+
+    - name: Copy the local-only Ansible inventory
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../inventory/hosts.ini"
+        dest: /home/simon/src/homelab/homelab/ansible/inventory/hosts.ini
+        owner: simon
+        group: simon
+        mode: "0600"
+
+    - name: Copy the local-only Ansible variables
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        dest: /home/simon/src/homelab/homelab/ansible/inventory/group_vars/all.yml
+        owner: simon
+        group: simon
+        mode: "0600"
+
+    - name: Configure Git author identity
+      ansible.builtin.command: >-
+        git config --global {{ item.key }} {{ item.value }}
+      become_user: simon
+      loop:
+        - { key: user.name, value: 'Simon Osmond' }
+        - { key: user.email, value: 'osmond.simon@gmail.com' }
+      changed_when: false
+
+    - name: Generate a distinct secondary automation key
+      ansible.builtin.command: >-
+        ssh-keygen -q -t ed25519 -N '' -C secondary-mgmt-automation
+        -f /home/simon/.ssh/id_ed25519
+      args:
+        creates: /home/simon/.ssh/id_ed25519
+      become_user: simon
+
+    - name: Generate a repo-scoped GitHub deploy key
+      ansible.builtin.command: >-
+        ssh-keygen -q -t ed25519 -N '' -C github-deploy@mgmt-vm2
+        -f /home/simon/.ssh/id_ed25519_github
+      args:
+        creates: /home/simon/.ssh/id_ed25519_github
+      become_user: simon
+
+    - name: Configure the distinct GitHub deploy identity
+      ansible.builtin.copy:
+        dest: /home/simon/.ssh/config
+        owner: simon
+        group: simon
+        mode: "0600"
+        content: |
+          Host github.com
+              HostName github.com
+              User git
+              IdentityFile ~/.ssh/id_ed25519_github
+              IdentitiesOnly yes
+
+    - name: Keep fetches public and route pushes through the deploy key
+      ansible.builtin.command: >-
+        git remote set-url --push origin git@github.com:osmondsimon-bit/homelab.git
+      args:
+        chdir: /home/simon/src/homelab
+      become_user: simon
+      changed_when: false
+
+    - name: Read the secondary automation public key
+      ansible.builtin.slurp:
+        src: /home/simon/.ssh/id_ed25519.pub
+      register: secondary_mgmt_public_key_file
+
+    - name: Read the GitHub deploy public key
+      ansible.builtin.slurp:
+        src: /home/simon/.ssh/id_ed25519_github.pub
+      register: secondary_mgmt_github_key_file
+
+    - name: Publish the secondary automation public key in memory
+      ansible.builtin.set_fact:
+        secondary_mgmt_automation_public_key: >-
+          {{ secondary_mgmt_public_key_file.content | b64decode | trim }}
+        secondary_mgmt_github_public_key: >-
+          {{ secondary_mgmt_github_key_file.content | b64decode | trim }}
+
+    - name: Add stable infrastructure host aliases
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} HOMELAB CONTROL HOSTS"
+        block: |
+          {% for host_name in groups['proxmox'] %}
+          {{ hostvars[host_name].ansible_host }} {{ host_name }}
+          {% endfor %}
+
+    - name: Apply pending handlers before validation
+      ansible.builtin.meta: flush_handlers
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: restarted
+
+- name: Authorize the secondary control key on every PVE host
+  hosts: proxmox
+  gather_facts: false
+  serial: 1
+
+  tasks:
+    - name: Trust the distinct secondary-mgmt-automation key
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        manage_dir: true
+        key: "{{ hostvars['secondary-mgmt-vm'].secondary_mgmt_automation_public_key }}"
+
+- name: Prove the secondary can operate as an Ansible control node
+  hosts: _secondary_mgmt_target
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Verify passwordless sudo remains available
+      ansible.builtin.command: sudo -n true
+      changed_when: false
+
+    - name: Verify DNS from the recovery node
+      ansible.builtin.command: getent hosts github.com
+      changed_when: false
+
+    - name: Verify the infrastructure checkout is clean
+      ansible.builtin.command: git status --short --branch
+      args:
+        chdir: /home/simon/src/homelab
+      register: secondary_mgmt_git_status
+      changed_when: false
+
+    - name: Verify all PVE hosts through Ansible from the secondary
+      ansible.builtin.command: >-
+        ansible proxmox -m ansible.builtin.ping
+      args:
+        chdir: /home/simon/src/homelab/homelab/ansible
+      environment:
+        ANSIBLE_HOST_KEY_CHECKING: "False"
+      register: secondary_mgmt_ansible_ping
+      changed_when: false
+
+    - name: Report the recovery-node validation
+      ansible.builtin.debug:
+        msg:
+          - "Git: {{ secondary_mgmt_git_status.stdout_lines }}"
+          - "PVE control: {{ secondary_mgmt_ansible_ping.stdout_lines }}"
+          - "One-time GitHub deploy-key registration: {{ secondary_mgmt_github_public_key }}"
+
+- name: Return the validated secondary to a protected cold state
+  hosts: carter
+  gather_facts: false
+
+  tasks:
+    - name: Shut down the secondary after validation
+      ansible.builtin.command: "qm shutdown {{ secondary_mgmt_vmid }} --timeout 180"
+      changed_when: true
+
+    - name: Wait until the secondary is stopped
+      ansible.builtin.command: "qm status {{ secondary_mgmt_vmid }}"
+      register: secondary_mgmt_stopped
+      changed_when: false
+      retries: 30
+      delay: 2
+      until: "'status: stopped' in secondary_mgmt_stopped.stdout"
+
+    - name: Keep the cold recovery disk thin-provisioned
+      ansible.builtin.shell: |
+        set -e
+        secondary_dataset="$(zfs list -H -o name -t volume | grep '/vm-{{ secondary_mgmt_vmid }}-disk-0$')"
+        test -n "$secondary_dataset"
+        current="$(zfs get -H -o value refreservation "$secondary_dataset")"
+        if [ "$current" != "none" ] && [ "$current" != "0" ]; then
+          zfs set refreservation=none "$secondary_dataset"
+          echo changed
+        fi
+      register: secondary_mgmt_sparse_disk
+      changed_when: "'changed' in secondary_mgmt_sparse_disk.stdout"
+
+    - name: Enforce cold-standby safeguards
+      ansible.builtin.command: >-
+        qm set {{ secondary_mgmt_vmid }} --onboot 0 --protection 1
+        --tags 'cold-standby;recovery'
+      changed_when: true
+
+    - name: Show the final protected cold state
+      ansible.builtin.shell: |
+        qm status {{ secondary_mgmt_vmid }}
+        qm config {{ secondary_mgmt_vmid }} | grep -E '^(name|onboot|protection|tags|memory|cores|scsi0|ipconfig0):'
+      register: secondary_mgmt_final_state
+      changed_when: false
+
+    - name: Report activation details
+      ansible.builtin.debug:
+        msg:
+          - "{{ secondary_mgmt_final_state.stdout_lines }}"
+          - "Activate deliberately on Carter: qm start {{ secondary_mgmt_vmid }}"
+          - "Connect: ssh simon@{{ secondary_mgmt_ip | regex_replace('/.*$', '') }}"

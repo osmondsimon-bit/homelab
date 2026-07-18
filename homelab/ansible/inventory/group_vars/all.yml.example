@@ -10,6 +10,17 @@ lxc_template: debian-12-standard_12.12-1_amd64.tar.zst       # base template
 bridge: vmbr0
 gateway: YOUR_GATEWAY_IP
 
+# --- Cold secondary management VM (Carter) ---------------------------------
+# Independent Ubuntu control node, not a clone of VM 100. It is normally powered off;
+# provision-secondary-mgmt.yml boots it only to converge/test, then shuts it down again.
+secondary_mgmt_vmid: 128
+secondary_mgmt_hostname: mgmt-vm2
+secondary_mgmt_ram_mb: 8192
+secondary_mgmt_cores: 2
+secondary_mgmt_disk_gb: 64
+secondary_mgmt_ip: YOUR_SECONDARY_MGMT_IP/24
+secondary_mgmt_cpu: x86-64-v2-AES
+
 # --- Tailscale LXC -----------------------------------------------------------
 tailscale_ctid: 110                                         # ensure this VMID is free
 tailscale_hostname: tailscale
