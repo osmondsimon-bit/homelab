@@ -138,14 +138,30 @@ hosts. The checkout uses public HTTPS for credential-free fetches. A separate
 register its `.pub` once under the repository's **Settings → Deploy keys** with write access. Agent
 sign-in is deliberately not copied from the primary.
 
-### Activate during a planned primary-management outage
+### Use the recovery VM
+
+Use `mgmt-vm2` when the primary management VM is unavailable, when planned work takes the primary
+offline, or when an independent control node on Carter is needed to diagnose or recover the PVE
+hosts. It is not a highly available service host and should not remain powered on after the
+management session.
+
+Start it from an authenticated Carter session, connect to it, and validate its control-plane view
+before making changes:
 
 ```bash
 ssh root@YOUR_CARTER_IP 'qm start 128'
 ssh simon@YOUR_SECONDARY_MGMT_IP
-cd ~/src/homelab/homelab/ansible
+cd ~/src/homelab
+git status --short --branch
+git pull --ff-only
+cd homelab/ansible
 ansible proxmox -m ping
 ```
+
+Stop if the checkout has uncommitted changes, is not on the intended branch, cannot fast-forward,
+or any host expected to be available does not return `pong`. Once validated, use the same playbooks
+and runbook procedures as on the primary management VM. Commit and push completed infrastructure
+changes before shutting down so the primary can later resume from the repository's canonical state.
 
 If Apophis is actually down, Carter first loses quorum. Confirm this is a real node outage rather
 than a network partition, then use the already-authorized operator desktop path:
