@@ -6,6 +6,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 playbook="${repo_root}/homelab/ansible/playbooks/provision-secondary-mgmt.yml"
 example_vars="${repo_root}/homelab/ansible/inventory/group_vars/all.yml.example"
 runbook="${repo_root}/homelab/docs/operations/runbooks.md"
+decision="${repo_root}/homelab/decisions/000-mgmt-vm.md"
+plan="${repo_root}/homelab/PLAN.md"
+tech_radar="${repo_root}/homelab/docs/tech-radar.md"
 alert_rules="${repo_root}/homelab/ansible/files/monitoring/alert-rules.yml"
 glance_template="${repo_root}/homelab/ansible/templates/glance/glance.yml.j2"
 
@@ -42,6 +45,27 @@ grep -Fq 'inventory/group_vars/all.yml' "$playbook" \
   || fail 'the local-only Ansible variables must be copied to the secondary'
 grep -Fq 'files/patching/setup-unattended.sh' "$playbook" \
   || fail 'the cold VM must catch up security updates after a powered-off interval'
+grep -Fq 'https://downloads.claude.ai/keys/claude-code.asc' "$playbook" \
+  || fail 'Claude Code must use the published Anthropic signing key'
+grep -Fq '31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE' "$playbook" \
+  || fail 'the Anthropic signing key fingerprint must be verified before use'
+grep -Fq 'https://downloads.claude.ai/claude-code/apt/stable' "$playbook" \
+  || fail 'Claude Code must use the Anthropic stable apt channel'
+grep -Fq 'name: claude-code' "$playbook" \
+  || fail 'the recovery workstation must install the standalone Claude Code CLI'
+grep -Fq 'npm install --global @openai/codex@latest' "$playbook" \
+  || fail 'the recovery workstation must install the official Codex CLI package'
+grep -Fq 'NPM_CONFIG_PREFIX: /home/simon/.local/npm' "$playbook" \
+  || fail 'Codex must install in the unprivileged user-local npm prefix'
+grep -Fq 'claude --version' "$playbook" \
+  || fail 'the recovery workstation must validate the Claude Code binary'
+grep -Fq 'codex --version' "$playbook" \
+  || fail 'the recovery workstation must validate the Codex binary'
+grep -Fq 'Agent authentication remains manual on mgmt-vm2' "$playbook" \
+  || fail 'the build must preserve manual, independent agent authentication'
+if grep -Eq 'src:.*(\.claude|\.codex|auth\.json|credentials\.json)' "$playbook"; then
+  fail 'the recovery workstation must never copy agent config or credentials from the primary'
+fi
 grep -Fq 'https://github.com/osmondsimon-bit/homelab.git' "$playbook" \
   || fail 'the secondary must get a credential-free read checkout'
 grep -Fq 'cloud-init status --wait --long' "$playbook" \
@@ -80,6 +104,21 @@ grep -Fq 'git status --short --branch' "$runbook" \
   || fail 'the recovery workflow must check repository state before making changes'
 grep -Fq 'ansible proxmox -m ping' "$runbook" \
   || fail 'the recovery workflow must verify managed-host access'
+grep -Fq 'claude auth login' "$runbook" \
+  || fail 'the recovery workflow must document independent Claude authentication'
+grep -Fq 'codex login --device-auth' "$runbook" \
+  || fail 'the recovery workflow must document headless Codex authentication'
+grep -Fq 'Claude Code and Codex extensions in the remote window' "$runbook" \
+  || fail 'the recovery workflow must document VS Code remote extension commissioning'
+
+grep -Fq "Anthropic's signed stable apt channel" "$decision" \
+  || fail 'the management ADR must record the Claude Code supply channel'
+grep -Fq "official npm package" "$decision" \
+  || fail 'the management ADR must record the Codex supply channel'
+grep -Fq 'AI-ready refresh codified 2026-07-19' "$plan" \
+  || fail 'the project plan must record the pending recovery-node refresh'
+grep -Fq 'Claude Code + Codex' "$tech_radar" \
+  || fail 'the technology radar must record both adopted coding agents'
 
 grep -Fq 'id!="qemu/128"' "$alert_rules" \
   || fail 'the intentionally stopped cold VM must be excluded from GuestDown'

@@ -127,6 +127,9 @@ reserving its full virtual size.
 - Public HTTPS fetches work. Before the first push, display `~/.ssh/id_ed25519_github.pub` and add
   that repo-scoped key under the GitHub repository's **Settings → Deploy keys** with write access.
   Do not copy or register the primary management VM's account key.
+- **AI-ready refresh codified 2026-07-19, live refresh pending:** the playbook now installs Claude
+  Code from Anthropic's signed stable apt channel and Codex from OpenAI's official npm package in
+  `~/.local/npm`. It validates both binaries but deliberately copies no agent credentials or state.
 - A cold VM cannot start itself. When the operator is away from the authorized desktop, Carter
   still needs a separate authenticated access path before `qm start 128`; direct operator-only
   Tailscale SSH to Carter remains a backlog item.
@@ -137,6 +140,30 @@ hosts. The checkout uses public HTTPS for credential-free fetches. A separate
 `~/.ssh/id_ed25519_github` is generated for SSH pushes without copying the primary's account key;
 register its `.pub` once under the repository's **Settings → Deploy keys** with write access. Agent
 sign-in is deliberately not copied from the primary.
+
+After the AI-ready playbook refresh, complete the one-time agent commissioning interactively on
+`mgmt-vm2`; never copy `~/.claude`, `~/.codex`, tokens, sessions, or browser credentials from VM 100:
+
+```bash
+claude --version
+codex --version
+claude auth login
+codex login
+```
+
+Both sign-in flows use a browser. For Codex over a headless SSH session, `codex login --device-auth`
+is the documented fallback when the localhost browser callback is unavailable. Confirm the final
+state without printing tokens:
+
+```bash
+claude auth status --text
+codex login status
+```
+
+For VS Code, connect with Remote SSH and confirm the status bar identifies `mgmt-vm2`. Install the
+Claude Code and Codex extensions in the remote window when VS Code offers **Install in SSH:
+mgmt-vm2**, then sign in there. Do not rely on the primary VM's extension or cached authentication
+appearing in the remote extension host.
 
 ### Use the recovery VM
 
@@ -156,6 +183,8 @@ git status --short --branch
 git pull --ff-only
 cd homelab/ansible
 ansible proxmox -m ping
+claude --version
+codex --version
 ```
 
 Stop if the checkout has uncommitted changes, is not on the intended branch, cannot fast-forward,
@@ -182,6 +211,8 @@ the cold VM cannot start itself.
   control node before continuing that branch on the other.
 - Treat the copied inventory as a point-in-time recovery copy. Re-run the provisioning playbook
   after meaningful local-only inventory changes to refresh and revalidate the standby.
+- Treat Claude and Codex authentication as independent recovery-node state. Sign in interactively;
+  never copy the primary VM's agent directories or credential files.
 - Do not add VM 128 to normal autostart or GuestDown alerting; powered off is its healthy state.
 
 Return it to cold state from inside the VM, then verify from Carter:

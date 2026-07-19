@@ -5,6 +5,7 @@
 # SSH host keys, and automation key. The public repository is cloned over HTTPS and the
 # controller's gitignored inventory files are copied separately. The build boots the VM,
 # proves that it can control every PVE host, then shuts it down and enables VM protection.
+# Agent authentication remains manual on mgmt-vm2; credentials are never copied from VM 100.
 #
 # Run from the primary mgmt-vm, inside homelab/ansible/:
 #   ansible-playbook playbooks/provision-secondary-mgmt.yml
@@ -145,6 +146,7 @@
           - ca-certificates
           - curl
           - git
+          - gnupg
           - jq
           - nodejs
           - npm
@@ -161,6 +163,105 @@
       retries: 3
       delay: 10
       until: secondary_mgmt_packages is succeeded
+
+    - name: Create the third-party apt keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the Anthropic Claude Code signing key
+      ansible.builtin.get_url:
+        url: https://downloads.claude.ai/keys/claude-code.asc
+        dest: /etc/apt/keyrings/claude-code.asc
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Read the Anthropic signing key fingerprint
+      ansible.builtin.command: >-
+        gpg --batch --show-keys --with-colons /etc/apt/keyrings/claude-code.asc
+      register: secondary_mgmt_claude_signing_key
+      changed_when: false
+
+    - name: Verify the Anthropic signing key before trusting it
+      ansible.builtin.assert:
+        that:
+          - >-
+            secondary_mgmt_claude_signing_key.stdout is
+            search('fpr:::::::::31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE:')
+        fail_msg: "The downloaded Claude Code apt signing key has an unexpected fingerprint."
+        quiet: true
+
+    - name: Configure the Anthropic Claude Code stable repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/claude-code.list
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/stable stable main
+
+    - name: Install the standalone Claude Code CLI
+      ansible.builtin.apt:
+        name: claude-code
+        state: latest
+        update_cache: true
+        lock_timeout: 300
+      register: secondary_mgmt_claude_package
+      retries: 3
+      delay: 10
+      until: secondary_mgmt_claude_package is succeeded
+
+    - name: Create the user-local npm prefix
+      ansible.builtin.file:
+        path: /home/simon/.local/npm
+        state: directory
+        owner: simon
+        group: simon
+        mode: "0755"
+
+    - name: Configure the user-local npm prefix
+      ansible.builtin.copy:
+        dest: /home/simon/.npmrc
+        owner: simon
+        group: simon
+        mode: "0644"
+        content: |
+          prefix=/home/simon/.local/npm
+
+    - name: Add user-local npm commands to the login PATH
+      ansible.builtin.blockinfile:
+        path: /home/simon/.profile
+        marker: "# {mark} HOMELAB USER-LOCAL NPM"
+        block: |
+          export PATH="$HOME/.local/npm/bin:$PATH"
+
+    - name: Install the official Codex CLI in the user-local prefix
+      ansible.builtin.command: npm install --global @openai/codex@latest
+      become_user: simon
+      environment:
+        NPM_CONFIG_PREFIX: /home/simon/.local/npm
+      register: secondary_mgmt_codex_install
+      changed_when: >-
+        'added' in secondary_mgmt_codex_install.stdout or
+        'changed' in secondary_mgmt_codex_install.stdout
+
+    - name: Validate the Claude Code CLI
+      ansible.builtin.command: claude --version
+      become_user: simon
+      register: secondary_mgmt_claude_version
+      changed_when: false
+
+    - name: Validate the Codex CLI
+      ansible.builtin.command: codex --version
+      become_user: simon
+      environment:
+        PATH: "/home/simon/.local/npm/bin:/home/simon/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      register: secondary_mgmt_codex_version
+      changed_when: false
 
     - name: Enable the guest agent
       ansible.builtin.systemd_service:
