@@ -851,13 +851,19 @@ confirmation that it applies to the Essenx E2 N150 and current `TWL_P0_AK` firmw
 advisory or a firmware fault. Loading or testing `iTCO_wdt` is a separate controlled maintenance
 task; module availability alone does not prove the watchdog is usable.
 
-#### Carter firmware baseline before the planned update (2026-07-14)
+#### Carter firmware baseline and update record (2026-07-14 to 2026-07-19)
 
 Carter was previously documented as an M920q; DMI confirms it is a **ThinkStation P330 Tiny**, type
 `30CE`, machine type/model `30CES0DW00`, with an i5-8500. It runs PVE 9.2.4 and kernel
-`7.0.14-4-pve`. The installed BIOS is **`M1UKT23A` (2018-12-05)**. Lenovo's model-compatible,
+`7.0.14-4-pve`. Its pre-update BIOS was **`M1UKT23A` (2018-12-05)**. Lenovo's model-compatible,
 recommended release is [M1UKT79A (2026-03-30)](https://support.lenovo.com/ag/en/downloads/DS503907),
 available as bootable ISO `m1uj979usa.iso`; use the checksum shown by Lenovo at download time.
+
+**Update confirmed live 2026-07-19:** DMI reports BIOS **`M1UKT79A`**, release date
+**`03/12/2026`**, and machine type/model **`30CES0DW00`**. The DMI firmware date precedes Lenovo's
+public package date and is not a mismatch. This confirms the intended image is installed on the
+correct model. The settings audit below and a controlled warm reboot remain pending; do not infer
+those checks from the version alone.
 
 Record these values again immediately before flashing and restore them if the update resets setup:
 
