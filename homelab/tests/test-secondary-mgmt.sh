@@ -45,6 +45,8 @@ grep -Fq 'inventory/group_vars/all.yml' "$playbook" \
   || fail 'the local-only Ansible variables must be copied to the secondary'
 grep -Fq 'files/patching/setup-unattended.sh' "$playbook" \
   || fail 'the cold VM must catch up security updates after a powered-off interval'
+grep -Fq -- '- bubblewrap' "$playbook" \
+  || fail 'the recovery workstation must install Codex sandbox support from Ubuntu'
 grep -Fq 'https://downloads.claude.ai/keys/claude-code.asc' "$playbook" \
   || fail 'Claude Code must use the published Anthropic signing key'
 grep -Fq '31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE' "$playbook" \
