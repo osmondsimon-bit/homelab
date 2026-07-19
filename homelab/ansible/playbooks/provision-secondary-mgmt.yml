@@ -143,6 +143,7 @@
       ansible.builtin.apt:
         name:
           - ansible
+          - bubblewrap
           - ca-certificates
           - curl
           - git
