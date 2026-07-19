@@ -45,7 +45,7 @@
 |--------|------|------|----|--------|
 | technitium2 | 117 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM2_IP | Running — 2nd DNS resolver, config-identical to CT 111 via the `technitium_instances` playbook loop (ADR-011). Independent node from CT 111 (oneill) for DNS redundancy. GuestDown covers `lxc/117`. |
 | actual | 127 | VM (Ubuntu 24.04) | YOUR_ACTUAL_IP | Running — Actual Budget in a pinned official Docker container; loopback-only application behind Tailscale Serve, `tag:actual` operator-only; encrypted PBS daily + no-network restore drill proven 2026-07-15 (ADR-023). |
-| mgmt-vm2 | 128 | VM (Ubuntu 24.04) | YOUR_SECONDARY_MGMT_IP | **Cold + validated 2026-07-18** — independent build (not a VM 100 clone), 2 cores / 8 GB / 64 GB thin disk (2.28 GB actual after provisioning), distinct automation key, local-only Ansible config, `onboot=0`, protected while stopped. From this VM, Ansible `ping` passed against all three PVE hosts. Activate manually when the primary control node is unavailable (ADR-000). |
+| mgmt-vm2 | 128 | VM (Ubuntu 24.04) | YOUR_SECONDARY_MGMT_IP | **Cold + validated 2026-07-18** — independent build (not a VM 100 clone), 2 cores / 8 GB / 64 GB thin disk (2.28 GB actual after provisioning), distinct automation key, local-only Ansible config, `onboot=0`, protected while stopped. Ansible `ping` passed against all three PVE hosts. AI-ready refresh codified 2026-07-19: signed stable Claude Code + user-local Codex, with independent manual sign-in; live refresh pending. Activate manually when the primary control node is unavailable (ADR-000). |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
 

@@ -21,7 +21,7 @@ Keep the Proxmox host clean and avoid installing tooling directly on the hypervi
 ## Notes
 This VM is not intended to host production services. It is an admin and automation workstation.
 
-## Independent cold secondary (revised 2026-07-18)
+## Independent cold secondary (revised 2026-07-19)
 
 VM 128 `mgmt-vm2` on Carter is a separately built Ubuntu management workstation, normally powered
 off. It is not a clone or continuously synchronized replica of VM 100. That avoids duplicate
@@ -34,6 +34,12 @@ the PVE hosts and can be revoked independently. A second distinct SSH key is gen
 write-enabled deploy key on only the public homelab repository; the primary account key is never
 copied. It is sized at 2 cores, 8 GB RAM and a 64 GB thin disk; `onboot=0` and Proxmox VM protection
 make activation and removal deliberate.
+
+The recovery baseline includes both AI command-line clients without their authentication state:
+Claude Code comes from Anthropic's signed stable apt channel, while Codex comes from OpenAI's
+official npm package in Simon's unprivileged user-local prefix. Each client is authenticated
+interactively on the secondary when needed. This makes AI assistance available during a primary
+management outage without copying credentials, sessions, caches, or the primary home directory.
 
 This improves control-plane recovery but does not bootstrap its own power-on. If Apophis is down,
 the operator must first reach Carter, deliberately restore single-node quorum, and start VM 128.
