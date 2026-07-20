@@ -55,9 +55,9 @@ in VM 125's `/tmp` was then removed.
 Automated validation passed: Seerr reports 3.3.0 and healthy; 1 user, 4 requests and 8 media records
 survived; Jellyfin sync completed; the stored Sonarr and Radarr credentials reached both APIs;
 Prowlarr retained 3 indexers, 2 app connections and 1 download client; Gluetun/ByParr are healthy;
-and Prowlarr still exits through ProtonVPN. The temporary archive remains only for migration
-rollback and may be removed after the operator confirms browser login/request history and accepts
-the observation period.
+and Prowlarr still exits through ProtonVPN. The operator subsequently confirmed Jellyfin sign-in
+and existing request history in the browser. The temporary archive remains only for migration
+rollback and may be removed after the observation period is accepted.
 
 If rollback is required, stop Seerr, preserve the failed migrated config separately, copy the
 archive back to VM 125, and extract it under `/opt/jellyseerr`; its included `docker-compose.yml`
