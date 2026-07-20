@@ -201,16 +201,17 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 - [x] **Patching cadence enforcement — ✅ DONE 2026-07-13.** `provision-maintenance-monitoring.yml` installs a persistent mgmt-vm systemd timer that sends an ntfy reminder at 12:00 local on the last day of every month. The reminder points to Glance Maintenance State + Renovate and never upgrades or reboots anything; the operator follows the node-safe runbook deliberately.
 
 **Lower priority but don't forget:**
-- [~] **Migrate Jellyseerr 2.1.0 to Seerr 3.3.0 — deployed 2026-07-20.** The official
+- [x] **Migrate Jellyseerr 2.1.0 to Seerr 3.3.0 — ✅ DONE 2026-07-20.** The official
   `ghcr.io/seerr-team/seerr:v3.3.0` image is live as UID 1000 with Compose `init: true`; the existing
   VM/IP/project path remain stable. Automatic migration preserved 1 user, 4 requests, 8 media
   records, Jellyfin, and one Sonarr + one Radarr connection. Seerr/container health, Jellyfin sync,
   direct Sonarr/Radarr API authentication, Prowlarr's 3 indexers + 2 apps + 1 download client,
   ByParr/Gluetun health, and the unchanged ProtonVPN exit all passed. Glance now uses the Seerr name
   and upstream release feed. A checksum-verified pre-migration config + Compose archive is held
-  off-VM under `~/backups/seerr-migration-20260720/`; the duplicate VM `/tmp` copy was removed.
-  **Remaining:** operator confirms Jellyfin sign-in and request history in the browser, then the
-  temporary rollback archive can be retired deliberately. Official guide:
+  off-VM under `~/backups/seerr-migration-20260720/`; the duplicate VM `/tmp` copy was removed. The
+  operator then confirmed Jellyfin sign-in and the existing request history in the browser. Retain
+  the temporary rollback archive through the observation period, then retire it deliberately.
+  Official guide:
   https://docs.seerr.dev/migration-guide/.
 - [ ] **CT 116 infra-portal ADR-017 compliance** — the onboarding checklist (monitoring ✓, alerting ✓) was partially followed. CT 116 is fully reproducible from the playbook so a formal restore drill is low-value, but a quick note in the runbook confirming this is the intended recovery path would close the loop.
 - [x] **Reserve `YOUR_PORTAL_IP` in UniFi** — ✅ done 2026-06-20.
