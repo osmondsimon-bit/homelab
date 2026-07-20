@@ -851,6 +851,25 @@ confirmation that it applies to the Essenx E2 N150 and current `TWL_P0_AK` firmw
 advisory or a firmware fault. Loading or testing `iTCO_wdt` is a separate controlled maintenance
 task; module availability alone does not prove the watchdog is usable.
 
+#### Apophis firmware baseline and update record (2026-07-20)
+
+Apophis is a **ThinkCentre M720q**, type 10T8, with an i7-8700T. Its pre-update BIOS was
+**`M1UKT6AA` (2022-04-21)**. It uses the same Lenovo `M1U` firmware family and model-compatible
+`M1UKT79A` bootable ISO recorded for Carter below.
+
+**Update confirmed live 2026-07-20:** DMI reports BIOS **`M1UKT79A`**, release date
+**`03/12/2026`**, and the expected ThinkCentre M720q product. After the update, `thinklmi` confirmed
+the critical settings: UEFI Only, CSM and Secure Boot disabled, AHCI, VT-x and VT-d enabled, all CPU
+cores/Turbo/EIST enabled, C-states enabled, TPM 2.0 enabled, After Power Loss = Power On, Wake on
+LAN = Automatic, PXE enabled, M.2 first in the primary boot sequence, rollback allowed, and Windows
+UEFI firmware updates enabled.
+
+The operator then physically disconnected, moved, and reconnected Apophis; it powered on
+unattended and returned to the healthy two-node cluster. This proves the AC-restore setting survived
+the update. The update shutdown reached a clean `poweroff.target`; it was not an ordinary warm
+reboot, so the controlled warm-reboot test remains pending. If that test still hangs on current
+firmware, evaluate `reboot=cold,pci` separately rather than combining kernel and firmware changes.
+
 #### Carter firmware baseline and update record (2026-07-14 to 2026-07-19)
 
 Carter was previously documented as an M920q; DMI confirms it is a **ThinkStation P330 Tiny**, type
