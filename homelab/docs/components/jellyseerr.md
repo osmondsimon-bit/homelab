@@ -1,9 +1,10 @@
-# Jellyseerr (VM 125)
+# Seerr (VM 125)
 
-Request UI for the media stack — Phase 7, ADR-022. Users search and request movies/shows; Jellyseerr
+Request UI for the media stack — Phase 7, ADR-022. Users search and request movies/shows; Seerr
 authenticates **via Jellyfin** and hands requests to Sonarr/Radarr. Runs the official container in a
 dedicated Ubuntu 24.04 Docker VM (ADR-014 Docker exception #2, like Vaultwarden) — which also hosts
-the indexer-VPN stack (Gluetun + Prowlarr + ByParr).
+the indexer-VPN stack (Gluetun + Prowlarr + ByParr). Migrated in place from Jellyseerr 2.1.0 on
+2026-07-20; the stable VM identity and `/opt/jellyseerr` project path were deliberately retained.
 
 | | |
 |---|---|
@@ -11,8 +12,8 @@ the indexer-VPN stack (Gluetun + Prowlarr + ByParr).
 | IP / UI | `YOUR_JELLYSEERR_IP` — `:5055` (LAN/Tailscale only; **LAN-direct**, *not* behind the VPN) |
 | Shape | 3 GB / 2 cores / 20 GB (RAM + disk sized for ByParr's headless browser) |
 | Co-tenants | `gluetun` + `prowlarr` + `byparr` (the indexer-VPN sidecars — see [prowlarr.md](prowlarr.md)) |
-| Image | `fallenbagel/jellyseerr` (pinned tag); container `no-new-privileges` |
-| Backup | NONE by design — small SQLite config, reproducible |
+| Image | `ghcr.io/seerr-team/seerr:v3.3.0` (pinned tag); UID 1000, `init: true`, container `no-new-privileges` |
+| Backup | NONE routinely by design — small SQLite config, reproducible; the off-VM migration rollback archive is temporary |
 
 ## How it's managed
 
@@ -30,6 +31,7 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 ## Health / recovery
 - **Health:** `http://<ip>:5055/api/v1/status` (200).
 - **Recovery:** reproducible → re-run `provision-jellyseerr.yml` (needs `jellyseerr_ip` + `prowlarr_vpn_wg_config` in gitignored `all.yml`). Redo the Jellyfin sign-in; re-add Sonarr/Radarr using their **new auto-generated API keys** (Settings → General in each app after reprovision); re-add the ByParr FlareSolverr proxy in Prowlarr (`http://localhost:8191`). Any registered-site indexer credentials must be re-entered from Vaultwarden.
+- **Migration rollback:** stop Seerr, restore the pre-migration config archive and old Jellyseerr compose definition together, then redeploy. Never run Jellyseerr against the migrated Seerr database.
 
 ## Related
 ADR-022 · ADR-014 (Docker exception #2) · [prowlarr.md](prowlarr.md) · [jellyfin.md](jellyfin.md).

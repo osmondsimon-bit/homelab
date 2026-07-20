@@ -6,7 +6,7 @@ indexer domains *and* the VPN keeps a consistent exit IP for Cloudflare solving.
 
 | | |
 |---|---|
-| Host / VMID | **apophis** / VM 125 (the Docker VM, shared with Jellyseerr) |
+| Host / VMID | **apophis** / VM 125 (the Docker VM, shared with Seerr) |
 | WebUI | `http://YOUR_JELLYSEERR_IP:9696` (published on the VM IP by Gluetun) |
 | Packaging | `lscr.io/linuxserver/prowlarr` Docker container, **`network_mode: service:gluetun`** (digest-pinned) |
 | VPN | **Gluetun** → a 2nd ProtonVPN WireGuard exit (no port-forwarding); egress verified ≠ home WAN |
@@ -24,8 +24,8 @@ valid. See ADR-022 (revision 2026-06-27).
 
 ## How it's managed
 
-Built alongside Jellyseerr by `provision-jellyseerr.yml` — one Docker compose on VM 125
-(jellyseerr LAN-direct + gluetun + prowlarr + byparr). The 2nd ProtonVPN WireGuard config is
+Built alongside Seerr by `provision-jellyseerr.yml` — one Docker compose on VM 125
+(Seerr LAN-direct + Gluetun + Prowlarr + ByParr). The 2nd ProtonVPN WireGuard config is
 `prowlarr_vpn_wg_config` in the gitignored `all.yml` (parsed into Gluetun's env).
 
 ```bash

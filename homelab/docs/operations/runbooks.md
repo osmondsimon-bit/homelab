@@ -32,7 +32,7 @@ recovery stays non-circular.
 | **qBittorrent** (CT 121) dies | reproducible → re-run `provision-qbittorrent.yml` (needs WG config + IP in gitignored `all.yml`); downloads persist on the USB SSD; killswitch must pass leak-test after | n/a — not imaged by design | [qbittorrent.md](../components/qbittorrent.md) · [leak-test](#qbittorrent--wireguard-killswitch-ct-121--adr-021-phase-6b) |
 | **Sonarr** (CT 123) dies | reproducible → re-run `provision-sonarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/tv`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored series) is lost** — re-add manually or from a Sonarr backup export. | n/a — not imaged by design | [sonarr.md](../components/sonarr.md) |
 | **Radarr** (CT 124) dies | reproducible → re-run `provision-radarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/movies`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored movies) is lost** — re-add manually or from a Radarr backup export. | n/a — not imaged by design | [radarr.md](../components/radarr.md) |
-| **Jellyseerr / Prowlarr / ByParr** (VM 125) dies | reproducible → re-run `provision-jellyseerr.yml` (no `--limit`; needs `prowlarr_vpn_wg_config` + `jellyseerr_ip` in gitignored `all.yml`); redo Jellyfin OAuth sign-in; re-add Sonarr/Radarr with new API keys; re-add indexers + ByParr FlareSolverr proxy (`http://localhost:8191`) in Prowlarr. | n/a — not imaged by design | [jellyseerr.md](../components/jellyseerr.md) · [prowlarr.md](../components/prowlarr.md) |
+| **Seerr / Prowlarr / ByParr** (VM 125) dies | reproducible → re-run `provision-jellyseerr.yml` (no `--limit`; needs `prowlarr_vpn_wg_config` + `jellyseerr_ip` in gitignored `all.yml`); redo Jellyfin OAuth sign-in; re-add Sonarr/Radarr with new API keys; re-add indexers + ByParr FlareSolverr proxy (`http://localhost:8191`) in Prowlarr. | n/a — not imaged by design | [jellyseerr.md](../components/jellyseerr.md) · [prowlarr.md](../components/prowlarr.md) |
 | **Technitium DNS** (CT 111 oneill / CT 117 carter) | reproducible from code → re-run `provision-technitium.yml --limit <node>`; the other resolver covers DNS during the rebuild. **Needs the admin/API password at the prompt** | ⚠️ not drilled (reprovision drill pending) | [Recover CT 111](#recover-ct-111-lost--corrupted-or-oneill-rebuilt) |
 | **Tailscale** (CT 110) / **Glance** (CT 115) / **Monitoring** (CT 114) / **infra-portal** (CT 116) / **HA share** (CT 113) / **PBS** down | all reproducible from code → re-run the matching `provision-*.yml` / `install-node-exporter.yml` | ⚠️ not drilled | [Recovery model](#recovery-model--what-recovers-what-avoid-doubling-up) |
 | **PBS datastore / oneill SSD lost** (backup data, not production) | single local copy today → loses restore history, not production. **Off-site copy is the real fix and is still deferred** | ❌ off-site GAP (ADR-012) | [Recovery model → "Backing up the hub"](#recovery-model--what-recovers-what-avoid-doubling-up) |
@@ -42,6 +42,28 @@ recovery stays non-circular.
 > single copy — the off-site leg (ADR-012) is unresolved, so a site disaster loses VM
 > data; (2) the CT 111/117 reprovision and oneill-rebuild paths are **documented but
 > not yet drilled** — treat their RTO as an estimate, not a fact, until run.
+
+### Seerr migration rollback record (2026-07-20)
+
+VM 125 migrated in place from Jellyseerr 2.1.0 to official Seerr 3.3.0. Before first Seerr start,
+the stopped Jellyseerr config and old Compose file were archived with numeric ownership and copied
+off VM 125 to
+`~/backups/seerr-migration-20260720/jellyseerr-pre-seerr-20260720T055806Z.tar.gz` on mgmt-vm.
+The source and destination SHA-256 checksums matched; permissions are `0600`. The duplicate archive
+in VM 125's `/tmp` was then removed.
+
+Automated validation passed: Seerr reports 3.3.0 and healthy; 1 user, 4 requests and 8 media records
+survived; Jellyfin sync completed; the stored Sonarr and Radarr credentials reached both APIs;
+Prowlarr retained 3 indexers, 2 app connections and 1 download client; Gluetun/ByParr are healthy;
+and Prowlarr still exits through ProtonVPN. The temporary archive remains only for migration
+rollback and may be removed after the operator confirms browser login/request history and accepts
+the observation period.
+
+If rollback is required, stop Seerr, preserve the failed migrated config separately, copy the
+archive back to VM 125, and extract it under `/opt/jellyseerr`; its included `docker-compose.yml`
+restores the old Jellyseerr image and service name together with the matching pre-migration
+database. Start that Compose project and verify Jellyfin login plus all four requests. Never point
+Jellyseerr 2.1.0 at the migrated Seerr database.
 
 ---
 
@@ -466,7 +488,7 @@ backlog item.)
   it as one block — see the per-host steps + danger box below). Ubuntu VM **non-security updates and
   reboots** are handled by hand. A persistent mgmt-vm timer sends an ntfy reminder at the
   start of the window; open Glance's **Maintenance State** pane and Renovate PRs from that reminder.
-- **Ubuntu VMs (100 mgmt-vm, 118 vaultwarden, 125 jellyseerr):** security updates now auto-apply at
+- **Ubuntu VMs (100 mgmt-vm, 118 vaultwarden, 125 Seerr; hostname remains `jellyseerr`):** security updates now auto-apply at
   local noon. Ordinary Ubuntu packages and any required reboot wait for the monthly window. Docker
   images on 118/125 remain pinned and are bumped separately (see below).
   After 125 reboots, confirm Gluetun's VPN egress ≠ home WAN.
@@ -784,7 +806,7 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 | _pending_ | CT 111 / CT 117 Ansible reprovision | untested — records the real RTO |
 | _pending_ | CT 123 (Sonarr) Ansible reprovision | untested — simplest Phase 7 drill (no VPN credential dep); re-add qBit + root folder, verify hardlink import |
 | _pending_ | CT 124 (Radarr) Ansible reprovision | untested — same drill path as Sonarr |
-| _pending_ | VM 125 (Jellyseerr + Prowlarr + ByParr) Ansible reprovision | untested — needs `prowlarr_vpn_wg_config` in `all.yml`; verify Prowlarr egress = ProtonVPN after rebuild |
+| _pending_ | VM 125 (Seerr + Prowlarr + ByParr) Ansible reprovision | untested — needs `prowlarr_vpn_wg_config` in `all.yml`; verify Prowlarr egress = ProtonVPN after rebuild |
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
 > local; PBS snapshot names are **UTC** (`…T16:30:03Z` = 02:30 AEST). Don't mistake the offset
