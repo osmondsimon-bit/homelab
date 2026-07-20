@@ -25,7 +25,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | VM/CT backups | Proxmox Backup Server (CT 112, oneill) | Phase 3 ✓ — PBS live, mgmt-vm imaged daily off-box; CTs rebuild from Ansible (ADR-012). HA native backup ✅ landing on share (CT 113); restore drill ✅ PASS 2026-06-18. Off-site copy deferred. |
 | Media server | Jellyfin (was Plex) | **Phase 6 ✓ 2026-06-27** — CT 120 on **apophis**, unprivileged LXC, iGPU QuickSync (`/dev/dri` passthrough) proven; media on 500 GB USB-C SSD. ADR-021. |
 | Torrent client + VPN | qBittorrent + **native WireGuard + nftables killswitch** + ProtonVPN Plus | **Phase 6 ✓ 2026-06-27** — CT 121 on **apophis**; leak-test ✅ (Gluetun/Docker rejected — native WG keeps service LXCs Docker-free). ADR-021. |
-| Media automation | Sonarr + Radarr + Prowlarr + Jellyseerr + ByParr | **Phase 7 ✓ 2026-06-28** — Sonarr CT 123 + Radarr CT 124 (native Servarr, hardlinks via shared media-group); Prowlarr + ByParr (CF solver for 1337x) behind Gluetun on VM 125 (2nd ProtonVPN exit — bypasses AU ISP blocks + keeps consistent CF egress IP); Jellyseerr request UI on VM 125. ADR-022. |
+| Media automation | Sonarr + Radarr + Prowlarr + Seerr + ByParr | **Phase 7 ✓ 2026-06-28** — Sonarr CT 123 + Radarr CT 124 (native Servarr, hardlinks via shared media-group); Prowlarr + ByParr (CF solver for 1337x) behind Gluetun on VM 125 (2nd ProtonVPN exit — bypasses AU ISP blocks + keeps consistent CF egress IP); Seerr request UI on VM 125 (migrated from Jellyseerr 2026-07-20). ADR-022. |
 | Password manager | Vaultwarden (self-hosted) | **Phase 5 ✓ 2026-06-26** — VM 118 on apophis, Ubuntu 24.04 + Docker container (native-LXC plan OOMed), Tailscale-Serve TLS, tailnet-only; `pvesr` to carter + PBS daily; tailnet ACL locks it to operator devices. ADR-010/014/018. |
 | Secret handling | Tier 3 env files + Vaultwarden (Tier 1) | ADR-018 (revised 2026-06-25): **ansible-vault dropped** as never-wired-in. Machine tokens → gitignored `~/.*.env` on mgmt-vm; human-typed admin passwords → Vaultwarden. Tier 2 anchors (PBS/HA keys, 2FA recovery codes) → Keychain, outside the lab. |
 | Local config backup | Private repo + `backup-local-config.sh` | Adopted (ADR-007) — interim off-box backup |
@@ -75,7 +75,7 @@ These require more hardware (second server, NAS, more RAM) or are aspirational u
 |------------|--------|
 | HashiCorp Vault | Vaultwarden is sufficient at this scale |
 | PM2 process manager | Docker-centric; not applicable to Proxmox VM/LXC model |
-| Docker Compose stacks | Services run as native packages/binaries on LXC service nodes (oneill stays Docker-free). **Contained exceptions, each isolated to its own VM:** Vaultwarden (VM 118, Phase 5 — container-only upstream; ADR-014 revised 2026-06-26) and the Gluetun/media-automation stack on apophis (VM 125, Phase 7 — Jellyseerr + Prowlarr + ByParr). The no-Docker principle for the LXC service nodes is intact. |
+| Docker Compose stacks | Services run as native packages/binaries on LXC service nodes (oneill stays Docker-free). **Contained exceptions, each isolated to its own VM:** Vaultwarden (VM 118, Phase 5 — container-only upstream; ADR-014 revised 2026-06-26) and the Gluetun/media-automation stack on apophis (VM 125, Phase 7 — Seerr + Prowlarr + ByParr). The no-Docker principle for the LXC service nodes is intact. |
 | Btrfs snapshots (btrbk) | Proxmox uses ZFS/ext4; use Proxmox Backup Server instead |
 
 ---

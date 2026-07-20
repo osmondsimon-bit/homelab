@@ -44,7 +44,7 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > `Automatic at daily patch window`, `Monthly action`, or `Action required`; security updates on
 > enrolled guests are not presented as manual emergencies unless the three-day overdue alert fires.
 > **Update Review** sits below operational state and shows only declared pins that differ from the
-> latest upstream GitHub release for Glance, Vaultwarden, Jellyseerr, and Actual. Current pins
+> latest upstream GitHub release for Glance, Vaultwarden, Seerr, and Actual. Current pins
 > collapse to one subdued no-action message. Requests use GitHub's required API headers and a
 > 12-hour cache; if any release check fails, the widget shows one compact unavailable message.
 > Container version proposals still arrive through Renovate and are deployed manually.

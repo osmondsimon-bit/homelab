@@ -192,7 +192,7 @@ glance_services:
   - { title: "Prowlarr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ prowlarr_port }}/ping", icon: "di:prowlarr" }
   - { title: "Sonarr", node: apophis, workload: "CT 123", url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}", check_url: "http://{{ sonarr_ip | regex_replace('/.*$','') }}:{{ sonarr_port }}/ping", icon: "di:sonarr" }
   - { title: "Radarr", node: apophis, workload: "CT 124", url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}", check_url: "http://{{ radarr_ip | regex_replace('/.*$','') }}:{{ radarr_port }}/ping", icon: "di:radarr" }
-  - { title: "Jellyseerr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:jellyseerr" }
+  - { title: "Seerr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:seerr" }
   - { title: "Technitium DNS", node: oneill, workload: "CT 111", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Technitium DNS 2", node: carter, workload: "CT 117", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Grafana", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
@@ -211,7 +211,7 @@ glance_services:
 glance_version_currency:
   - { key: glance, title: "Glance", configured: "{{ glance_version }}", repository: glanceapp/glance }
   - { key: vaultwarden, title: "Vaultwarden", configured: "{{ vaultwarden_image | regex_replace('^.*:', '') }}", repository: dani-garcia/vaultwarden }
-  - { key: jellyseerr, title: "Jellyseerr", configured: "{{ jellyseerr_image | regex_replace('^.*:', '') }}", repository: seerr-team/seerr }
+  - { key: seerr, title: "Seerr", configured: "{{ seerr_image | regex_replace('^.*:', '') }}", repository: seerr-team/seerr }
   - { key: actual, title: "Actual Budget", configured: "{{ actual_image | regex_replace('^.*:', '') }}", repository: actualbudget/actual }
 
 # Glance "Latest Releases" — bump when a new service has a GitHub release to track.
@@ -313,8 +313,8 @@ jellyseerr_disk_gb: 20                                      # ByParr's browser-b
 jellyseerr_ip: YOUR_JELLYSEERR_IP/24
 jellyseerr_cpu: Skylake-Client-noTSX-IBRS
 jellyseerr_port: 5055
-# renovate: datasource=docker depName=fallenbagel/jellyseerr
-jellyseerr_image: "fallenbagel/jellyseerr:2.1.0"            # PIN — Renovate proposes; operator deploys deliberately
+# renovate: datasource=docker depName=ghcr.io/seerr-team/seerr
+seerr_image: "ghcr.io/seerr-team/seerr:v3.3.0"             # PIN — Renovate proposes; operator deploys deliberately
 # Indexer VPN stack on VM 125 (Gluetun + Prowlarr behind it) — bypasses ISP blocks + consistent exit IP.
 # Prowlarr WebUI published on the VM IP :{{ prowlarr_port }}. (ByParr/FlareSolverr added behind the same
 # Gluetun later only if an indexer needs Cloudflare-solving.)

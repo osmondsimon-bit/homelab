@@ -16,7 +16,7 @@ const matches = config.customManagers.flatMap((manager) =>
 const dependencies = matches.map((match) => match.groups.depName).sort();
 const expected = [
   "actualbudget/actual-server",
-  "fallenbagel/jellyseerr",
+  "ghcr.io/seerr-team/seerr",
   "ghcr.io/thephaseless/byparr",
   "lscr.io/linuxserver/prowlarr",
   "qmcgaw/gluetun",
