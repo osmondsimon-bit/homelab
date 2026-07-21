@@ -37,6 +37,11 @@ require_text "$template" 'title: Largest Files' 'Media page must expose the larg
 require_text "$template" 'title: Now Playing' 'Media page must expose Jellyfin sessions when credentials are enabled'
 require_text "$template" 'title: Automation Queue' 'Media page must consolidate Sonarr and Radarr queue state'
 require_text "$template" 'title: Recent Imports' 'Media page must show recent Sonarr and Radarr imports'
+require_text "$template" '| toRelativeTime }}></span>' \
+  'Recent Imports must use Glance supported dynamic relative-time attributes'
+if grep -Fq -- '| relativeTime' "$template"; then
+  fail 'relativeTime is not a supported Glance custom-template function'
+fi
 require_text "$template" 'title: Media Services' 'Media page must retain direct service launchers and health checks'
 require_text "$template" 'title: Host Pulse' 'Overview must attribute resource pressure to each physical host'
 require_text "$template" 'css-class: host-pulse' 'host pulse must have a stable responsive styling hook'
@@ -119,6 +124,8 @@ require_text "$playbook" 'LoadCredential=jellyfin-api-key:' 'Jellyfin API key mu
 require_text "$playbook" 'LoadCredential=sonarr-api-key:' 'Sonarr API key must use a systemd credential'
 require_text "$playbook" 'LoadCredential=radarr-api-key:' 'Radarr API key must use a systemd credential'
 require_text "$playbook" 'no_log: true' 'secret deployment must suppress credential values from Ansible output'
+[[ "$(grep -Fc -- "'Config has errors:'" "$playbook")" -eq 4 ]] \
+  || fail 'both staged-config paths must reject Glance errors even when config:print exits zero'
 require_text "$template" '${readFileFromEnv:GLANCE_JELLYFIN_API_KEY_FILE}' \
   'Jellyfin API calls must read the systemd credential through an environment-provided path'
 require_text "$template" '${readFileFromEnv:GLANCE_SONARR_API_KEY_FILE}' \

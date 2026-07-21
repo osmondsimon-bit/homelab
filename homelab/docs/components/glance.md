@@ -30,7 +30,8 @@ idempotent), **renders `/etc/glance/glance.yml` from the committed Jinja templat
 `ansible/templates/glance/glance.yml.j2`**, installs a hardened systemd unit (`DynamicUser`,
 `ProtectSystem=strict`), installs the committed `operator.css` stylesheet, and starts it. The render
 is **staged + validated** (`glance … config:print` on a `.new` file) and only **promoted** into place
-if it parses — a bad render can't break the live dashboard. The template uses **custom Jinja
+after a clean result. Because `config:print` can report `Config has errors:` while exiting zero,
+the playbook rejects that diagnostic explicitly. The template uses **custom Jinja
 delimiters** (`<< >>` / `<% %>`) so Glance's own
 Go-template `{{ }}` pass through untouched; real LAN values come from gitignored `group_vars`
 (`glance_prometheus_url`, `glance_hosts`, `monitoring_ip`, `ha_ip`, `technitium_ip`, `pbs_ip`,
