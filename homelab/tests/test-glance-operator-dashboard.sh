@@ -22,6 +22,7 @@ require_text() {
 
 require_text "$template" '- name: Overview' 'Overview must be the first dashboard page'
 require_text "$template" '- name: Infrastructure' 'Infrastructure detail page is missing'
+require_text "$template" '- name: Media' 'Media operations page is missing'
 require_text "$template" 'head-widgets:' 'Overview must lead with full-width operational signals'
 require_text "$template" 'css-class: operator-summary' 'operational summary must have a stable styling hook'
 require_text "$template" 'Core telemetry' 'summary must describe only the telemetry it actually aggregates'
@@ -31,6 +32,12 @@ if grep -Fq -- 'No concerns' "$template"; then
   fail 'summary must not claim that native service checks and version currency are healthy'
 fi
 require_text "$template" 'title: Service Directory' 'service launcher must be retained on Overview'
+require_text "$template" 'title: Largest Media' 'Media page must rank physical usage by movie and series'
+require_text "$template" 'title: Largest Files' 'Media page must expose the largest individual files'
+require_text "$template" 'title: Now Playing' 'Media page must expose Jellyfin sessions when credentials are enabled'
+require_text "$template" 'title: Automation Queue' 'Media page must consolidate Sonarr and Radarr queue state'
+require_text "$template" 'title: Recent Imports' 'Media page must show recent Sonarr and Radarr imports'
+require_text "$template" 'title: Media Services' 'Media page must retain direct service launchers and health checks'
 require_text "$template" 'title: Host Pulse' 'Overview must attribute resource pressure to each physical host'
 require_text "$template" 'css-class: host-pulse' 'host pulse must have a stable responsive styling hook'
 require_text "$template" 'class="host-pulse-grid"' 'host pulse must render as a compact comparison grid'
@@ -108,6 +115,19 @@ require_text "$vars" 'glance_version_currency:' 'version-currency targets must b
 require_text "$vars" 'repository: seerr-team/seerr' 'Jellyseerr currency must follow its current upstream repository'
 require_text "$playbook" 'operator.css' 'the Glance playbook must deploy the operator stylesheet'
 require_text "$template" 'custom-css-file: /assets/operator.css' 'Glance must load the operator stylesheet'
+require_text "$playbook" 'LoadCredential=jellyfin-api-key:' 'Jellyfin API key must use a systemd credential'
+require_text "$playbook" 'LoadCredential=sonarr-api-key:' 'Sonarr API key must use a systemd credential'
+require_text "$playbook" 'LoadCredential=radarr-api-key:' 'Radarr API key must use a systemd credential'
+require_text "$playbook" 'no_log: true' 'secret deployment must suppress credential values from Ansible output'
+require_text "$template" '${readFileFromEnv:GLANCE_JELLYFIN_API_KEY_FILE}' \
+  'Jellyfin API calls must read the systemd credential through an environment-provided path'
+require_text "$template" '${readFileFromEnv:GLANCE_SONARR_API_KEY_FILE}' \
+  'Sonarr API calls must read the systemd credential through an environment-provided path'
+require_text "$template" '${readFileFromEnv:GLANCE_RADARR_API_KEY_FILE}' \
+  'Radarr API calls must read the systemd credential through an environment-provided path'
+if grep -Eq -- '(api_key|apikey)=.*readFileFromEnv' "$template"; then
+  fail 'API credentials must never be emitted into browser-visible query URLs'
+fi
 
 [[ -f "$stylesheet" ]] || fail 'operator stylesheet is missing'
 require_text "$stylesheet" '@media (max-width: 700px)' 'stylesheet must include explicit phone treatment'
@@ -118,6 +138,8 @@ require_text "$stylesheet" '.host-pulse-grid' 'host pulse must have responsive g
 require_text "$stylesheet" '.host-pulse-storage-grid' 'host pulse must style shared and attached storage responsively'
 require_text "$stylesheet" '.host-pulse-capacity' 'host pulse must style local ZFS GB detail'
 require_text "$stylesheet" '.currency-unavailable' 'currency failures must have compact fallback styling'
+require_text "$stylesheet" '.media-storage-grid' 'Media storage summary must have responsive grid styling'
+require_text "$stylesheet" '.media-consumer-row' 'largest-media rows must have dedicated responsive styling'
 require_text "$stylesheet" 'content: "Service Directory"' 'service launcher needs a visible section heading'
 require_text "$stylesheet" 'font-size: 1rem;' 'section heading must remain readable'
 require_text "$stylesheet" '.service-directory + .widget-type-monitor' 'core infrastructure must be separated from the service directory'

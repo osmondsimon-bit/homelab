@@ -304,6 +304,78 @@
   opacity: 0.78;
 }
 
+.media-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.media-storage-card {
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-widget-content-border);
+  border-radius: var(--border-radius);
+  background: var(--color-widget-background);
+}
+
+.media-storage-capacity {
+  grid-column: span 2;
+}
+
+.media-storage-detail,
+.media-consumer-detail {
+  margin-top: 0.2rem;
+  color: var(--color-text-base);
+  font-size: 0.72rem;
+  opacity: 0.72;
+}
+
+.media-consumer-list,
+.media-activity-list {
+  display: grid;
+}
+
+.media-consumer-row,
+.media-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--color-widget-content-border);
+}
+
+.media-consumer-row:first-child,
+.media-activity-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.media-consumer-size {
+  color: var(--color-text-base);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.media-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.media-import-grid > div + div {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--color-widget-content-border);
+}
+
+.library-count-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  text-align: center;
+}
+
 @media (min-width: 1600px) {
   .operator-summary .signal-value {
     font-size: 1.5rem;
@@ -345,6 +417,10 @@
 @media (max-width: 1000px) {
   .operator-summary .signal-grid,
   .host-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .media-storage-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -392,6 +468,27 @@
   .host-pulse-card + .host-pulse-card {
     border-top: 1px solid var(--color-widget-content-border);
     border-left: 0;
+  }
+
+  .media-storage-grid,
+  .media-import-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .media-storage-capacity {
+    grid-column: span 1;
+  }
+
+  .media-import-grid > div + div {
+    padding-top: 1rem;
+    padding-left: 0;
+    border-top: 1px solid var(--color-widget-content-border);
+    border-left: 0;
+  }
+
+  .media-consumer-row,
+  .media-activity-row {
+    gap: 0.65rem;
   }
 
   .currency-unavailable {

@@ -130,3 +130,12 @@ Verdict **APPROVE-WITH-CHANGES**. Architecture sound; RAM headroom confirmed (~2
    id-map comment for 120/121.
 7. **Pre-provision gates:** reserve the 120/121 IPs in UniFi first; verify the scoped PBS token can't
    enumerate the USB datastore (media must never be imaged); `/security-review` before build.
+
+## Revision — 2026-07-21 (500 GB storage management)
+
+The initial free-space card is supplemented by a daily, metadata-only inventory on apophis. It
+deduplicates by device/inode so imported files hardlinked between downloads and the library count
+once, identifies download-only allocations, and exposes bounded top-title/top-file rankings to the
+LAN/Tailscale-only Glance Media page. The inventory is informational and cannot remove files;
+cleanup remains deliberate in the owning media application. Capacity sampling stays a separate
+six-hour service so a deeper directory walk cannot weaken mount or low-space detection.

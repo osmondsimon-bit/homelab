@@ -1,6 +1,6 @@
 ---
-# Cache Media USB capacity on apophis every six hours. Mount availability remains independently
-# monitored through node_exporter's narrowly scoped systemd collector.
+# Cache Media USB capacity every six hours and a bounded, hardlink-aware file inventory daily.
+# Mount availability remains independently monitored through node_exporter's systemd collector.
 # Run from the mgmt-vm: ansible-playbook playbooks/provision-media-storage-monitoring.yml
 
 - name: Install low-frequency Media USB capacity monitoring on apophis
@@ -14,6 +14,12 @@
         dest: /usr/local/bin/homelab-media-storage-collector
         mode: "0755"
 
+    - name: Install the Media USB inventory collector
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/media-inventory-collector.py"
+        dest: /usr/local/bin/homelab-media-inventory-collector
+        mode: "0755"
+
     - name: Configure the Media USB capacity collector
       ansible.builtin.copy:
         dest: /etc/default/homelab-media-storage
@@ -22,6 +28,7 @@
           NODE_NAME={{ inventory_hostname }}
           MOUNT_PATH={{ media_host_root }}
           TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+          INVENTORY_LIMIT=15
 
     - name: Install the Media USB capacity service
       ansible.builtin.copy:
@@ -55,9 +62,55 @@
           [Install]
           WantedBy=timers.target
 
+    - name: Install the daily Media USB inventory service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-inventory.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Cache hardlink-aware Media USB inventory for Prometheus
+          After=mnt-usb\x2dmedia.mount
+          ConditionPathIsMountPoint={{ media_host_root }}
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/homelab-media-storage
+          ExecStart=/usr/local/bin/homelab-media-inventory-collector
+          Nice=15
+          IOSchedulingClass=idle
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=strict
+          ReadOnlyPaths={{ media_host_root }}
+          ReadWritePaths=/var/lib/prometheus/node-exporter
+
+    - name: Install the daily Media USB inventory timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-media-inventory.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Inventory Media USB allocations daily
+
+          [Timer]
+          OnCalendar=daily
+          RandomizedDelaySec=30m
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
     - name: Enable the Media USB capacity timer
       ansible.builtin.systemd:
         name: homelab-media-storage.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Enable the Media USB inventory timer
+      ansible.builtin.systemd:
+        name: homelab-media-inventory.timer
         daemon_reload: true
         enabled: true
         state: started
@@ -73,6 +126,11 @@
       changed_when: true
       when: media_mount.rc == 0
 
+    - name: Inventory Media USB allocations now
+      ansible.builtin.command: systemctl start homelab-media-inventory.service
+      changed_when: true
+      when: media_mount.rc == 0
+
     - name: Confirm cached Media USB capacity metrics
       ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_media_storage.prom
       register: media_storage_metrics
@@ -82,4 +140,17 @@
     - name: Report cached Media USB capacity metrics
       ansible.builtin.debug:
         var: media_storage_metrics.stdout_lines
+      when: media_mount.rc == 0
+
+    - name: Confirm cached Media USB inventory metrics
+      ansible.builtin.command: test -s /var/lib/prometheus/node-exporter/homelab_media_inventory.prom
+      changed_when: false
+      when: media_mount.rc == 0
+
+    - name: Report Media USB inventory location
+      ansible.builtin.debug:
+        msg: >-
+          Hardlink-aware top-15 inventory cached in
+          /var/lib/prometheus/node-exporter/homelab_media_inventory.prom; refresh with
+          systemctl start homelab-media-inventory.service.
       when: media_mount.rc == 0

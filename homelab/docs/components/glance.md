@@ -1,7 +1,8 @@
 # Glance dashboard (CT 115)
 
-The homelab **front-door**: a responsive two-page operator dashboard for degradation, service
-launching, resource pressure, placement, backup/maintenance state, and update exceptions. It is an
+The homelab **front-door**: a responsive three-page operator dashboard for degradation, service
+launching, media/storage operations, resource pressure, placement, backup/maintenance state, and
+update exceptions. It is an
 at-a-glance **summary**, *not* the deep time-series/debugging surface (that's Grafana) and *not* the
 wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Proxmox nodes
 (ADR-014).
@@ -12,8 +13,8 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
 | Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
-| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest CPU·RAM·disk, maintenance intent and alerts; GitHub Releases for declared-pin currency |
-| Layout | **Overview:** operational signals + three-host pulse with physical/shared storage + host-grouped service launcher + action-oriented maintenance/backups + exception-only update review · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
+| Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest resources, maintenance, alerts, and cached Media USB inventory; optional Jellyfin/Sonarr/Radarr GET APIs; GitHub Releases for declared-pin currency |
+| Layout | **Overview:** operational signals + host pulse + service launcher + maintenance/backups · **Media:** capacity, hardlink-aware largest consumers, service activity and launchers · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |
 
 ## How it's managed
 
@@ -34,6 +35,26 @@ delimiters** (`<< >>` / `<% %>`) so Glance's own
 Go-template `{{ }}` pass through untouched; real LAN values come from gitignored `group_vars`
 (`glance_prometheus_url`, `glance_hosts`, `monitoring_ip`, `ha_ip`, `technitium_ip`, `pbs_ip`,
 `gateway`) and committed files use `YOUR_*` placeholders (ADR-006).
+
+### Optional live Media API insights
+
+Storage inventory and Media service health require no application credentials. To additionally show
+Jellyfin sessions/library counts plus Sonarr/Radarr queue and import activity, put the following in
+the **real, gitignored** `ansible/inventory/group_vars/all.yml`, then rerun the Glance playbook:
+
+```yaml
+glance_media_api_enabled: true
+glance_media_jellyfin_api_key: "<Jellyfin Dashboard -> API Keys>"
+glance_media_sonarr_api_key: "<Sonarr Settings -> General -> Security>"
+glance_media_radarr_api_key: "<Radarr Settings -> General -> Security>"
+```
+
+The playbook asserts that all three values are present, installs root-only credential source files,
+and passes them to the `DynamicUser` process through systemd `LoadCredential`. Glance performs only
+GET requests. The page deliberately renders no poster/thumbnail URLs because embedding a token in
+those browser-visible URLs would disclose it. qBittorrent statistics are also deliberately omitted:
+its Web API needs cookie authentication and would require storing the more powerful Web UI password;
+the Sonarr/Radarr queues already expose the managed-download state needed here.
 
 > **Invariant:** change the **template** (`glance.yml.j2`) and/or the `glance_*` vars, then re-run
 > the playbook — **not** the live `/etc/glance/glance.yml` (it's overwritten on the next run and
@@ -62,6 +83,19 @@ Go-template `{{ }}` pass through untouched; real LAN values come from gitignored
 > `Not mounted`, while a failed target means `Monitoring unavailable`. A separate textfile collector
 > samples used/total bytes every six hours, exposes the sample age, and preserves the last successful
 > value rather than substituting the host root filesystem when the mount is absent.
+> A separate **daily metadata-only inventory** groups paths by `(device, inode)`, so a Sonarr/Radarr
+> hardlink present in both `downloads` and `library` is counted once. It publishes four bounded
+> categories, the top 15 imported titles, and top 15 individual files using relative paths only.
+> Values are unique **apparent file bytes** (normal media files closely match allocation), while
+> `df` remains authoritative for actual filesystem usage. `unimported-downloads` means the inode has
+> no library hardlink. Every large-file row includes the filesystem hardlink count because deleting
+> one of several links does not reclaim the allocation. Glance has no delete controls; cleanup stays
+> in qBittorrent/Sonarr/Radarr after review. Refresh manually on apophis with
+> `systemctl start homelab-media-inventory.service`.
+>
+> **Metadata visibility:** current top titles and relative filenames become bounded Prometheus
+> labels and therefore remain in Prometheus history for its retention period. Prometheus and Glance
+> are LAN/Tailscale-only; no absolute host paths are published.
 > Capacity meters use 70% warning / 85% critical thresholds. Infrastructure workloads remain
 > resource-ranked and collapse after five entries per host.
 >
