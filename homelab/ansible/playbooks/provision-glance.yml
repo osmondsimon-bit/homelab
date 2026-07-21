@@ -7,8 +7,8 @@
 # Run from the mgmt-vm, inside homelab/ansible/, targeting oneill:
 #   ansible-playbook playbooks/provision-glance.yml --limit oneill
 #
-# Dashboard is a single page rendered from templates/glance/glance.yml.j2 (host/guest metrics
-# via Prometheus custom-api, service status, alerts, versions, releases, admin links). Vars:
+# Dashboard has Overview, Media, and Infrastructure pages rendered from glance.yml.j2. Metrics
+# arrive via Prometheus; optional live media APIs use systemd credentials. Vars:
 # glance_* + glance_prometheus_url/glance_hosts in group_vars. LAN/Tailscale only (no auth, same
 # posture as Grafana/Prometheus). Glance on :{{ glance_port }}.
 
@@ -93,8 +93,8 @@
       when: glance_have.stdout | trim != glance_version
       changed_when: true
 
-    # --- Config (single-page dashboard rendered from the committed Jinja template) ---
-    # The template uses custom Jinja delimiters ([[ ]] / [% %]) so Glance's own Go-template {{ }}
+    # --- Config (three-page dashboard rendered from the committed Jinja template) ---
+    # The template uses custom Jinja delimiters (<< >> / <% %>) so Glance's own Go-template {{ }}
     # pass through; only IPs/version/port are substituted from group_vars (ADR-014).
     - name: Render glance.yml from the template to a temp file on oneill
       ansible.builtin.template:
@@ -122,6 +122,85 @@
         rm -f /tmp/glance-operator.css
       changed_when: true
 
+    - name: Validate optional Media API credential inputs
+      ansible.builtin.assert:
+        that:
+          - glance_media_jellyfin_api_key | default('') | length > 0
+          - glance_media_sonarr_api_key | default('') | length > 0
+          - glance_media_radarr_api_key | default('') | length > 0
+        fail_msg: >-
+          glance_media_api_enabled requires Jellyfin, Sonarr, and Radarr API keys in the
+          gitignored group_vars/all.yml.
+      when: glance_media_api_enabled | default(false)
+      no_log: true
+
+    - name: Create the root-only Glance credential source directory
+      ansible.builtin.command: >-
+        pct exec {{ glance_ctid }} -- install -d -m 0700 /etc/glance/credentials
+      changed_when: true
+      when: glance_media_api_enabled | default(false)
+
+    - name: Install root-only Media API credential sources
+      when: glance_media_api_enabled | default(false)
+      block:
+        - name: Create a root-only credential staging directory on oneill
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: glance-media-credentials-
+          register: glance_credential_stage
+
+        - name: Stage Media API credentials on oneill
+          ansible.builtin.copy:
+            dest: "{{ glance_credential_stage.path }}/{{ item.name }}"
+            content: "{{ item.value }}"
+            mode: "0600"
+          loop:
+            - { name: jellyfin-api-key, value: "{{ glance_media_jellyfin_api_key | default('') }}" }
+            - { name: sonarr-api-key, value: "{{ glance_media_sonarr_api_key | default('') }}" }
+            - { name: radarr-api-key, value: "{{ glance_media_radarr_api_key | default('') }}" }
+          no_log: true
+
+        - name: Push Media API credentials into the Glance CT
+          ansible.builtin.command: >-
+            pct push {{ glance_ctid }} {{ glance_credential_stage.path }}/{{ item.name }}
+            /etc/glance/credentials/{{ item.name }} --perms 600
+          loop:
+            - { name: jellyfin-api-key }
+            - { name: sonarr-api-key }
+            - { name: radarr-api-key }
+          changed_when: true
+          no_log: true
+      always:
+        - name: Remove the credential staging directory from oneill
+          ansible.builtin.file:
+            path: "{{ glance_credential_stage.path }}"
+            state: absent
+          when: glance_credential_stage is defined
+          no_log: true
+
+    - name: Check for disabled Media API credential sources
+      ansible.builtin.command: >-
+        pct exec {{ glance_ctid }} -- test ! -e /etc/glance/credentials/jellyfin-api-key
+        -a ! -e /etc/glance/credentials/sonarr-api-key
+        -a ! -e /etc/glance/credentials/radarr-api-key
+      register: disabled_media_credentials_absent
+      when: not (glance_media_api_enabled | default(false))
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Remove disabled Media API credential sources
+      ansible.builtin.command: >-
+        pct exec {{ glance_ctid }} -- rm -f
+        /etc/glance/credentials/jellyfin-api-key
+        /etc/glance/credentials/sonarr-api-key
+        /etc/glance/credentials/radarr-api-key
+      when:
+        - not (glance_media_api_enabled | default(false))
+        - disabled_media_credentials_absent.rc != 0
+      changed_when: true
+      no_log: true
+
     - name: Install the Glance systemd unit (hardened, DynamicUser)
       ansible.builtin.shell: >
         echo '{{ glance_unit | b64encode }}' | base64 -d |
@@ -133,6 +212,14 @@
           After=network-online.target
           Wants=network-online.target
           [Service]
+          {% if glance_media_api_enabled | default(false) %}
+          LoadCredential=jellyfin-api-key:/etc/glance/credentials/jellyfin-api-key
+          LoadCredential=sonarr-api-key:/etc/glance/credentials/sonarr-api-key
+          LoadCredential=radarr-api-key:/etc/glance/credentials/radarr-api-key
+          Environment=GLANCE_JELLYFIN_API_KEY_FILE=%d/jellyfin-api-key
+          Environment=GLANCE_SONARR_API_KEY_FILE=%d/sonarr-api-key
+          Environment=GLANCE_RADARR_API_KEY_FILE=%d/radarr-api-key
+          {% endif %}
           ExecStart=/opt/glance/glance --config /etc/glance/glance.yml
           Restart=on-failure
           DynamicUser=yes
@@ -144,10 +231,30 @@
           WantedBy=multi-user.target
       changed_when: true
 
-    - name: Validate the staged config (live file untouched until it passes)
+    - name: Validate the staged config without Media API credentials
       ansible.builtin.command: >
         pct exec {{ glance_ctid }} -- /opt/glance/glance --config /etc/glance/glance.yml.new config:print
       changed_when: false
+      when: not (glance_media_api_enabled | default(false))
+
+    - name: Validate the staged config with root-only Media API credentials
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ glance_ctid }}"
+          - "--"
+          - env
+          - GLANCE_JELLYFIN_API_KEY_FILE=/etc/glance/credentials/jellyfin-api-key
+          - GLANCE_SONARR_API_KEY_FILE=/etc/glance/credentials/sonarr-api-key
+          - GLANCE_RADARR_API_KEY_FILE=/etc/glance/credentials/radarr-api-key
+          - /opt/glance/glance
+          - --config
+          - /etc/glance/glance.yml.new
+          - config:print
+      changed_when: false
+      when: glance_media_api_enabled | default(false)
+      no_log: true
 
     - name: Promote the validated config into place
       ansible.builtin.command: >
@@ -176,5 +283,6 @@
       ansible.builtin.debug:
         msg:
           - "Glance CT {{ glance_ctid }} up at {{ glance_ip | regex_replace('/.*$', '') }}:{{ glance_port }} (HTTP {{ glance_http.stdout }})."
-          - "Single-page dashboard rendered from templates/glance/glance.yml.j2 — LAN/Tailscale only, no auth."
+          - "Three-page dashboard rendered from templates/glance/glance.yml.j2 — LAN/Tailscale only, no auth."
+          - "Live Media API insights: {{ glance_media_api_enabled | default(false) | ternary('enabled', 'disabled; storage inventory remains available') }}."
           - "Pinned {{ glance_version }}. Reserve {{ glance_ip | regex_replace('/.*$', '') }} in UniFi."

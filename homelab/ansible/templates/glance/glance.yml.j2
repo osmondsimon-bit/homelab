@@ -491,6 +491,249 @@ pages:
                   - { title: Actual Budget, url: "<< actual_domain >>", description: "Personal finance", icon: "di:actual-budget" }
                   <% endif %>
 
+  # Media operations and bounded storage intelligence. This is deliberately read-only: cleanup
+  # happens in the owning application after reviewing hardlinks and import state.
+  - name: Media
+    width: wide
+    head-widgets:
+      - type: custom-api
+        title: Media Storage
+        css-class: media-storage
+        cache: 15m
+        url: << prom >>
+        parameters:
+          query: homelab_media_storage_used_bytes{node="apophis"} / 1e9
+        subrequests:
+          size:
+            url: << prom >>
+            parameters:
+              query: homelab_media_storage_size_bytes{node="apophis"} / 1e9
+          available:
+            url: << prom >>
+            parameters:
+              query: homelab_media_storage_available_bytes{node="apophis"} / 1e9
+          percent:
+            url: << prom >>
+            parameters:
+              query: 100 * homelab_media_storage_used_bytes{node="apophis"} / homelab_media_storage_size_bytes{node="apophis"}
+          mounted:
+            url: << prom >>
+            parameters:
+              query: node_systemd_unit_state{job="node",node="apophis",name="mnt-usb\\x2dmedia.mount",state="active"}
+          inventory:
+            url: << prom >>
+            parameters:
+              query: homelab_media_inventory_category_bytes{node="apophis"} / 1e9
+          inventory_age:
+            url: << prom >>
+            parameters:
+              query: (time() - homelab_media_inventory_last_check_timestamp_seconds{node="apophis"}) / 3600
+          unique_files:
+            url: << prom >>
+            parameters:
+              query: homelab_media_inventory_unique_files{node="apophis"}
+        template: |
+          {{ $sizeResult := .Subrequest "size" }}{{ $availableResult := .Subrequest "available" }}{{ $percentResult := .Subrequest "percent" }}{{ $mountedResult := .Subrequest "mounted" }}
+          {{ $inventory := .Subrequest "inventory" }}{{ $inventoryAgeResult := .Subrequest "inventory_age" }}{{ $uniqueFilesResult := .Subrequest "unique_files" }}
+          {{ $used := 0.0 }}{{ range .JSON.Array "data.result" }}{{ $used = .Float "value.1" }}{{ end }}
+          {{ $size := 0.0 }}{{ range $sizeResult.JSON.Array "data.result" }}{{ $size = .Float "value.1" }}{{ end }}
+          {{ $available := 0.0 }}{{ range $availableResult.JSON.Array "data.result" }}{{ $available = .Float "value.1" }}{{ end }}
+          {{ $percent := 0.0 }}{{ range $percentResult.JSON.Array "data.result" }}{{ $percent = .Float "value.1" }}{{ end }}
+          {{ $mounted := 0.0 }}{{ range $mountedResult.JSON.Array "data.result" }}{{ $mounted = .Float "value.1" }}{{ end }}
+          {{ $inventoryAge := 0.0 }}{{ range $inventoryAgeResult.JSON.Array "data.result" }}{{ $inventoryAge = .Float "value.1" }}{{ end }}
+          {{ $uniqueFiles := 0.0 }}{{ range $uniqueFilesResult.JSON.Array "data.result" }}{{ $uniqueFiles = .Float "value.1" }}{{ end }}
+          {{ $movies := 0.0 }}{{ $tv := 0.0 }}{{ $unimported := 0.0 }}{{ $other := 0.0 }}
+          {{ range $inventory.JSON.Array "data.result" }}
+            {{ if eq (.String "metric.category") "movies" }}{{ $movies = .Float "value.1" }}
+            {{ else if eq (.String "metric.category") "tv" }}{{ $tv = .Float "value.1" }}
+            {{ else if eq (.String "metric.category") "unimported-downloads" }}{{ $unimported = .Float "value.1" }}
+            {{ else if eq (.String "metric.category") "other" }}{{ $other = .Float "value.1" }}{{ end }}
+          {{ end }}
+          {{ $hasCapacity := gt (len (.JSON.Array "data.result")) 0 }}{{ $hasInventory := gt (len ($inventory.JSON.Array "data.result")) 0 }}
+          <div class="media-storage-grid">
+            <div class="media-storage-card media-storage-capacity">
+              <div class="resource-heading"><div><div class="resource-label">Physical filesystem</div><div class="size-h3 color-highlight">{{ if eq $mounted 0.0 }}Not mounted{{ else if not $hasCapacity }}Sample pending{{ else }}{{ printf "%.0f GB free" $available }}{{ end }}</div></div><div class="{{ if or (eq $mounted 0.0) (ge $percent 85.0) }}color-negative{{ else if ge $percent 70.0 }}color-highlight{{ else }}color-positive{{ end }}">{{ if $hasCapacity }}{{ printf "%.0f%%" $percent }}{{ else }}&mdash;{{ end }}</div></div>
+              {{ if $hasCapacity }}<meter class="resource-meter {{ if ge $percent 85.0 }}is-critical{{ else if ge $percent 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $percent }}"></meter><div class="resource-reading"><span>{{ printf "%.0f GB used" $used }}</span><span>{{ printf "%.0f GB total" $size }}</span></div>{{ end }}
+            </div>
+            <div class="media-storage-card"><div class="resource-label">Movies</div><div class="size-h3 color-highlight">{{ if $hasInventory }}{{ printf "%.1f GB" $movies }}{{ else }}Pending{{ end }}</div><div class="media-storage-detail">unique apparent bytes</div></div>
+            <div class="media-storage-card"><div class="resource-label">TV</div><div class="size-h3 color-highlight">{{ if $hasInventory }}{{ printf "%.1f GB" $tv }}{{ else }}Pending{{ end }}</div><div class="media-storage-detail">unique apparent bytes</div></div>
+            <div class="media-storage-card"><div class="resource-label">Unimported downloads</div><div class="size-h3 {{ if gt $unimported 25.0 }}color-highlight{{ else }}color-positive{{ end }}">{{ if $hasInventory }}{{ printf "%.1f GB" $unimported }}{{ else }}Pending{{ end }}</div><div class="media-storage-detail">no library hardlink found</div></div>
+            <div class="media-storage-card"><div class="resource-label">Inventory</div><div class="size-h3 color-highlight">{{ if $hasInventory }}{{ printf "%.0f files" $uniqueFiles }}{{ else }}Pending{{ end }}</div><div class="media-storage-detail">{{ if $hasInventory }}{{ printf "%.0fh old · other %.1f GB" $inventoryAge $other }}{{ else }}daily metadata scan{{ end }}</div></div>
+          </div>
+
+    columns:
+      - size: full
+        widgets:
+          - type: custom-api
+            title: Largest Media
+            title-url: http://<< jellyfin_ip | regex_replace('/.*$','') >>:<< jellyfin_port >>
+            css-class: media-consumers
+            cache: 15m
+            url: << prom >>
+            parameters:
+              query: sort_desc(homelab_media_inventory_title_bytes{node="apophis"} / 1e9)
+            template: |
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}
+                <div class="color-subdue">Daily inventory pending. Run <code>systemctl start homelab-media-inventory.service</code> on apophis to refresh.</div>
+              {{ else }}
+                <div class="media-consumer-list collapsible-container" data-collapse-after="10">
+                {{ range .JSON.Array "data.result" }}
+                  <div class="media-consumer-row"><div><div class="color-highlight text-truncate">{{ .String "metric.title" }}</div><div class="media-consumer-detail">{{ .String "metric.kind" }} · unique apparent bytes</div></div><div class="media-consumer-size">{{ printf "%.1f GB" (.Float "value.1") }}</div></div>
+                {{ end }}
+                </div>
+              {{ end }}
+
+          - type: custom-api
+            title: Largest Files
+            css-class: media-consumers
+            cache: 15m
+            url: << prom >>
+            parameters:
+              query: sort_desc(homelab_media_inventory_file_bytes{node="apophis"} / 1e9)
+            template: |
+              {{ if eq (len (.JSON.Array "data.result")) 0 }}
+                <div class="color-subdue">Daily inventory pending.</div>
+              {{ else }}
+                <div class="media-consumer-list collapsible-container" data-collapse-after="10">
+                {{ range .JSON.Array "data.result" }}
+                  {{ $links := .String "metric.hardlinks" }}
+                  <div class="media-consumer-row"><div class="min-width-0"><div class="color-highlight text-truncate">{{ .String "metric.path" }}</div><div class="media-consumer-detail">{{ .String "metric.category" }} · {{ $links }} hardlinks{{ if ne $links "1" }} · remove every link to reclaim these bytes{{ end }}</div></div><div class="media-consumer-size">{{ printf "%.1f GB" (.Float "value.1") }}</div></div>
+                {{ end }}
+                </div>
+              {{ end }}
+
+          <% if glance_media_api_enabled | default(false) %>
+          - type: custom-api
+            title: Now Playing
+            title-url: http://<< jellyfin_ip | regex_replace('/.*$','') >>:<< jellyfin_port >>
+            css-class: media-activity
+            cache: 30s
+            url: http://<< jellyfin_ip | regex_replace('/.*$','') >>:<< jellyfin_port >>/Sessions
+            parameters:
+              activeWithinSeconds: 60
+            headers:
+              X-Emby-Token: "${readFileFromEnv:GLANCE_JELLYFIN_API_KEY_FILE}"
+            template: |
+              {{ if ne .Response.StatusCode 200 }}
+                <div class="color-negative">Jellyfin sessions unavailable (HTTP {{ .Response.StatusCode }}).</div>
+              {{ else }}
+                {{ $playing := 0 }}{{ range .JSON.Array "" }}{{ if .Exists "NowPlayingItem.Id" }}{{ $playing = add $playing 1 }}{{ end }}{{ end }}
+                {{ if eq $playing 0 }}<div class="color-subdue">Nothing is playing right now.</div>{{ else }}
+                <div class="media-activity-list">
+                {{ range .JSON.Array "" }}{{ if .Exists "NowPlayingItem.Id" }}
+                  <div class="media-activity-row"><div class="min-width-0"><div class="color-highlight text-truncate">{{ if .Exists "NowPlayingItem.SeriesName" }}{{ .String "NowPlayingItem.SeriesName" }} · {{ end }}{{ .String "NowPlayingItem.Name" }}</div><div class="media-consumer-detail">{{ .String "UserName" }} · {{ .String "Client" }} on {{ .String "DeviceName" }}</div></div><div class="{{ if .Bool "PlayState.IsPaused" }}color-subdue{{ else }}color-positive{{ end }}">{{ if .Bool "PlayState.IsPaused" }}Paused{{ else if .Exists "TranscodingInfo" }}Transcoding{{ else }}Direct play{{ end }}</div></div>
+                {{ end }}{{ end }}
+                </div>{{ end }}
+              {{ end }}
+
+          - type: custom-api
+            title: Automation Queue
+            css-class: media-activity
+            cache: 1m
+            url: http://<< sonarr_ip | regex_replace('/.*$','') >>:<< sonarr_port >>/api/v3/queue
+            parameters:
+              page: 1
+              pageSize: 25
+              includeSeries: "true"
+              includeEpisode: "true"
+            headers:
+              X-Api-Key: "${readFileFromEnv:GLANCE_SONARR_API_KEY_FILE}"
+            subrequests:
+              radarr:
+                url: http://<< radarr_ip | regex_replace('/.*$','') >>:<< radarr_port >>/api/v3/queue
+                parameters:
+                  page: 1
+                  pageSize: 25
+                  includeMovie: "true"
+                headers:
+                  X-Api-Key: "${readFileFromEnv:GLANCE_RADARR_API_KEY_FILE}"
+            template: |
+              {{ $radarr := .Subrequest "radarr" }}{{ $sonarrRecords := .JSON.Array "records" }}{{ $radarrRecords := $radarr.JSON.Array "records" }}
+              {{ if and (ne .Response.StatusCode 200) (ne $radarr.Response.StatusCode 200) }}
+                <div class="color-negative">Sonarr and Radarr queues are unavailable.</div>
+              {{ else if eq (add (len $sonarrRecords) (len $radarrRecords)) 0 }}
+                <div class="color-subdue">No managed downloads are queued.</div>
+              {{ else }}
+                <div class="media-activity-list collapsible-container" data-collapse-after="8">
+                {{ range $sonarrRecords }}<div class="media-activity-row"><div class="min-width-0"><div class="color-highlight text-truncate">{{ .String "series.title" }} · {{ .String "episode.title" }}</div><div class="media-consumer-detail">TV · {{ .String "status" }}{{ if ne (.String "timeleft") "" }} · {{ .String "timeleft" }} left{{ end }}</div></div><div class="{{ if eq (.String "trackedDownloadStatus") "warning" }}color-negative{{ else }}color-positive{{ end }}">{{ .String "trackedDownloadStatus" }}</div></div>{{ end }}
+                {{ range $radarrRecords }}<div class="media-activity-row"><div class="min-width-0"><div class="color-highlight text-truncate">{{ .String "movie.title" }}</div><div class="media-consumer-detail">Movie · {{ .String "status" }}{{ if ne (.String "timeleft") "" }} · {{ .String "timeleft" }} left{{ end }}</div></div><div class="{{ if eq (.String "trackedDownloadStatus") "warning" }}color-negative{{ else }}color-positive{{ end }}">{{ .String "trackedDownloadStatus" }}</div></div>{{ end }}
+                </div>
+              {{ end }}
+
+          - type: custom-api
+            title: Recent Imports
+            css-class: media-activity
+            cache: 5m
+            url: http://<< sonarr_ip | regex_replace('/.*$','') >>:<< sonarr_port >>/api/v3/history
+            parameters:
+              page: 1
+              pageSize: 6
+              sortKey: date
+              sortDirection: descending
+              eventType: downloadFolderImported
+              includeSeries: "true"
+              includeEpisode: "true"
+            headers:
+              X-Api-Key: "${readFileFromEnv:GLANCE_SONARR_API_KEY_FILE}"
+            subrequests:
+              radarr:
+                url: http://<< radarr_ip | regex_replace('/.*$','') >>:<< radarr_port >>/api/v3/history
+                parameters:
+                  page: 1
+                  pageSize: 6
+                  sortKey: date
+                  sortDirection: descending
+                  eventType: downloadFolderImported
+                  includeMovie: "true"
+                headers:
+                  X-Api-Key: "${readFileFromEnv:GLANCE_RADARR_API_KEY_FILE}"
+            template: |
+              {{ $radarr := .Subrequest "radarr" }}{{ $sonarrRecords := .JSON.Array "records" }}{{ $radarrRecords := $radarr.JSON.Array "records" }}
+              <div class="media-import-grid">
+                <div><div class="resource-label">TV</div>{{ if eq (len $sonarrRecords) 0 }}<div class="color-subdue margin-top-10">No recent imports</div>{{ else }}<div class="list list-gap-10 margin-top-10">{{ range $sonarrRecords }}<div><div class="color-highlight text-truncate">{{ .String "series.title" }}</div><div class="media-consumer-detail">{{ .String "episode.title" }} · {{ .String "date" | parseTime "RFC3339" | relativeTime }}</div></div>{{ end }}</div>{{ end }}</div>
+                <div><div class="resource-label">Movies</div>{{ if eq (len $radarrRecords) 0 }}<div class="color-subdue margin-top-10">No recent imports</div>{{ else }}<div class="list list-gap-10 margin-top-10">{{ range $radarrRecords }}<div><div class="color-highlight text-truncate">{{ .String "movie.title" }}</div><div class="media-consumer-detail">Imported {{ .String "date" | parseTime "RFC3339" | relativeTime }}</div></div>{{ end }}</div>{{ end }}</div>
+              </div>
+          <% endif %>
+
+      - size: small
+        widgets:
+          - type: monitor
+            title: Media Services
+            cache: 1m
+            sites:
+              <% for s in glance_services if s.title in ['Jellyfin', 'Seerr', 'Sonarr', 'Radarr', 'qBittorrent', 'Prowlarr'] %>
+              - title: << s.title >> · << s.workload >>
+                url: << s.url >>
+              <% if s.check_url is defined %>
+                check-url: << s.check_url >>
+              <% endif %>
+                icon: << s.icon >>
+              <% endfor %>
+
+          <% if glance_media_api_enabled | default(false) %>
+          - type: custom-api
+            title: Library
+            title-url: http://<< jellyfin_ip | regex_replace('/.*$','') >>:<< jellyfin_port >>
+            cache: 15m
+            url: http://<< jellyfin_ip | regex_replace('/.*$','') >>:<< jellyfin_port >>/Items/Counts
+            headers:
+              X-Emby-Token: "${readFileFromEnv:GLANCE_JELLYFIN_API_KEY_FILE}"
+            template: |
+              {{ if eq .Response.StatusCode 200 }}
+                <div class="library-count-grid"><div><div class="size-h3 color-highlight">{{ .JSON.Int "MovieCount" | formatNumber }}</div><div class="resource-label">Movies</div></div><div><div class="size-h3 color-highlight">{{ .JSON.Int "SeriesCount" | formatNumber }}</div><div class="resource-label">Series</div></div><div><div class="size-h3 color-highlight">{{ .JSON.Int "EpisodeCount" | formatNumber }}</div><div class="resource-label">Episodes</div></div></div>
+              {{ else }}<div class="color-negative">Library counts unavailable.</div>{{ end }}
+          <% endif %>
+
+          - type: bookmarks
+            title: Storage Actions
+            groups:
+              - title: Review before removal
+                color: 42 70 55
+                links:
+                  - { title: qBittorrent, url: "http://<< qbittorrent_ip | regex_replace('/.*$','') >>:<< qbittorrent_webui_port >>", description: "Remove completed or unimported downloads", icon: "di:qbittorrent" }
+                  - { title: Sonarr, url: "http://<< sonarr_ip | regex_replace('/.*$','') >>:<< sonarr_port >>", description: "Review TV files and queue", icon: "di:sonarr" }
+                  - { title: Radarr, url: "http://<< radarr_ip | regex_replace('/.*$','') >>:<< radarr_port >>", description: "Review movie files and queue", icon: "di:radarr" }
+
   # Deeper resource and placement surface. Grafana remains the time-series/debugging destination.
   - name: Infrastructure
     width: wide

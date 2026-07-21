@@ -92,3 +92,19 @@ daily automatic security updates from ordinary monthly work, while configured-pi
 below operational state and lists exceptions only. Media USB capacity uses a cached six-hour sample;
 mount state remains an independent systemd signal so stale capacity can never masquerade as a
 healthy mount.
+
+## Revision — 2026-07-21 (Media operations and bounded storage inventory)
+
+Add a third responsive `Media` page without changing Glance's role as a read-only summary and
+launcher. A daily apophis collector walks file metadata—not contents—and deduplicates allocations by
+device/inode before publishing four category totals plus only the 15 largest titles and files. This
+prevents Sonarr/Radarr hardlinks in both `downloads` and `library` from being double-counted. `df`
+remains the physical-filesystem authority; inventory values are unique apparent bytes and disclose
+sample age, relative path, and hardlink count. Names are bounded Prometheus labels visible only on
+the existing LAN/Tailscale administration plane; absolute paths and delete controls are excluded.
+
+Optional Jellyfin sessions/library counts and Sonarr/Radarr queue/import activity use API keys from
+gitignored group vars. The playbook supplies them to Glance through root-owned systemd credentials,
+uses them only in server-side GET headers, and renders no thumbnail URLs that could expose tokens.
+Direct qBittorrent statistics remain out of scope because its cookie-authenticated API would require
+storing the Web UI password; the Arr queues supply the useful managed-download state.
