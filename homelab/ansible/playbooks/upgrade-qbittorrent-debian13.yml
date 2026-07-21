@@ -1,0 +1,380 @@
+---
+# Upgrade qBittorrent CT 121 from Debian 12 to Debian 13 with a ZFS rollback snapshot.
+# This is a deliberate one-time major-release migration, not routine patching. It follows the
+# Debian 13 release-note sequence (minimal upgrade, then full-upgrade), preserves the media bind
+# mount, reboots the CT, and proves qBittorrent 5 plus the WireGuard killswitch before reporting
+# success. Run only from mgmt-vm with explicit confirmation:
+#   ansible-playbook playbooks/upgrade-qbittorrent-debian13.yml --limit apophis \
+#     -e qbittorrent_upgrade_confirm=true
+
+- name: Upgrade qBittorrent CT to Debian 13 and qBittorrent 5
+  hosts: apophis
+  gather_facts: false
+  vars:
+    qbittorrent_upgrade_confirm: false
+    qbittorrent_upgrade_dataset: rpool/data/subvol-121-disk-0
+    qbittorrent_upgrade_snapshot: pre-debian13-qbittorrent5
+    qbittorrent_upgrade_config_backup: "/root/ct-{{ qbittorrent_ctid }}-pre-debian13.conf"
+    qbittorrent_upgrade_source_stage: /tmp/qbittorrent-debian13.sources
+
+  tasks:
+    - name: Require explicit approval for the major distribution upgrade
+      ansible.builtin.assert:
+        that:
+          - qbittorrent_upgrade_confirm | bool
+        fail_msg: >-
+          This play changes CT 121 from Debian 12 to Debian 13. Re-run with
+          -e qbittorrent_upgrade_confirm=true after reviewing the component runbook.
+
+    - name: Read the current Debian major version
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ qbittorrent_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - '. /etc/os-release; printf "%s" "$VERSION_ID"'
+      register: qbittorrent_debian_version
+      changed_when: false
+
+    - name: Refuse unsupported source releases
+      ansible.builtin.assert:
+        that:
+          - qbittorrent_debian_version.stdout in ['12', '13']
+        fail_msg: >-
+          Expected Debian 12 or 13 in CT {{ qbittorrent_ctid }}, found
+          {{ qbittorrent_debian_version.stdout | default('unknown') }}.
+
+    - name: Upgrade Debian 12 in place
+      when: qbittorrent_debian_version.stdout == '12'
+      block:
+        - name: Confirm no packages are held
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- apt-mark showhold
+          register: qbittorrent_held_packages
+          changed_when: false
+
+        - name: Refuse an upgrade with held packages
+          ansible.builtin.assert:
+            that:
+              - (qbittorrent_held_packages.stdout | trim | length) == 0
+            fail_msg: >-
+              Remove or review held packages before the Debian major-version upgrade:
+              {{ qbittorrent_held_packages.stdout_lines }}
+
+        - name: Check root filesystem free bytes
+          ansible.builtin.shell: >-
+            pct exec {{ qbittorrent_ctid }} --
+            bash -c 'df --output=avail -B1 / | tail -1'
+          register: qbittorrent_root_available
+          changed_when: false
+
+        - name: Require at least 2 GB free for the upgrade
+          ansible.builtin.assert:
+            that:
+              - (qbittorrent_root_available.stdout | trim | int) >= 2000000000
+            fail_msg: "CT {{ qbittorrent_ctid }} needs at least 2 GB free on / before upgrading."
+
+        - name: Ask qBittorrent to stop before snapshotting its state
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl stop qbittorrent
+          register: qbittorrent_stop
+          failed_when: false
+          changed_when: true
+
+        - name: Wait until qBittorrent has stopped
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl is-active qbittorrent
+          register: qbittorrent_stopped
+          until: qbittorrent_stopped.stdout not in ['active', 'activating', 'deactivating']
+          retries: 12
+          delay: 10
+          failed_when: qbittorrent_stopped.stdout in ['active', 'activating', 'deactivating']
+          changed_when: false
+
+        - name: Preserve the Proxmox CT configuration outside its rootfs
+          ansible.builtin.copy:
+            src: "/etc/pve/lxc/{{ qbittorrent_ctid }}.conf"
+            dest: "{{ qbittorrent_upgrade_config_backup }}"
+            remote_src: true
+            force: false
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Verify the configured qBittorrent rootfs dataset exists
+          ansible.builtin.command:
+            argv:
+              - zfs
+              - list
+              - -H
+              - -o
+              - name
+              - "{{ qbittorrent_upgrade_dataset }}"
+          register: qbittorrent_upgrade_dataset_result
+          changed_when: false
+
+        - name: Check for the direct ZFS rollback snapshot
+          ansible.builtin.command:
+            argv:
+              - zfs
+              - list
+              - -H
+              - -t
+              - snapshot
+              - -o
+              - name
+              - "{{ qbittorrent_upgrade_dataset }}@{{ qbittorrent_upgrade_snapshot }}"
+          register: qbittorrent_snapshot_present
+          failed_when: false
+          changed_when: false
+
+        - name: Create the pre-upgrade rootfs rollback snapshot
+          ansible.builtin.command: >-
+            zfs snapshot {{ qbittorrent_upgrade_dataset }}@{{ qbittorrent_upgrade_snapshot }}
+          when: qbittorrent_snapshot_present.rc != 0
+          changed_when: true
+
+        - name: Stage Debian 13 deb822 sources on apophis
+          ansible.builtin.copy:
+            dest: "{{ qbittorrent_upgrade_source_stage }}"
+            mode: "0644"
+            content: |
+              Types: deb
+              URIs: https://deb.debian.org/debian
+              Suites: trixie trixie-updates
+              Components: main contrib
+              Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+              Types: deb
+              URIs: https://security.debian.org/debian-security
+              Suites: trixie-security
+              Components: main contrib
+              Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+        - name: Install Debian 13 sources inside the CT
+          ansible.builtin.command: >-
+            pct push {{ qbittorrent_ctid }} {{ qbittorrent_upgrade_source_stage }}
+            /etc/apt/sources.list.d/debian.sources --perms 644
+          changed_when: true
+
+        - name: Disable the old Debian 12 source list recoverably
+          ansible.builtin.shell: >-
+            pct exec {{ qbittorrent_ctid }} -- bash -c
+            'if [ -f /etc/apt/sources.list ]; then
+            mv /etc/apt/sources.list /etc/apt/sources.list.bookworm-disabled; fi'
+          changed_when: true
+
+        - name: Refresh Debian 13 package metadata
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- env DEBIAN_FRONTEND=noninteractive
+            apt-get update
+          changed_when: true
+
+        - name: Perform the Debian recommended minimal upgrade
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- env DEBIAN_FRONTEND=noninteractive
+            apt-get -y upgrade
+            -o Dpkg::Options::=--force-confold
+          changed_when: true
+
+        - name: Perform the Debian 13 full distribution upgrade
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- env DEBIAN_FRONTEND=noninteractive
+            apt-get -y full-upgrade
+            -o Dpkg::Options::=--force-confold
+          changed_when: true
+
+        - name: Ensure the qBittorrent VPN packages remain installed
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- env DEBIAN_FRONTEND=noninteractive
+            apt-get install -y qbittorrent-nox wireguard-tools nftables natpmpc openresolv
+          changed_when: true
+
+        - name: Reboot the upgraded CT
+          ansible.builtin.command: "pct reboot {{ qbittorrent_ctid }}"
+          changed_when: true
+
+        - name: Wait for the upgraded CT to return
+          ansible.builtin.command: "pct exec {{ qbittorrent_ctid }} -- true"
+          register: qbittorrent_upgrade_ready
+          until: qbittorrent_upgrade_ready.rc == 0
+          retries: 30
+          delay: 3
+          changed_when: false
+
+      always:
+        - name: Remove the staged Debian sources from apophis
+          ansible.builtin.file:
+            path: "{{ qbittorrent_upgrade_source_stage }}"
+            state: absent
+
+    - name: Read the upgraded Debian version
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ qbittorrent_ctid }}"
+          - "--"
+          - bash
+          - -c
+          - '. /etc/os-release; printf "%s" "$VERSION_ID"'
+      register: qbittorrent_upgraded_debian_version
+      changed_when: false
+
+    - name: Read the upgraded qBittorrent version
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- qbittorrent-nox --version
+      register: qbittorrent_upgraded_version_raw
+      changed_when: false
+
+    - name: Parse the qBittorrent version
+      ansible.builtin.set_fact:
+        qbittorrent_upgraded_version: >-
+          {{ qbittorrent_upgraded_version_raw.stdout |
+             regex_search('[0-9]+\.[0-9]+\.[0-9]+') }}
+
+    - name: Require Debian 13 and qBittorrent 5 or newer
+      ansible.builtin.assert:
+        that:
+          - qbittorrent_upgraded_debian_version.stdout == '13'
+          - qbittorrent_upgraded_version is version('5.0', '>=')
+        fail_msg: >-
+          Upgrade incomplete: Debian={{ qbittorrent_upgraded_debian_version.stdout }},
+          qBittorrent={{ qbittorrent_upgraded_version_raw.stdout }}.
+
+    - name: Verify qBittorrent, WireGuard, nftables, and NAT-PMP timer are active
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- systemctl is-active
+        qbittorrent wg-quick@wg0 nftables natpmp-renew.timer
+      register: qbittorrent_upgrade_services
+      changed_when: false
+
+    - name: Verify public traffic routes through WireGuard
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- ip route get 1.1.1.1
+      register: qbittorrent_upgrade_route
+      changed_when: false
+      failed_when: "'dev wg0' not in qbittorrent_upgrade_route.stdout"
+
+    - name: Exercise the killswitch with WireGuard stopped
+      block:
+        - name: Stop NAT-PMP scheduling before dropping WireGuard
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} --
+            systemctl stop natpmp-renew.timer natpmp-renew.service
+          changed_when: true
+
+        - name: Stop qBittorrent before dropping WireGuard
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl stop qbittorrent
+          changed_when: true
+
+        - name: Enforce qBittorrent's secondary WireGuard interface bind
+          ansible.builtin.shell: |
+            pct exec {{ qbittorrent_ctid }} -- bash -c '
+              set -e
+              conf=/root/.config/qBittorrent/qBittorrent.conf
+              if grep -Fqx "Session\Interface=wg0" "$conf" &&
+                 grep -Fqx "Session\InterfaceName=wg0" "$conf"; then
+                printf "unchanged\n"
+                exit 0
+              fi
+              if grep -q "^Session.Interface=" "$conf"; then
+                sed -i "s|^Session.Interface=.*|Session\\\\Interface=wg0|" "$conf"
+              else
+                sed -i "/^\[BitTorrent\]/a Session\\\\Interface=wg0" "$conf"
+              fi
+              if grep -q "^Session.InterfaceName=" "$conf"; then
+                sed -i "s|^Session.InterfaceName=.*|Session\\\\InterfaceName=wg0|" "$conf"
+              else
+                sed -i "/^\[BitTorrent\]/a Session\\\\InterfaceName=wg0" "$conf"
+              fi
+              printf "changed\n"
+            '
+          register: qbittorrent_interface_bind
+          changed_when: "'changed' in qbittorrent_interface_bind.stdout_lines"
+
+        - name: Stop WireGuard for the negative leak test
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl stop wg-quick@wg0
+          changed_when: true
+
+        - name: Confirm HTTP egress is blocked without WireGuard
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} --
+            curl --silent --show-error --max-time 5 https://api.ipify.org
+          register: qbittorrent_killswitch_http
+          failed_when: false
+          changed_when: false
+
+        - name: Confirm DNS egress is blocked without WireGuard
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} --
+            getent ahostsv4 example.com
+          register: qbittorrent_killswitch_dns
+          failed_when: false
+          changed_when: false
+
+        - name: Require both leak attempts to fail
+          ansible.builtin.assert:
+            that:
+              - qbittorrent_killswitch_http.rc != 0
+              - qbittorrent_killswitch_dns.rc != 0
+            fail_msg: >-
+              Killswitch verification failed. Leave qBittorrent stopped and inspect nftables;
+              HTTP rc={{ qbittorrent_killswitch_http.rc }},
+              DNS rc={{ qbittorrent_killswitch_dns.rc }}.
+      always:
+        - name: Restore WireGuard after the negative leak test
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl start wg-quick@wg0
+          changed_when: true
+
+        - name: Restore NAT-PMP scheduling after WireGuard recovery
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl start natpmp-renew.timer
+          changed_when: true
+
+    - name: Restart qBittorrent only after the killswitch test passes
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- systemctl restart qbittorrent
+      changed_when: true
+
+    - name: Verify qBittorrent retained both WireGuard interface keys
+      ansible.builtin.shell: >-
+        pct exec {{ qbittorrent_ctid }} -- bash -c
+        'grep -Fqx "Session\Interface=wg0"
+        /root/.config/qBittorrent/qBittorrent.conf &&
+        grep -Fqx "Session\InterfaceName=wg0"
+        /root/.config/qBittorrent/qBittorrent.conf'
+      changed_when: false
+
+    - name: Confirm the Web UI is serving
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- bash -c
+        'curl -fsS -o /dev/null -w "%{http_code}"
+        http://{{ qbittorrent_ip | regex_replace('/.*$', '') }}:{{ qbittorrent_webui_port }}/'
+      register: qbittorrent_upgrade_http
+      retries: 10
+      delay: 2
+      until: qbittorrent_upgrade_http.stdout == '200'
+      changed_when: false
+
+    - name: Report the completed migration
+      ansible.builtin.debug:
+        msg:
+          - >-
+            qBittorrent CT {{ qbittorrent_ctid }} is on Debian
+            {{ qbittorrent_upgraded_debian_version.stdout }} with qBittorrent
+            {{ qbittorrent_upgraded_version }}.
+          - "WireGuard routing, negative leak test, services, and Web UI passed."
+          - >-
+            Retain snapshot {{ qbittorrent_upgrade_snapshot }} through the observation period;
+            rollback rootfs with: pct stop {{ qbittorrent_ctid }} then
+            zfs rollback -r {{ qbittorrent_upgrade_dataset }}@{{ qbittorrent_upgrade_snapshot }}
+            then pct start {{ qbittorrent_ctid }}. The media bind mount is excluded.
+          - >-
+            The preserved CT configuration is {{ qbittorrent_upgrade_config_backup }}.
