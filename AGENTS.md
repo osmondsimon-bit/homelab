@@ -19,6 +19,9 @@ Documentation, provisioning scripts, and configuration for a Proxmox-based home 
 * CI/CD: None currently
 * Deployment target: Proxmox VE on apophis (YOUR_PROXMOX_IP); services run in VMs and LXCs
 * Hosting: Self-hosted, local network only — Tailscale for remote access, Cloudflare Tunnel for Home Assistant
+* Authoritative working and deployment tree: `/home/simon` (the public Git repository root; project files are under `/home/simon/homelab`).
+* `/home/simon/homelab-private` is a separate private backup repository. Its nested `homelab/` is a tracked restore snapshot and must not be used as a working tree or deployment source.
+* The backup currently mirrors gitignored `group_vars/all.yml`, which contains machine credentials; treat `homelab-private` as credential-bearing recovery material until the ADR-007 remediation backlog is resolved. Never print or paste those values into agent output.
 
 ---
 
