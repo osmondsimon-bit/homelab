@@ -8,7 +8,7 @@
 | Service | Guest | Node | Key detail |
 |---------|-------|------|------------|
 | Jellyfin | CT 120 (Debian 12 unpriv LXC) | apophis | iGPU QuickSync (`/dev/dri` passthrough via single-GID idmap, render GID 993 `hostrender`); media on 500 GB USB-C SSD (`/mnt/usb-media`, ext4) |
-| qBittorrent | CT 121 (Debian 12 unpriv LXC) | apophis | All egress via ProtonVPN WireGuard + nftables killswitch (default-drop output; wg0 + handshake only); qBit also binds torrents to wg0 (defence-in-depth); NAT-PMP port forward |
+| qBittorrent | CT 121 (Debian 13 unpriv LXC) | apophis | qBittorrent 5; all egress via ProtonVPN WireGuard + nftables killswitch (default-drop output; wg0 + handshake only); qBit also binds torrents to wg0 (defence-in-depth); NAT-PMP port forward |
 
 ## Key decisions
 

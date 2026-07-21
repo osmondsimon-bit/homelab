@@ -7,6 +7,7 @@ upgrade_playbook="${repo_root}/homelab/ansible/playbooks/upgrade-qbittorrent-deb
 provision_playbook="${repo_root}/homelab/ansible/playbooks/provision-qbittorrent.yml"
 vars="${repo_root}/homelab/ansible/inventory/group_vars/all.yml.example"
 component="${repo_root}/homelab/docs/components/qbittorrent.md"
+phase="${repo_root}/homelab/docs/phases/6-media.md"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -63,5 +64,7 @@ require_text "$component" 'Debian 13' \
   'component documentation must record the upgraded operating system'
 require_text "$component" 'qBittorrent 5' \
   'component documentation must record the corrected qBittorrent baseline'
+require_text "$phase" 'qBittorrent | CT 121 (Debian 13 unpriv LXC)' \
+  'media-phase documentation must record the Debian 13 qBittorrent rebuild baseline'
 
 printf 'PASS: qBittorrent Debian 13 migration contract\n'
