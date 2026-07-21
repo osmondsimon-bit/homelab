@@ -6,7 +6,10 @@
 # local Claude/Codex config. Those live only on this machine — this script gives
 # them an off-box, off-site backup alongside the mgmt-vm PBS image (ADR-007).
 #
-# IMPORTANT: credentials are NEVER backed up here — no SSH private keys or tokens.
+# SECURITY CLASSIFICATION: group_vars/all.yml now contains machine credentials, so
+# homelab-private is credential-bearing recovery material in practice. The guard
+# below excludes a narrow set of high-risk key/token formats; it is not proof that
+# the backup is non-secret. See ADR-007 and the remediation backlog in PLAN.md.
 # GitHub uses a dedicated SSH key that stays on the mgmt-vm (and in its PBS image).
 #
 # Restore: clone homelab-private and copy the files back to the same paths under $HOME.
@@ -18,7 +21,7 @@ WORKDIR="$HOME/homelab-private"     # gitignored by the public repo
 SRC="$HOME"
 
 # Local-only paths to back up (relative to $HOME). Add new sensitive/local-only
-# files here as they appear. Do NOT add private keys or credential files.
+# files only after classifying them under ADR-007. Do not add SSH private keys.
 PATHS=(
   "homelab/ansible/inventory/hosts.ini"
   "homelab/ansible/inventory/group_vars/all.yml"
@@ -48,7 +51,8 @@ for p in "${PATHS[@]}"; do
   fi
 done
 
-# Safety net: ensure nothing obviously credential-like sneaks in.
+# Narrow safety net: reject selected high-risk private-key and token formats. This
+# does not detect generic API keys or embedded VPN configuration.
 if grep -rIlE 'BEGIN (OPENSSH|RSA|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{30,}|tskey-' "$WORKDIR" \
     --exclude-dir=.git 2>/dev/null; then
   echo "ERROR: a credential-like value was found in the backup set above — aborting."
