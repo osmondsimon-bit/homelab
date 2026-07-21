@@ -234,7 +234,12 @@
     - name: Validate the staged config without Media API credentials
       ansible.builtin.command: >
         pct exec {{ glance_ctid }} -- /opt/glance/glance --config /etc/glance/glance.yml.new config:print
+      register: glance_config_validation_without_credentials
       changed_when: false
+      failed_when: >-
+        glance_config_validation_without_credentials.rc != 0 or
+        'Config has errors:' in glance_config_validation_without_credentials.stdout or
+        'Config has errors:' in glance_config_validation_without_credentials.stderr
       when: not (glance_media_api_enabled | default(false))
 
     - name: Validate the staged config with root-only Media API credentials
@@ -252,7 +257,12 @@
           - --config
           - /etc/glance/glance.yml.new
           - config:print
+      register: glance_config_validation_with_credentials
       changed_when: false
+      failed_when: >-
+        glance_config_validation_with_credentials.rc != 0 or
+        'Config has errors:' in glance_config_validation_with_credentials.stdout or
+        'Config has errors:' in glance_config_validation_with_credentials.stderr
       when: glance_media_api_enabled | default(false)
       no_log: true
 
