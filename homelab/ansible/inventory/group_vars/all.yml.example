@@ -272,6 +272,7 @@ jellyfin_render_devno: "226:128"                           # /dev/dri/renderD128
 # qBittorrent (CT 121, apophis — ADR-021, Phase 6b): native WireGuard egress + nftables killswitch
 qbittorrent_ctid: 121
 qbittorrent_hostname: qbittorrent
+qbittorrent_lxc_template: debian-13-standard_13.6-1_amd64.tar.zst
 qbittorrent_ram_mb: 2048
 qbittorrent_cores: 2
 qbittorrent_disk_gb: 8

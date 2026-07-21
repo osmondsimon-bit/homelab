@@ -62,14 +62,18 @@
       failed_when: false
 
     - name: Ensure Debian template is downloaded
-      ansible.builtin.command: "pveam download {{ template_store }} {{ lxc_template }}"
+      ansible.builtin.command: >-
+        pveam download {{ template_store }}
+        {{ qbittorrent_lxc_template | default(lxc_template) }}
       args:
-        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+        creates: >-
+          /var/lib/vz/template/cache/{{ qbittorrent_lxc_template | default(lxc_template) }}
       when: ct_status.rc != 0
 
     - name: Create unprivileged qBittorrent LXC (not started yet)
       ansible.builtin.command: >
-        pct create {{ qbittorrent_ctid }} {{ template_store }}:vztmpl/{{ lxc_template }}
+        pct create {{ qbittorrent_ctid }}
+        {{ template_store }}:vztmpl/{{ qbittorrent_lxc_template | default(lxc_template) }}
         --hostname {{ qbittorrent_hostname }}
         --cores {{ qbittorrent_cores }}
         --memory {{ qbittorrent_ram_mb }}
@@ -199,6 +203,7 @@
           if [ ! -f "$CONF" ]; then
             cat > "$CONF" <<'QBEOF'
         [BitTorrent]
+        Session\Interface=wg0
         Session\InterfaceName=wg0
         Session\DefaultSavePath=/media/downloads
 

@@ -7,7 +7,7 @@ NAT-PMP-forwarded port through the tunnel).
 
 | | |
 |---|---|
-| Host / CTID | **apophis** / CT 121 (unprivileged Debian 12 LXC, `nesting=1`; `/dev/net/tun` passed in for WireGuard) |
+| Host / CTID | **apophis** / CT 121 (unprivileged Debian 13 LXC, `nesting=1`; `/dev/net/tun` passed in for WireGuard) |
 | IP | `YOUR_QBITTORRENT_IP` (static; reserved in UniFi) — Web-UI on `:8080` |
 | Shape | 2 GB / 2 cores / 8 GB rootfs |
 | VPN | ProtonVPN WireGuard `wg0` (P2P server); config is the secret `qbittorrent_wg_config` (gitignored). qBittorrent binds torrents to `wg0`. |
@@ -15,6 +15,7 @@ NAT-PMP-forwarded port through the tunnel).
 | Port forward | `natpmpc` renewal timer (every 45 s) keeps a Proton NAT-PMP port alive; set qBittorrent's listen port to match |
 | Storage | downloads bind-mounted from the USB SSD — `/mnt/usb-media/downloads` → `/media/downloads` (shared with Jellyfin) |
 | Backup | **NONE by design** — downloads are replaceable; config not imaged (not a `BackupAbsent` target) |
+| Runtime | qBittorrent 5 from Debian 13 stable; upgraded from Debian 12's qBittorrent 4.5.2 after its resume checker wedged on a partial torrent |
 
 ## How it's managed
 
@@ -48,6 +49,20 @@ security control, not the in-container user. The `lxc.*` tun-passthrough lines u
 Reproducible from code → re-run `provision-qbittorrent.yml` (needs `qbittorrent_wg_config` +
 `qbittorrent_ip` in the gitignored `all.yml`). Not imaged; downloads on the USB SSD persist. If the
 ProtonVPN config is rotated, update `qbittorrent_wg_config` and re-run.
+
+The one-time Debian 12→13 migration is codified in `upgrade-qbittorrent-debian13.yml`. It requires
+`-e qbittorrent_upgrade_confirm=true`, retains the direct ZFS rootfs snapshot
+`rpool/data/subvol-121-disk-0@pre-debian13-qbittorrent5`, preserves the Proxmox CT config at
+`/root/ct-121-pre-debian13.conf`, and reruns the VPN route plus negative killswitch checks. A normal
+Proxmox CT snapshot is unavailable because of the bind mount. To roll back, stop CT 121, run
+`zfs rollback -r rpool/data/subvol-121-disk-0@pre-debian13-qbittorrent5`, then start CT 121. The
+bind-mounted media SSD is outside that snapshot; do not interpret a rootfs rollback as a media rollback.
+
+qBittorrent 5 needs both `Session\Interface=wg0` and `Session\InterfaceName=wg0` in its configuration.
+The provisioning and migration playbooks enforce both; startup logs must say it is trying to listen on
+`wg0`, not `0.0.0.0`. During a negative leak test, stop `natpmp-renew.timer` and qBittorrent before
+stopping WireGuard. The NAT-PMP service requires `wg-quick@wg0` and can otherwise race the stop by
+starting WireGuard again.
 
 ## Related
 
