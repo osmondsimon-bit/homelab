@@ -6,15 +6,15 @@ LAN or the internet.**
 
 | | |
 |---|---|
-| Host / VMID | **apophis** / VM 118 (Ubuntu 24.04 cloud-image VM, **not** an LXC) |
+| Host / VMID | **carter** / VM 118 (Ubuntu 24.04 cloud-image VM, **not** an LXC; built on Apophis, moved 2026-07-22) |
 | IP | `YOUR_VAULTWARDEN_IP` (static; reserve in UniFi) |
 | Shape | 2 GB / 1 core / 10 GB; CPU `Skylake-Client-noTSX-IBRS` (migratable across the Coffee-Lake pair) |
 | Runtime | Official `vaultwarden/server` **Docker container** (pinned tag), Docker **confined to this VM** — ADR-014 exception |
 | Bind | container published to `127.0.0.1:8080` only |
 | TLS / access | **Tailscale Serve** terminates TLS → `https://vaultwarden.<tailnet>.ts.net`; tailnet ACL restricts it to `group:operators` (node tagged `tag:vaultwarden`, default-deny) |
 | Hardening | container `cap_drop: ALL` + `no-new-privileges`; **signups OFF**; **Argon2id `ADMIN_TOKEN`** (hash only on the VM) |
-| Redundancy | `pvesr` job `118-0` → carter (15 min); manual failover (no HA manager) |
-| Backup | PBS daily job on apophis (with vm/100); data volume `/opt/vaultwarden/data`. **Restore drill ✅ PASS 2026-06-26** (`qmrestore` → throwaway VM 119; `db.sqlite3` + `rsa_key.pem` intact — see runbooks restore-drills table). |
+| Redundancy | `pvesr` job `118-0` → apophis (15 min); capacity-aware manual failover (no HA manager) |
+| Backup | Cluster PBS daily job; data volume `/opt/vaultwarden/data`. **Restore drill ✅ PASS 2026-06-26** (`qmrestore` → throwaway VM 119; `db.sqlite3` + `rsa_key.pem` intact — see runbooks restore-drills table). |
 
 ## Why a VM running Docker (not a native LXC)
 
@@ -26,10 +26,11 @@ deliberately contained to this one guest (oneill's service LXCs stay Docker-free
 ## How it's managed
 
 Provisioned **and** configured by `homelab/ansible/playbooks/provision-vaultwarden.yml` (idempotent;
-two plays — create the VM on apophis, then configure Docker + Tailscale + the container over SSH):
+two plays — the selected cluster host creates the VM, then configures Docker + Tailscale + the
+container over SSH). Carter is the accepted rebuild target under the 16 GB capacity model:
 
 ```bash
-cd ~/homelab/ansible && ansible-playbook playbooks/provision-vaultwarden.yml --limit apophis
+cd ~/homelab/ansible && ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
 ```
 
 Prompts for a Tailscale auth key + the admin-panel token (neither is stored). First-run account

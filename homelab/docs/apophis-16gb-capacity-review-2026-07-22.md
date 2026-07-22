@@ -225,8 +225,8 @@ simultaneously available. If continuous management plus HA plus Vaultwarden duri
 is a firm requirement, Apophis must regain more physical RAM or the critical guests must be resized
 after evidence-based testing.
 
-The existing manual-failover runbook does not currently state this shutdown requirement because it
-was written for 32 GB Apophis. It must be revised if the 16 GB design is accepted.
+The manual-failover runbook was written for 32 GB Apophis and did not state this shutdown
+requirement when the review began. It was revised when the 16 GB design was accepted.
 
 ### oneill fails
 
@@ -260,7 +260,8 @@ The correct description is **replicated recovery with asymmetric capacity**, not
   re-enabled and synchronized. Its final enabled state remains a verification item.
 - Prove direct operator access to Apophis before accepting the Carter-failure sequence that shuts
   down VM 100.
-- Do not count VM 199 as a recovery control node until its unexplained presence is resolved.
+- VM 199 was not counted as a recovery control node. It was subsequently identified as a stale,
+  stopped recovery clone and purged; see the implementation state below.
 
 ## Purchase triggers
 
@@ -274,18 +275,18 @@ these becomes a real requirement or measured condition:
    swap activity.
 5. Operationally managing service tiers becomes more costly or error-prone than purchasing RAM.
 
-## Required follow-ups before acceptance
+## Acceptance checklist and implementation state
 
-1. Confirm `pvesr status` on Carter shows both `118-0` and `200-0` enabled, current, `FailCount 0`,
-   and `State OK`.
-2. Establish what VM 199 is and why it exists despite the documented purge. Inspect only; cleanup is
-   a separate explicit action.
-3. Confirm direct operator administrative access to Apophis without VM 100.
-4. Collect at least several representative management and HA peak-memory periods before proposing
+1. **Open:** confirm `pvesr status` on Carter shows both `118-0` and `200-0` enabled, current,
+   `FailCount 0`, and `State OK`. VM 200 meets this condition; final VM 118 confirmation remains.
+2. **Closed 2026-07-22:** VM 199 was confirmed stopped, without a NIC or snapshots. The operator
+   authorized its destruction; its configuration and owned ZFS volumes are now absent.
+3. **Open:** confirm direct operator administrative access to Apophis without VM 100.
+4. **Ongoing:** collect at least several representative management and HA peak-memory periods before proposing
    permanent guest reductions.
-5. Decide whether the operator accepts losing VM 100 temporarily during a Carter failure.
-6. If accepted, revise ADR-009, `PLAN.md`, the power/autostart section, and the manual-failover
-   runbook in a separate focused implementation pass.
+5. **Accepted 2026-07-22:** the operator accepts losing VM 100 temporarily during a Carter failure.
+6. **Closed 2026-07-22:** ADR-009, `PLAN.md`, the power/autostart section, and manual-failover
+   runbook were revised for the asymmetric-capacity model.
 
 ## Recommendation
 

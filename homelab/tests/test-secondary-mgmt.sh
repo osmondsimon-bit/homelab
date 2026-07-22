@@ -122,9 +122,9 @@ grep -Fq 'AI-ready refresh codified 2026-07-19' "$plan" \
 grep -Fq 'Claude Code + Codex' "$tech_radar" \
   || fail 'the technology radar must record both adopted coding agents'
 
-grep -Fq 'id!="qemu/128"' "$alert_rules" \
+grep -Fq 'qemu/(125|128)' "$alert_rules" \
   || fail 'the intentionally stopped cold VM must be excluded from GuestDown'
-grep -Fq 'intentional cold standby' "$alert_rules" \
+grep -Fq 'Intentional cold/capacity-tier guests are excluded' "$alert_rules" \
   || fail 'the GuestDown exclusion must explain why VM 128 is exceptional'
 
 [[ "$(grep -Fc 'id!="qemu/128"' "$glance_template")" -ge 3 ]] \

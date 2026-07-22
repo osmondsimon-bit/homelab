@@ -77,3 +77,12 @@ image kernel-panicked on emulated CPU models — `x86-64-v2-AES` etc.), CPU `Sky
 no-new-privileges, signups off, Argon2id `ADMIN_TOKEN`). Replicated apophis→carter (`pvesr` 118-0) +
 PBS backup. The security posture (zero-knowledge, Tailscale-only, hardened, replicated+backed-up) is
 unchanged from the plan; only the packaging differs. Build recipe: `docs/operations/runbooks.md`.
+
+## Placement refinement — 2026-07-22
+
+Apophis's original 16 GB SO-DIMM failed, reducing that host from 32 GB to 16 GB. Under ADR-009's
+accepted asymmetric-capacity model, VM 118 now runs on **Carter** and `pvesr` job 118-0 targets
+**Apophis**. The PBS backup remains the durable fallback. A Carter failure can recover VM 118 and
+VM 200 together on Apophis only after media and VM 100 stop; see the capacity-aware failover
+runbook. This changes placement and simultaneous compute capacity, not Vaultwarden's exposure,
+hardening, data model, or backup decision.

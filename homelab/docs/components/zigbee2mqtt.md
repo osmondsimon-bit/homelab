@@ -5,7 +5,7 @@ Home Assistant VM** (not a separate guest), talking to a **network** Zigbee coor
 
 | | |
 |---|---|
-| Host / VMID | **apophis** / VM 200 (HAOS) — add-on `45df7312_zigbee2mqtt` |
+| Host / VMID | **carter** / VM 200 (HAOS; moved 2026-07-22 under ADR-009's 16 GB capacity model) — add-on `45df7312_zigbee2mqtt` |
 | Coordinator | **SLZB-06** (Ethernet, PoE) at `YOUR_ZIGBEE_COORD_IP:6638` — IoT VLAN |
 | MQTT broker | `core-mosquitto` add-on (same HA VM) |
 | Bridge availability | MQTT topic `zigbee2mqtt/bridge/state` (retain) → HA `binary_sensor.zigbee2mqtt_bridge_connection_state` |
