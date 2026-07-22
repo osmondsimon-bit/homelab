@@ -44,9 +44,9 @@
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
 | technitium2 | 117 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM2_IP | Running — 2nd DNS resolver, config-identical to CT 111 via the `technitium_instances` playbook loop (ADR-011). Independent node from CT 111 (oneill) for DNS redundancy. GuestDown covers `lxc/117`. |
-| vaultwarden | 118 | VM (Ubuntu 24.04) | YOUR_VAULTWARDEN_IP | Running — password manager; tailnet-only. `pvesr` job 118-0 targets Apophis + PBS daily (ADR-010/018). |
+| vaultwarden | 118 | VM (Ubuntu 24.04) | YOUR_VAULTWARDEN_IP | Running — password manager; tailnet-only. `pvesr` job 118-0 targets Apophis + PBS daily; enabled/current with `FailCount 0`, `State OK` verified 2026-07-22 (ADR-010/018). |
 | actual | 127 | VM (Ubuntu 24.04) | YOUR_ACTUAL_IP | Running — Actual Budget in a pinned official Docker container; loopback-only application behind Tailscale Serve, `tag:actual` operator-only; encrypted PBS daily + no-network restore drill proven 2026-07-15 (ADR-023). |
-| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — migrated from Apophis during the 2026-07-22 RAM incident; HA and Zigbee verified healthy. `pvesr` job 200-0 targets Apophis; manual replica bootability proven 2026-06-25. |
+| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — migrated from Apophis during the 2026-07-22 RAM incident; HA and Zigbee verified healthy. `pvesr` job 200-0 targets Apophis and was verified enabled/current with `FailCount 0`, `State OK`; manual replica bootability proven 2026-06-25. |
 | mgmt-vm2 | 128 | VM (Ubuntu 24.04) | YOUR_SECONDARY_MGMT_IP | **Cold + validated 2026-07-18** — independent build (not a VM 100 clone), 2 cores / 8 GB / 64 GB thin disk (2.28 GB actual after provisioning), distinct automation key, local-only Ansible config, `onboot=0`, protected while stopped. Ansible `ping` passed against all three PVE hosts. AI-ready refresh codified 2026-07-19: signed stable Claude Code + user-local Codex, with independent manual sign-in; live refresh pending. Activate manually when the primary control node is unavailable (ADR-000). |
 
 **Network note:** mgmt-vm is on the Home VLAN. VLAN tagging on the VM NIC is off for now — relying on UniFi to assign the correct VLAN via port profile.
@@ -220,7 +220,8 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 
 ### ▶ Pick up next session (immediate)
 - **[x] Apophis 16 GB capacity decision — ✅ ACCEPTED 2026-07-22.** The original Lenovo 16 GB module failed; the later aftermarket 16 GB module is healthy. HA + Vaultwarden run on Carter and replicate to Apophis; VM 100 + CT 110 are Apophis's default workload; all media guests are `onboot=0`. No immediate RAM purchase. Reconsider 32 GB only on the explicit ADR-009 purchase triggers. The stale, stopped VM 199 recovery clone on Carter was purged after its absent NIC, disks, and snapshots were verified; its owned ZFS volumes are removed. Formal review: `docs/apophis-16gb-capacity-review-2026-07-22.md`.
-- **[ ] Close the two live 16 GB acceptance checks:** confirm Carter replication job `118-0` is enabled and completes a fresh sync to Apophis, then prove a direct operator path to Apophis that does not depend on VM 100 before relying on the Carter-loss runbook. VM 200 job `200-0` was enabled and healthy on 2026-07-22.
+- **[x] Critical replication direction and health — ✅ VERIFIED 2026-07-22.** Carter jobs `118-0` and `200-0` both target Apophis, are enabled, and reported `FailCount 0`, `State OK`; VM 118 completed a fresh sync at 21:41:43 and VM 200 at 21:30:01.
+- **[ ] Prove a direct operator path to Apophis** that does not depend on VM 100 before relying on the Carter-loss runbook.
 - **Historical 32 GB re-balance (superseded 2026-07-22):** done 2026-06-18 while both modules worked:
   - **home-assistant (VM 200)** was 4 GB, 24h peak 92% → set **8 GB** and **rebooted — live** ✅.
   - **mgmt-vm (VM 100)** was 4 GB, 24h peak 86% → **now 10 GB ✅ confirmed live** (bumped 6→10 GB on 2026-06-20, rebooted; no hotplug so it needed the reboot).

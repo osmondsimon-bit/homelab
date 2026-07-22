@@ -255,9 +255,9 @@ The correct description is **replicated recovery with asymmetric capacity**, not
 - Do not start multiple media guests together merely because the current idle snapshot has 8.1 GiB
   available.
 - Retain the 100000 KiB/s cross-node migration cap from the existing single-NIC runbook.
-- Verify both replication jobs after every migration. During this incident, VM 200 job `200-0` was
-  enabled and healthy on Carter; VM 118 job `118-0` was observed disabled and was instructed to be
-  re-enabled and synchronized. Its final enabled state remains a verification item.
+- Verify both replication jobs after every migration. During this incident, VM 118 job `118-0` was
+  initially observed disabled, then re-enabled and synchronized. Final Carter status on 2026-07-22
+  showed both `118-0` and `200-0` enabled, targeting Apophis, with `FailCount 0` and `State OK`.
 - Prove direct operator access to Apophis before accepting the Carter-failure sequence that shuts
   down VM 100.
 - VM 199 was not counted as a recovery control node. It was subsequently identified as a stale,
@@ -277,8 +277,9 @@ these becomes a real requirement or measured condition:
 
 ## Acceptance checklist and implementation state
 
-1. **Open:** confirm `pvesr status` on Carter shows both `118-0` and `200-0` enabled, current,
-   `FailCount 0`, and `State OK`. VM 200 meets this condition; final VM 118 confirmation remains.
+1. **Closed 2026-07-22:** Carter `pvesr status` showed both `118-0` and `200-0` enabled and
+   targeting Apophis, with `FailCount 0` and `State OK`. Last successful syncs were 21:41:43 for VM
+   118 and 21:30:01 for VM 200; both next runs were scheduled for 21:45.
 2. **Closed 2026-07-22:** VM 199 was confirmed stopped, without a NIC or snapshots. The operator
    authorized its destruction; its configuration and owned ZFS volumes are now absent.
 3. **Open:** confirm direct operator administrative access to Apophis without VM 100.
