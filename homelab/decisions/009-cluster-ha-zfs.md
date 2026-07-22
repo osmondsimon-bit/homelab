@@ -1,7 +1,11 @@
 # ADR-009: 3-node Proxmox cluster + ZFS replication for resilience (manual failover, local storage)
 
 **Date:** 2026-06-14 (HA approach revised 2026-06-22 — automatic HA manager rejected; see Refinements)  
-**Status:** Accepted — **Phase 4 complete (2026-06-25)**. The 2-node cluster `homelab` (apophis + carter) is live; oneill stays standalone; `pvesr` replication + manual failover for VM 200 in production. The "3-node" framing in the title/Context below is the original direction — see **Refinements** for the as-built 2-node decision.
+**Status:** Accepted — **Phase 4 complete (2026-06-25)**; capacity model refined
+2026-07-22. The 2-node cluster `homelab` (apophis + carter) is live; oneill stays
+standalone; `pvesr` replication + manual failover for VMs 118/200 is in production. The
+"3-node" framing in the title/Context below is the original direction — see **Refinements**
+for the as-built 2-node and asymmetric-capacity decisions.
 
 ## Context
 
@@ -103,3 +107,35 @@ Implementation specifics live in PLAN.md / runbooks.
   + switch), apply firmware manually in a window, and alert on pending updates via existing
   unpoller metrics → ntfy. (A UniFi auto-update reboot was the root cause of the 2026-06-21 Zigbee
   outage.)
+
+## Refinement (2026-07-22 — Apophis reduced to 16 GB)
+
+Apophis's original Lenovo 16 GB SO-DIMM failed, leaving the later aftermarket 16 GB module as its
+only working RAM. A live three-node capacity review is recorded in
+`docs/apophis-16gb-capacity-review-2026-07-22.md`. The operator accepted a no-purchase 16 GB
+operating model with explicit service tiers.
+
+- **Normal placement is asymmetric.** Carter runs VM 200 (Home Assistant, 8 GB) and VM 118
+  (Vaultwarden, 2 GB), plus VM 127 and CT 117. Their `pvesr` jobs target Apophis. Apophis runs VM
+  100 (management, 10 GB) and CT 110 by default. oneill's placement is unchanged.
+- **Media is a capacity tier, not an autostart promise.** VM 125 and CTs 120/121/123/124 remain
+  `onboot=0`. Jellyfin may be trialled first. Restoring the complete media workflow requires a
+  separate measured change: validate VM 100 at 6 GB, move VM 125 to Carter, then start the
+  storage-bound media LXCs incrementally while Apophis retains at least 3 GiB `MemAvailable`.
+- **Replication is preserved; simultaneous compute failover is reduced.** An Apophis loss is still
+  well covered: HA/Vaultwarden remain on Carter and cold VM 128 can start there. A Carter loss is
+  capacity-constrained: stop media, use VM 100 to perform the recovery, prove an independent
+  operator path to Apophis, then stop VM 100 before starting both VM 200 and VM 118 on Apophis.
+  Their combined ceiling with CT 110 is 10.25 GiB. The primary management VM is unavailable until
+  Carter returns or one of the critical VMs stops.
+- **Describe this honestly as replicated recovery with asymmetric capacity.** Data/recovery
+  redundancy remains. Symmetric runtime capacity does not. Full media autostart and a promise that
+  management + HA + Vaultwarden survive either cluster-node failure simultaneously are no longer
+  part of the accepted design.
+- **Purchase triggers are requirements, not nostalgia for the old diagram.** Restore Apophis to
+  32 GB if continuous management plus both critical replicas during Carter failure is required,
+  full-time media must coexist with an 8–10 GB VM 100, the 3 GiB host guardrail fails, or managing
+  service tiers becomes less acceptable than the RAM cost.
+
+This refinement does not resize guests, move VM 125, or re-enable media. Those remain deliberate,
+separately validated operations.

@@ -121,11 +121,12 @@ groups:
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · 117 technitium2 · 120 jellyfin · 121 qbittorrent
       #         · 123 sonarr · 124 radarr · 126 tailscale2 (HA subnet router #2, on oneill)
-      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 jellyseerr+prowlarr+gluetun
-      #         · 127 actual-budget · 128 mgmt-vm2 (intentional cold standby; excluded below)
-      #         · 200 home-assistant.
+      #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 seerr+prowlarr+gluetun
+      #         · 127 actual-budget · 128 mgmt-vm2 · 200 home-assistant.
+      # Intentional cold/capacity-tier guests are excluded: media lxc/120,121,123,124 +
+      # qemu/125 under the 16 GB Apophis model, and cold recovery qemu/128.
       - alert: GuestDown
-        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) == 0
+        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!~"lxc/(120|121|123|124)|qemu/(125|128)"}) == 0
         for: 5m
         labels:
           severity: critical
@@ -133,12 +134,12 @@ groups:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} has pve_up=0 — stopped/crashed for 5m (deduplicated across cluster exporters)."
 
-      # pvesr replication health — the manual-failover safety net (ADR-009). VM 200 (HA) is
-      # replicated apophis->carter every 15 min (job 200-0); if that silently stops, a failover
-      # would start HA from a STALE or absent snapshot. pve-exporter exports these only from the
-      # SOURCE node's exporter (one series per job); max by(id) future-proofs the failback
-      # direction (carter->apophis) and is harmless now. NOTE: a real source-node (apophis)
-      # outage legitimately stalls replication — that alert firing alongside a node outage is
+      # pvesr replication health — the manual-failover safety net (ADR-009). VMs 118/200 are
+      # currently replicated carter->apophis every 15 min; if that silently stops, failover would
+      # use a STALE or absent snapshot. pve-exporter exports these only from the SOURCE node's
+      # exporter (one series per job); max by(id) remains correct after a future direction change.
+      # NOTE: a real source-node (currently Carter) outage legitimately stalls replication — that
+      # alert firing alongside a node outage is
       # expected (you're already failing over), not a false positive.
       - alert: ReplicationFailing
         expr: max by(id) (pve_replication_failed_syncs) > 0

@@ -13,10 +13,11 @@
 #    TLS -> https://vaultwarden.<tailnet>.ts.net (tailnet-only, NEVER on the LAN).
 #  - Hardened: container cap-drop ALL + no-new-privileges, signups off, Argon2id ADMIN_TOKEN.
 #
-# Play 1 creates+boots the VM on apophis; play 2 configures it over SSH (key from cloud-init).
+# Play 1 creates+boots the VM on the selected cluster host; play 2 configures it over SSH
+# (key from cloud-init). The accepted 16 GB capacity model targets carter by default.
 #
-# Run from the mgmt-vm, inside homelab/ansible/  (targets apophis):
-#   ansible-playbook playbooks/provision-vaultwarden.yml --limit apophis
+# Run from the mgmt-vm, inside homelab/ansible/ (targets carter):
+#   ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
 # Prompts for a Tailscale auth key + the admin-panel token (neither is stored).
 #
 # FIRST-RUN account bootstrap (signups default OFF): run once with signups ON to register the
@@ -26,7 +27,7 @@
 # Tailscale prerequisites (one-time, in the admin console): HTTPS + Serve enabled on the tailnet;
 # afterwards approve the node + disable key expiry + ACL it to operator devices.
 
-- name: Create the Vaultwarden VM on apophis (Ubuntu cloud image + cloud-init)
+- name: Create the Vaultwarden VM on the selected cluster host (Ubuntu cloud image + cloud-init)
   hosts: proxmox
   gather_facts: false
   vars:
