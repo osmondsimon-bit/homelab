@@ -88,6 +88,11 @@ errors. The historical counters were cleared once and a single recovery scrub co
 seconds, repaired `0B`, and found zero errors. Final pool and device READ, WRITE, and CKSUM counters
 were all zero, with `rpool` online and no known data errors. No additional scrub is required.
 
+Narrow-repair stage 4 completed successfully: a fresh encrypted snapshot-mode PBS backup of running
+VM 100 transferred the full 64 GiB virtual disk in 54 seconds, reported 77% sparse data, and
+finished without an I/O error. PBS listed the new restore point as `2026-07-23T07:29:49Z` while
+retaining the validated `2026-07-21T16:30:01Z` recovery point.
+
 Preservation status reported by the operator:
 
 - the sanctioned private local-config backup was run and pushed after the last meaningful change;
