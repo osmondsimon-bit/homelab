@@ -428,6 +428,39 @@ backlog item.)
   can't alert on its own host being down). Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh`
   (silent when healthy).
 
+### Temporary Apophis post-recovery monitor
+
+The completed 2026-07-23 ZFS recovery has a bounded observation window through Sunday 2026-07-26.
+`provision-apophis-recovery-monitor.yml` installs a read-only oneshot check plus three fixed systemd
+timer runs at 09:00 AEST on July 24, 25, and 26. The playbook runs the check immediately when the
+units are first installed. Every run sends an ntfy result; failures use high priority.
+
+The monitor checks `rpool` health, the clean recovery scrub result, zero pool/device
+READ/WRITE/CKSUM counters, selected NVMe health fields, post-recovery kernel recurrence signatures,
+jobs `118-0` and `200-0`, and the 3 GiB `MemAvailable` guardrail. Notifications contain no device
+identity, credentials, or raw kernel output. It does not scrub, clear errors, change replication,
+start or stop guests, or mutate storage.
+
+Deploy from VM 100:
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/provision-apophis-recovery-monitor.yml
+```
+
+Confirm the commissioning notification and inspect the fixed schedule:
+
+```bash
+ssh root@YOUR_PROXMOX_IP \
+  'systemctl status apophis-recovery-monitor.timer --no-pager; systemctl list-timers apophis-recovery-monitor.timer'
+```
+
+After the July 26 run, the fixed-date timer has no future trigger. Leave the evidence in the journal
+until the observation result is documented, then remove the inert service, timer, script, and
+root-only notification environment deliberately in a later cleanup pass. Any failed result is
+recurrence evidence: stop media workloads, preserve the output, and assess the documented full
+Apophis rebuild fallback before making changes.
+
 ---
 
 ## Glance dashboard (CT 115 on oneill) — ADR-014
