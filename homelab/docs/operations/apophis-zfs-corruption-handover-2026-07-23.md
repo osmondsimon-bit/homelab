@@ -82,6 +82,12 @@ run completed as a full send in approximately 77 seconds with `State OK` and `Fa
 `200-0` remained enabled and healthy throughout. ZFS errors still have not been cleared and no
 recovery scrub has run.
 
+Narrow-repair stage 3 completed successfully: after replacement, both VM 100 and VM 118 datasets
+existed, VM 118 had a fresh replication snapshot, and `zpool status -v` reported no known data
+errors. The historical counters were cleared once and a single recovery scrub completed in 28
+seconds, repaired `0B`, and found zero errors. Final pool and device READ, WRITE, and CKSUM counters
+were all zero, with `rpool` online and no known data errors. No additional scrub is required.
+
 Preservation status reported by the operator:
 
 - the sanctioned private local-config backup was run and pushed after the last meaningful change;
