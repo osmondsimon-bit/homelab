@@ -1,11 +1,25 @@
 # Apophis ZFS corruption recovery handover — 2026-07-23
 
-This document hands an active Apophis storage-corruption incident from the primary management VM
-(VM 100) to the independent recovery management VM (VM 128 on Carter). It records confirmed facts,
-uncertainties, safety boundaries, and the next decision gates so a new AI session can continue
-without relying on chat history.
+This document records the handover and completed recovery of an Apophis storage-corruption incident
+from the primary management VM (VM 100) to the independent recovery management VM (VM 128 on
+Carter). It preserves confirmed facts, decisions, safety boundaries, and final evidence without
+relying on chat history.
 
-## Current incident state
+## Resolution
+
+Recovery completed successfully on 2026-07-23 using the approved narrow repair. Apophis `rpool` is
+`ONLINE`; its recovery scrub repaired `0B` with zero errors, pool and device READ/WRITE/CKSUM
+counters are all zero, and ZFS reports no known data errors. VM 100 is restored, running, and back
+to `onboot=1`. VM 118 and VM 200 replication are enabled and healthy with `FailCount 0`. A fresh
+post-repair VM 100 PBS backup completed successfully. Temporary restore VM 198 was unprotected,
+stopped, and destroyed with its disks after explicit operator approval.
+
+The removed DIMM remains the leading cause hypothesis, not a proven root cause. Recurrent checksum,
+memory, PCIe, or NVMe errors require stopping affected workloads and escalating to a full pool/host
+rebuild or device replacement. The off-box PBS encryption-key copy was not positively verified;
+the operator explicitly accepted that residual risk during recovery, and it remains a follow-up.
+
+## Historical incident state
 
 - Apophis `rpool` is a single-device ZFS-on-root pool and reports `ZFS-8000-8A`: permanent,
   unrecoverable data errors exist because no redundant copy is available on the pool.
@@ -64,16 +78,16 @@ The newest known-good VM 100 candidate, `2026-07-21T16:30:01Z`, was restored to 
 normal Git history were readable and internally consistent, its working tree was clean, and the
 required local-only Ansible inventory existed without displaying its contents. A zero-valued
 Codex checkpoint ref made an unfiltered `git fsck` exit nonzero, but all objects reachable from
-normal branch, remote, and tag refs were present. VM 198 remains running, isolated, and protected
-as the validated safety copy.
+normal branch, remote, and tag refs were present. VM 198 remained running, isolated, and protected
+as the validated safety copy until final teardown.
 
 Narrow-repair stage 1 completed successfully: the stopped VM 100 configuration and all VM 100
 storage on Apophis were destroyed without `--purge`, preserving scheduled-backup selection. The
 proven `2026-07-21T16:30:01Z` image restored to production VMID 100 on `local-zfs`; its EFI disk
 was normalized by Proxmox, `onboot` was temporarily set to zero, and the guest started. The guest
 agent responded and verified the expected hostname, readable filesystem, public repository, and
-required local-only Ansible inventory. VM 198 remains the protected, no-network safety copy. ZFS
-errors have not been cleared and no recovery scrub has run.
+required local-only Ansible inventory. At this stage VM 198 remained the protected, no-network
+safety copy; ZFS errors had not been cleared and no recovery scrub had run.
 
 Narrow-repair stage 2 completed successfully: replication job `118-0` was disabled and deleted
 with forced configuration-only cleanup, then only `rpool/data/vm-118-disk-0` and its snapshots were
@@ -92,6 +106,12 @@ Narrow-repair stage 4 completed successfully: a fresh encrypted snapshot-mode PB
 VM 100 transferred the full 64 GiB virtual disk in 54 seconds, reported 77% sparse data, and
 finished without an I/O error. PBS listed the new restore point as `2026-07-23T07:29:49Z` while
 retaining the validated `2026-07-21T16:30:01Z` recovery point.
+
+Narrow-repair stage 5 completed successfully: VM 100 was returned to `onboot=1`; jobs `118-0` and
+`200-0` remained current with `State OK` and `FailCount 0`; and ZFS stayed online with a zero-error
+scrub result, no known data errors, and all pool/device counters at zero after the backup workload.
+With explicit operator approval, temporary VM 198 was unprotected, stopped, destroyed with
+`--purge`, and confirmed absent.
 
 Preservation status reported by the operator:
 

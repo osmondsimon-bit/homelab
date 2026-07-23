@@ -5,26 +5,14 @@
 ### apophis (Proxmox host)
 - Intel i7-8700T, **16 GB RAM** — the original Lenovo 16 GB SO-DIMM failed 2026-07-22; the later aftermarket 16 GB module remains healthy. The temporary 32 GB configuration ran 2026-06-18→2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
 - IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.3, **cluster member** (2-node `homelab` with carter; ADR-009)
-- **Active storage-recovery incident (2026-07-23):** `rpool` remains online but reports
-  `ZFS-8000-8A` permanent corruption affecting VM 100's disk and VM 118's replication target.
-  Recovery control has moved to VM 128 on Carter; VM 100 and all capacity-tier media guests are
-  stopped. The cluster remains quorate, VMs 118/200 remain authoritative and running on Carter,
-  PBS exposes the latest known-good VM 100 candidate from `2026-07-21T16:30:01Z`, and Carter has
-  capacity for an isolated restore to unused VMID 198. The installed 16 GB DIMM passed two full
-  MemTest86 passes with zero errors. The extended NVMe self-test also completed without error, and
-  the current boot showed no new memory, PCIe, NVMe, or ZFS hardware fault; the isolated PBS restore
-  passed on protected, no-network VMID 198. The operator initially approved a full rebuild, then paused before cutoff and superseded it with
-  approval for a narrow repair: restore VM 100, fully recreate only VM 118's corrupt Apophis
-  replication target, then require a zero-error scrub and fresh VM 100 backup. VM 100 has now been
-  replaced successfully from the proven PBS image and is running with `onboot=0` during recovery. VM 118's
-  corrupt Apophis target and snapshots were then removed and recreated by a successful full send
-  from Carter; jobs `118-0` and `200-0` both report `State OK` and `FailCount 0`. The historical ZFS
-  counters were then cleared once; the recovery scrub repaired `0B`, found zero errors, and left
-  both pool and device READ/WRITE/CKSUM counters at zero with no known data errors. A fresh
-  encrypted VM 100 PBS backup then completed successfully without I/O errors and PBS listed the new
-  `2026-07-23T07:29:49Z` restore point while retaining the validated July 21 image. A full rebuild is the
-  fallback if errors recur. The operator explicitly accepted the residual risk of proceeding without
-  positively verifying the off-box PBS key copy; Carter's cluster-held key decrypted the test. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
+- **ZFS corruption recovery completed 2026-07-23:** VM 100 was restored from the validated July 21
+  PBS image; VM 118's corrupt Apophis replica was fully recreated from Carter. The installed 16 GB
+  DIMM passed two MemTest86 passes and the NVMe passed an extended self-test. A recovery scrub
+  repaired `0B` with zero errors; pool and device READ/WRITE/CKSUM counters remained zero after a
+  successful fresh VM 100 PBS backup. VM 100 is running with `onboot=1`; replication jobs `118-0`
+  and `200-0` are healthy. Full rebuild remains the fallback if errors recur. The off-box PBS key
+  copy was not positively verified; the operator explicitly accepted that residual risk. See
+  `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
