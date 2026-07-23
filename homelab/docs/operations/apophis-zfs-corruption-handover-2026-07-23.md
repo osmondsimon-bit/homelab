@@ -28,6 +28,43 @@ without relying on chat history.
   VM 128, Apophis, or any replication job is in the same runtime state when the recovery session
   starts. Re-check live state before proposing changes.
 
+### Recovery-session baseline verified from VM 128
+
+Read-only checks at approximately 2026-07-23 16:22 local cluster time established:
+
+- VM 128 `mgmt-vm2` is running on Carter with `onboot=0`, protection enabled, and its recovery
+  tags intact. Its checkout was clean at `d36e481` on `agent/ai-ready-secondary-mgmt`, exactly
+  synchronized with the remote branch.
+- The two-node cluster is quorate with both votes present and expected votes unchanged at two.
+- VM 100 is stopped on Apophis as deliberately arranged by the operator after the handover push.
+  Its configuration still has `onboot=1`; no protection flag was reported.
+- VMs 118 and 200 are running on Carter. Their Carter-to-Apophis replication jobs were enabled,
+  current, and reported `State OK` with `FailCount 0`. This is status evidence only: the known
+  corrupt VM 118 target on Apophis remains untrusted.
+- The five capacity-tier media guests had been deliberately started after the incident. With
+  operator approval, CTs 120, 121, 123, and 124 plus VM 125 were shut down again during recovery
+  to reduce activity on the untrusted pool.
+- PBS storage `pbs-oneill` was active. VM 100 restore points were visible through
+  `2026-07-21T16:30:01Z`, which remains the newest known-good candidate. Carter had sufficient
+  free ZFS capacity for an isolated 64 GB restore, and temporary VMID 198 was confirmed unused.
+- VM 128 successfully administered Carter, Apophis, and Oneill.
+- Apophis still reported the same `ZFS-8000-8A` permanent errors, 64 device checksum errors, and
+  the same affected VM 100 and VM 118 objects. No errors were cleared and no additional scrub ran.
+- The currently installed single 16 GB DIMM completed two full MemTest86 passes with zero errors.
+  Apophis reported 6.7 GiB memory available after the media guests stopped.
+- Current NVMe SMART health remained `PASSED`, with no critical warning, 7% used, and zero media
+  and data-integrity errors. An extended self-test is still pending.
+
+Preservation status reported by the operator:
+
+- the sanctioned private local-config backup was run and pushed after the last meaningful change;
+- no irreplaceable VM 100 data exists outside the public repository, private recovery repository,
+  and PBS image;
+- the public handover branch is synchronized;
+- the off-box PBS encryption-key copy was **not positively verified**. The operator elected not to
+  check it at this stage. This remains an open preservation gate and must not be treated as
+  satisfied before any destructive recovery phase.
+
 ## How the incident was detected
 
 The scheduled PBS backup job is enabled and correctly selects VMs `100,118,127`, targets

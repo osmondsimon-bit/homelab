@@ -5,6 +5,15 @@
 ### apophis (Proxmox host)
 - Intel i7-8700T, **16 GB RAM** — the original Lenovo 16 GB SO-DIMM failed 2026-07-22; the later aftermarket 16 GB module remains healthy. The temporary 32 GB configuration ran 2026-06-18→2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
 - IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.3, **cluster member** (2-node `homelab` with carter; ADR-009)
+- **Active storage-recovery incident (2026-07-23):** `rpool` remains online but reports
+  `ZFS-8000-8A` permanent corruption affecting VM 100's disk and VM 118's replication target.
+  Recovery control has moved to VM 128 on Carter; VM 100 and all capacity-tier media guests are
+  stopped. The cluster remains quorate, VMs 118/200 remain authoritative and running on Carter,
+  PBS exposes the latest known-good VM 100 candidate from `2026-07-21T16:30:01Z`, and Carter has
+  capacity for an isolated restore to unused VMID 198. The installed 16 GB DIMM passed two full
+  MemTest86 passes with zero errors; an extended NVMe self-test and the isolated PBS restore remain
+  pending. The off-box PBS encryption-key copy is not positively verified, so destructive recovery
+  remains blocked. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
