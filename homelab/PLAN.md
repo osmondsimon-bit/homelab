@@ -15,7 +15,8 @@
   the current boot showed no new memory, PCIe, NVMe, or ZFS hardware fault; the isolated PBS restore
   passed on protected, no-network VMID 198. The operator initially approved a full rebuild, then paused before cutoff and superseded it with
   approval for a narrow repair: restore VM 100, fully recreate only VM 118's corrupt Apophis
-  replication target, then require a zero-error scrub and fresh VM 100 backup. A full rebuild is the
+  replication target, then require a zero-error scrub and fresh VM 100 backup. VM 100 has now been
+  replaced successfully from the proven PBS image and is running with `onboot=0` during recovery. A full rebuild is the
   fallback if errors recur. The operator explicitly accepted the residual risk of proceeding without
   positively verifying the off-box PBS key copy; Carter's cluster-held key decrypted the test. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
