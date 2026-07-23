@@ -53,7 +53,10 @@ Read-only checks at approximately 2026-07-23 16:22 local cluster time establishe
 - The currently installed single 16 GB DIMM completed two full MemTest86 passes with zero errors.
   Apophis reported 6.7 GiB memory available after the media guests stopped.
 - Current NVMe SMART health remained `PASSED`, with no critical warning, 7% used, and zero media
-  and data-integrity errors. An extended self-test is still pending.
+  and data-integrity errors. The extended NVMe self-test subsequently completed without error and
+  reported no failing LBA. Review of the current boot found no machine-check, EDAC memory error,
+  PCIe AER fault, NVMe reset/timeout/abort, or new ZFS fault. This passes the hardware-confidence
+  gate for continued recovery but does not prove that the removed DIMM caused the corruption.
 
 Preservation status reported by the operator:
 
