@@ -21,6 +21,13 @@
   remains passed, and no matching post-recovery checksum, memory, PCIe, NVMe, or ZFS recurrence
   appeared in the current kernel log. The DIMM hypothesis remains unproven, the off-box PBS key-copy
   check remains open, and a full rebuild remains the fallback only if errors recur.
+- **Recovery monitor commissioned 2026-07-23:** the corrected immediate check passed with `rpool`
+  online, zero counters, no known data errors, clean NVMe health, no matching recurrence events, and
+  a 5.5 GiB minimum `MemAvailable` across the one-minute sample. ntfy delivery passed, and fixed
+  09:00 AEST runs are active for July 24, 25, and 26. CT 120 Jellyfin is the first staged media
+  trial and remains `onboot=0`; do not add another media guest until representative load preserves
+  the 3 GiB guardrail. Carter-owned replication remains covered by the existing source-aware
+  Prometheus alerts.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
@@ -29,7 +36,7 @@
 |--------|------|------|----|--------|
 | mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
 | tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — first member of the HA subnet-router pair, advertises YOUR_LAN_CIDR (ADR-003/005). CT 126 on oneill is the independent failover router. |
-| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Stopped, `onboot=0` — capacity tier.** Media server with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). First media guest to trial if wanted. |
+| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running staged trial, `onboot=0` — capacity tier.** Media server with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Do not add another media guest until representative load preserves the 3 GiB guardrail. |
 | qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Stopped, `onboot=0` — capacity tier.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Stopped, `onboot=0` — capacity tier.** TV automation; remains tied to Apophis's USB-media bind mount. |
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Stopped, `onboot=0` — capacity tier.** Movie automation; remains tied to Apophis's USB-media bind mount. |

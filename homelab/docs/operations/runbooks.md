@@ -444,6 +444,13 @@ count. Carter-owned replication remains covered continuously by the source-aware
 identity, credentials, or raw kernel output. The monitor does not scrub, clear errors, change
 replication, start or stop guests, or mutate storage.
 
+**Corrected commissioning passed 2026-07-23.** The first run exposed two monitor-design issues, not
+storage recurrence: Apophis cannot list Carter-owned `pvesr` jobs locally, and one instantaneous
+memory sample did not implement the documented sustained guardrail. Replication was left to the
+existing source-aware alerts, and memory was changed to six samples over one minute. The corrected
+run reported clean ZFS/NVMe/kernel checks and a 5.5 GiB minimum `MemAvailable`; ntfy delivery passed,
+the timer was active, and its next event was Friday July 24 at 09:00 AEST.
+
 Deploy from VM 100:
 
 ```bash
