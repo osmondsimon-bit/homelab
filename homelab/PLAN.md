@@ -28,6 +28,11 @@
   trial and remains `onboot=0`; do not add another media guest until representative load preserves
   the 3 GiB guardrail. Carter-owned replication remains covered by the existing source-aware
   Prometheus alerts.
+- **Seven-day media silence active 2026-07-23:** Alertmanager `GuestDown` notifications for the
+  intentionally stopped CTs 121/123/124 and VM 125 are silenced until 2026-07-30 10:22 UTC.
+  Jellyfin CT 120 and every non-`GuestDown` signal remain unsilenced. The alerts proved that the
+  deployed Prometheus rule is behind the repository's capacity-tier matcher; reconcile the live
+  rule deliberately after the observation instead of broadening the temporary silence.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed

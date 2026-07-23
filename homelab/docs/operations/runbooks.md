@@ -471,6 +471,19 @@ root-only notification environment deliberately in a later cleanup pass. Any fai
 recurrence evidence: stop media workloads, preserve the output, and assess the documented full
 Apophis rebuild fallback before making changes.
 
+#### Temporary media GuestDown silence
+
+During the recovery observation, the live Prometheus rule emitted `GuestDown` for the intentionally
+stopped CTs 121/123/124 and VM 125 even though the versioned rule excludes the capacity tier. A
+seven-day Alertmanager silence was added for exactly those four guest IDs and expires automatically
+at 2026-07-30 10:22 UTC. It does not match Jellyfin CT 120 or any alert other than `GuestDown`.
+
+This silence is a bounded noise-control measure, not the permanent fix. After the observation
+window, compare the deployed `GuestDown` expression with
+`ansible/files/monitoring/alert-rules.yml` and reconcile it deliberately. Preserve alerts for any
+media guest that becomes a normal running service, and never broaden this silence to host, ZFS,
+NVMe, memory, replication, or recovery-monitor signals.
+
 ---
 
 ## Glance dashboard (CT 115 on oneill) — ADR-014
