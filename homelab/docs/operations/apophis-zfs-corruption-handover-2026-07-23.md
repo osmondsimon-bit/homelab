@@ -67,6 +67,14 @@ Codex checkpoint ref made an unfiltered `git fsck` exit nonzero, but all objects
 normal branch, remote, and tag refs were present. VM 198 remains running, isolated, and protected
 as the validated safety copy.
 
+Narrow-repair stage 1 completed successfully: the stopped VM 100 configuration and all VM 100
+storage on Apophis were destroyed without `--purge`, preserving scheduled-backup selection. The
+proven `2026-07-21T16:30:01Z` image restored to production VMID 100 on `local-zfs`; its EFI disk
+was normalized by Proxmox, `onboot` was temporarily set to zero, and the guest started. The guest
+agent responded and verified the expected hostname, readable filesystem, public repository, and
+required local-only Ansible inventory. VM 198 remains the protected, no-network safety copy. ZFS
+errors have not been cleared and no recovery scrub has run.
+
 Preservation status reported by the operator:
 
 - the sanctioned private local-config backup was run and pushed after the last meaningful change;
