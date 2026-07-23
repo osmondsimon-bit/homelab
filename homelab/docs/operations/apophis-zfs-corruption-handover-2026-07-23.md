@@ -46,6 +46,12 @@ errors, clean NVMe health, no matching recurrence events, and a 5.5 GiB minimum 
 across the one-minute sample. ntfy delivery and the next fixed timer event were both verified.
 Source-aware Prometheus alerts continue to cover the Carter-owned replication jobs.
 
+Alertmanager subsequently received `GuestDown` alerts for intentionally stopped CTs 121/123/124
+and VM 125, proving the deployed rule was behind the repository's capacity-tier exclusion. A
+seven-day silence matching only those four guest IDs is active until 2026-07-30 10:22 UTC.
+Jellyfin CT 120 and all non-`GuestDown` alerts remain unsilenced. Reconcile the deployed rule after
+the observation window; do not use the temporary silence to mask storage or recurrence signals.
+
 No recovery action was repeated. The full Apophis rebuild remains a fallback only if errors recur,
 and positive verification of the off-box PBS encryption-key copy remains open.
 
