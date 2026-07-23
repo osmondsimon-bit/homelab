@@ -13,8 +13,9 @@
   capacity for an isolated restore to unused VMID 198. The installed 16 GB DIMM passed two full
   MemTest86 passes with zero errors. The extended NVMe self-test also completed without error, and
   the current boot showed no new memory, PCIe, NVMe, or ZFS hardware fault; the isolated PBS restore
-  remains pending. The off-box PBS encryption-key copy is not positively verified, so destructive recovery
-  remains blocked. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
+  passed on protected, no-network VMID 198. The operator then approved a full Apophis rebuild and
+  explicitly accepted the residual risk of proceeding without positively verifying the off-box PBS
+  encryption-key copy; Carter's cluster-held key successfully decrypted the tested image. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
