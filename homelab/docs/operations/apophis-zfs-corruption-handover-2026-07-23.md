@@ -58,15 +58,27 @@ Read-only checks at approximately 2026-07-23 16:22 local cluster time establishe
   PCIe AER fault, NVMe reset/timeout/abort, or new ZFS fault. This passes the hardware-confidence
   gate for continued recovery but does not prove that the removed DIMM caused the corruption.
 
+The newest known-good VM 100 candidate, `2026-07-21T16:30:01Z`, was restored to temporary VMID
+198 on Carter in 49 seconds. Every virtual NIC was removed before first boot; the VM was set to
+`onboot=0`, protected, and named `mgmt-vm-restore-test`. The guest booted, its filesystem and
+normal Git history were readable and internally consistent, its working tree was clean, and the
+required local-only Ansible inventory existed without displaying its contents. A zero-valued
+Codex checkpoint ref made an unfiltered `git fsck` exit nonzero, but all objects reachable from
+normal branch, remote, and tag refs were present. VM 198 remains running, isolated, and protected
+as the validated safety copy.
+
 Preservation status reported by the operator:
 
 - the sanctioned private local-config backup was run and pushed after the last meaningful change;
 - no irreplaceable VM 100 data exists outside the public repository, private recovery repository,
   and PBS image;
 - the public handover branch is synchronized;
-- the off-box PBS encryption-key copy was **not positively verified**. The operator elected not to
-  check it at this stage. This remains an open preservation gate and must not be treated as
-  satisfied before any destructive recovery phase.
+- the off-box PBS encryption-key copy was **not positively verified**. After the successful isolated
+  restore proved that Carter retained a working cluster-held key, the operator explicitly accepted
+  the residual whole-cluster-loss risk and waived this verification gate; the copy must not be
+  described as verified.
+- the operator explicitly approved a full Apophis pool/host rebuild after the isolated restore
+  passed.
 
 ## How the incident was detected
 
