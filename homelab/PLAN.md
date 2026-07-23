@@ -18,7 +18,9 @@
   replication target, then require a zero-error scrub and fresh VM 100 backup. VM 100 has now been
   replaced successfully from the proven PBS image and is running with `onboot=0` during recovery. VM 118's
   corrupt Apophis target and snapshots were then removed and recreated by a successful full send
-  from Carter; jobs `118-0` and `200-0` both report `State OK` and `FailCount 0`. A full rebuild is the
+  from Carter; jobs `118-0` and `200-0` both report `State OK` and `FailCount 0`. The historical ZFS
+  counters were then cleared once; the recovery scrub repaired `0B`, found zero errors, and left
+  both pool and device READ/WRITE/CKSUM counters at zero with no known data errors. A full rebuild is the
   fallback if errors recur. The operator explicitly accepted the residual risk of proceeding without
   positively verifying the off-box PBS key copy; Carter's cluster-held key decrypted the test. See `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
