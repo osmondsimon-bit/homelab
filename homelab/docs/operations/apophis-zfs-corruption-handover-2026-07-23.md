@@ -19,6 +19,29 @@ memory, PCIe, or NVMe errors require stopping affected workloads and escalating 
 rebuild or device replacement. The off-box PBS encryption-key copy was not positively verified;
 the operator explicitly accepted that residual risk during recovery, and it remains a follow-up.
 
+## Post-recovery verification — 2026-07-23
+
+Read-only checks from restored VM 100 and operator-run commands on Carter and Apophis reconfirmed
+the completed recovery state:
+
+- VM 100 is running on Apophis as `mgmt-vm`, reports the expected guest hostname, and has
+  `onboot=1`.
+- VM 128 `mgmt-vm2` is stopped on Carter with `onboot=0`, `protection=1`, and its
+  `cold-standby;recovery` tags intact.
+- Replication jobs `118-0` and `200-0` remain enabled, current, and `State OK` with `FailCount 0`.
+- Apophis `rpool` and its device remain `ONLINE` with zero READ/WRITE/CKSUM counters. The completed
+  scrub still reports `0B` repaired and zero errors, and ZFS reports no known data errors.
+- NVMe health remains passed with no critical warning or media/data-integrity errors. The current
+  kernel log contains no matching post-recovery checksum, memory, PCIe, NVMe, or ZFS recurrence
+  evidence.
+- PBS still lists the fresh VM 100 restore point `2026-07-23T07:29:49Z`.
+- Capacity-tier CTs 120, 121, 123, and 124 plus VM 125 remain stopped with `onboot=0`.
+- The restored VM 100 checkout is clean on `agent/ai-ready-secondary-mgmt` and exactly synchronized
+  with the authoritative remote branch at `71c90fe`.
+
+No recovery action was repeated. The full Apophis rebuild remains a fallback only if errors recur,
+and positive verification of the off-box PBS encryption-key copy remains open.
+
 ## Historical incident state
 
 - Apophis `rpool` is a single-device ZFS-on-root pool and reports `ZFS-8000-8A`: permanent,

@@ -13,6 +13,14 @@
   and `200-0` are healthy. Full rebuild remains the fallback if errors recur. The off-box PBS key
   copy was not positively verified; the operator explicitly accepted that residual risk. See
   `docs/operations/apophis-zfs-corruption-handover-2026-07-23.md`.
+- **Post-recovery read-only verification passed 2026-07-23:** VM 100 remains running on Apophis
+  with `onboot=1`; VM 128 is stopped, protected, and `onboot=0` on Carter; replication jobs `118-0`
+  and `200-0` remain `State OK` with `FailCount 0`; the fresh VM 100 PBS restore point remains
+  visible; and all capacity-tier media guests remain stopped with `onboot=0`. Apophis `rpool` and
+  its device remain online with zero READ/WRITE/CKSUM counters and no known data errors. NVMe health
+  remains passed, and no matching post-recovery checksum, memory, PCIe, NVMe, or ZFS recurrence
+  appeared in the current kernel log. The DIMM hypothesis remains unproven, the off-box PBS key-copy
+  check remains open, and a full rebuild remains the fallback only if errors recur.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
 - **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
