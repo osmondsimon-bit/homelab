@@ -39,6 +39,13 @@ the completed recovery state:
 - The restored VM 100 checkout is clean on `agent/ai-ready-secondary-mgmt` and exactly synchronized
   with the authoritative remote branch at `71c90fe`.
 
+Subsequent staged operation started only CT 120 Jellyfin while retaining `onboot=0`; all other media
+guests remained stopped. A temporary read-only monitor was commissioned for 09:00 AEST on July 24,
+25, and 26. Its corrected immediate run passed with `rpool` online, zero counters, no known data
+errors, clean NVMe health, no matching recurrence events, and a 5.5 GiB minimum `MemAvailable`
+across the one-minute sample. ntfy delivery and the next fixed timer event were both verified.
+Source-aware Prometheus alerts continue to cover the Carter-owned replication jobs.
+
 No recovery action was repeated. The full Apophis rebuild remains a fallback only if errors recur,
 and positive verification of the off-box PBS encryption-key copy remains open.
 
