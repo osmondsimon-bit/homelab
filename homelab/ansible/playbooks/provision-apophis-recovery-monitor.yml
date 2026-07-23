@@ -1,0 +1,106 @@
+---
+# Install the fixed-window, read-only monitor for the completed 2026-07-23 Apophis ZFS recovery.
+# Run from VM 100 inside homelab/ansible:
+#   ansible-playbook playbooks/provision-apophis-recovery-monitor.yml
+
+- name: Install the temporary Apophis post-recovery monitor
+  hosts: apophis
+  gather_facts: false
+
+  tasks:
+    - name: Verify required monitoring commands
+      ansible.builtin.shell: |
+        set -e
+        for command in curl journalctl pvesr smartctl zpool; do
+          command -v "$command" >/dev/null
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Install the recovery monitor script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/apophis-recovery-monitor.sh"
+        dest: /usr/local/sbin/apophis-recovery-monitor
+        mode: "0755"
+      register: recovery_monitor_script
+
+    - name: Configure the recovery monitor notification destination
+      ansible.builtin.copy:
+        dest: /etc/default/apophis-recovery-monitor
+        mode: "0600"
+        content: |
+          NTFY_URL={{ (ntfy_base_url ~ '/' ~ ntfy_topic) | quote }}
+      no_log: true
+      register: recovery_monitor_environment
+
+    - name: Install the recovery monitor service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/apophis-recovery-monitor.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Check Apophis for post-recovery storage recurrence
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/apophis-recovery-monitor
+          ExecStart=/usr/local/sbin/apophis-recovery-monitor
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=strict
+          UMask=0077
+      register: recovery_monitor_service
+
+    - name: Install the fixed-window recovery monitor timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/apophis-recovery-monitor.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Run the temporary Apophis recovery monitor through 2026-07-26
+
+          [Timer]
+          OnCalendar=2026-07-24 09:00:00 Australia/Brisbane
+          OnCalendar=2026-07-25 09:00:00 Australia/Brisbane
+          OnCalendar=2026-07-26 09:00:00 Australia/Brisbane
+          Persistent=true
+          AccuracySec=1m
+
+          [Install]
+          WantedBy=timers.target
+      register: recovery_monitor_timer
+
+    - name: Enable the fixed-window recovery monitor
+      ansible.builtin.systemd:
+        name: apophis-recovery-monitor.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Run the recovery monitor immediately after installation
+      ansible.builtin.command: systemctl start apophis-recovery-monitor.service
+      changed_when: true
+      when: >-
+        recovery_monitor_script.changed
+        or recovery_monitor_environment.changed
+        or recovery_monitor_service.changed
+        or recovery_monitor_timer.changed
+
+    - name: Read the fixed-window timer state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - apophis-recovery-monitor.timer
+          - --property=ActiveState
+          - --property=NextElapseUSecRealtime
+      changed_when: false
+      register: recovery_monitor_state
+
+    - name: Report the fixed-window monitor state
+      ansible.builtin.debug:
+        var: recovery_monitor_state.stdout_lines
