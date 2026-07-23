@@ -77,8 +77,15 @@ Preservation status reported by the operator:
   restore proved that Carter retained a working cluster-held key, the operator explicitly accepted
   the residual whole-cluster-loss risk and waived this verification gate; the copy must not be
   described as verified.
-- the operator explicitly approved a full Apophis pool/host rebuild after the isolated restore
-  passed.
+- the operator initially approved a full Apophis pool/host rebuild after the isolated restore
+  passed, but paused before the cutoff command and requested a necessity review. No host shutdown,
+  quorum change, node removal, or pool rebuild occurred.
+- after reviewing the localized scrub findings, clean RAM/NVMe gates, proven VM 100 restore, and the
+  additional operational risk of cluster removal and guest reprovisioning, the operator superseded
+  the full-rebuild approval with explicit approval for a narrow repair. The approved scope is VM
+  100 replacement from PBS plus full recreation of only VM 118's Apophis replication target,
+  followed by a cleared error baseline, a zero-error scrub, and a verified fresh VM 100 backup. A
+  full rebuild remains the fallback if errors recur.
 
 ## How the incident was detected
 
