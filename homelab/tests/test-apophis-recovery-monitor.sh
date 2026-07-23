@@ -40,10 +40,17 @@ grep -Fq 'Media and Data Integrity Errors:' "$script" \
   || fail 'the monitor must check NVMe media-integrity errors'
 grep -Fq "2026-07-23 07:34:23 UTC" "$script" \
   || fail 'kernel recurrence checks must cover the full post-recovery window'
-grep -Fq '118-0 200-0' "$script" \
-  || fail 'the monitor must check both recovery replication jobs'
 grep -Fq '3145728' "$script" \
   || fail 'the monitor must enforce the 3 GiB MemAvailable guardrail'
+grep -Fq 'MEMORY_SAMPLE_COUNT=6' "$script" \
+  || fail 'the monitor must sample memory six times'
+grep -Fq 'MEMORY_SAMPLE_INTERVAL_SECONDS=10' "$script" \
+  || fail 'the monitor must cover a one-minute memory window'
+grep -Fq 'low_memory_samples == MEMORY_SAMPLE_COUNT' "$script" \
+  || fail 'memory must fail only when every sample breaches the guardrail'
+if grep -Fq 'pvesr' "$script"; then
+  fail 'the Apophis-local monitor must leave Carter-owned replication to existing alerts'
+fi
 grep -Fq 'send_notification high' "$script" \
   || fail 'failures must produce a high-priority notification'
 grep -Fq 'send_notification default' "$script" \
@@ -55,6 +62,8 @@ fi
 
 grep -Fq 'Temporary Apophis post-recovery monitor' "$runbook" \
   || fail 'the deployment and interpretation procedure must be documented'
+grep -Fq '`ReplicationFailing` and `ReplicationStale`' "$runbook" \
+  || fail 'the runbook must identify the existing source-aware replication alerts'
 
 systemd-analyze calendar '2026-07-24 09:00:00 Australia/Brisbane' >/dev/null \
   || fail 'systemd must accept the fixed AEST calendar expression'
