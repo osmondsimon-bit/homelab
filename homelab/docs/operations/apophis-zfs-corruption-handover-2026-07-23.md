@@ -75,6 +75,13 @@ agent responded and verified the expected hostname, readable filesystem, public 
 required local-only Ansible inventory. VM 198 remains the protected, no-network safety copy. ZFS
 errors have not been cleared and no recovery scrub has run.
 
+Narrow-repair stage 2 completed successfully: replication job `118-0` was disabled and deleted
+with forced configuration-only cleanup, then only `rpool/data/vm-118-disk-0` and its snapshots were
+destroyed on Apophis. The job was recreated from authoritative, running VM 118 on Carter; its first
+run completed as a full send in approximately 77 seconds with `State OK` and `FailCount 0`. Job
+`200-0` remained enabled and healthy throughout. ZFS errors still have not been cleared and no
+recovery scrub has run.
+
 Preservation status reported by the operator:
 
 - the sanctioned private local-config backup was run and pushed after the last meaningful change;
