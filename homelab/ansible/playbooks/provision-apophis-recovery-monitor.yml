@@ -11,7 +11,7 @@
     - name: Verify required monitoring commands
       ansible.builtin.shell: |
         set -e
-        for command in curl journalctl pvesr smartctl zpool; do
+        for command in curl journalctl smartctl zpool; do
           command -v "$command" >/dev/null
         done
       args:

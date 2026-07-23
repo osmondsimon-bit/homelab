@@ -4,6 +4,8 @@ set -uo pipefail
 
 readonly RECOVERY_BASELINE="2026-07-23 07:34:23 UTC"
 readonly MIN_MEM_AVAILABLE_KIB=3145728
+readonly MEMORY_SAMPLE_COUNT=6
+readonly MEMORY_SAMPLE_INTERVAL_SECONDS=10
 declare -a failures=()
 
 add_failure() {
@@ -26,7 +28,7 @@ if [[ -z "${NTFY_URL:-}" ]]; then
   exit 2
 fi
 
-for required_command in awk curl grep journalctl pvesr smartctl zpool; do
+for required_command in awk curl grep journalctl smartctl zpool; do
   command -v "$required_command" >/dev/null 2>&1 \
     || add_failure "required command unavailable: ${required_command}"
 done
@@ -90,42 +92,38 @@ if command -v journalctl >/dev/null 2>&1; then
   fi
 fi
 
-if command -v pvesr >/dev/null 2>&1; then
-  if ! replication_status="$(pvesr status 2>/dev/null)"; then
-    add_failure "replication status could not be read"
-  else
-    for job in 118-0 200-0; do
-      job_line="$(awk -v job="$job" '$1 == job {print; exit}' <<<"$replication_status")"
-      if [[ -z "$job_line" ]]; then
-        add_failure "replication job ${job} is missing"
-        continue
-      fi
-
-      read -r -a job_fields <<<"$job_line"
-      job_field_count="${#job_fields[@]}"
-      if ((job_field_count < 4)); then
-        add_failure "replication job ${job} status is incomplete"
-        continue
-      fi
-
-      job_enabled="${job_fields[1]}"
-      job_fail_count="${job_fields[job_field_count - 2]}"
-      job_state="${job_fields[job_field_count - 1]}"
-      if [[ "$job_enabled" != "Yes" || "$job_fail_count" != "0" || "$job_state" != "OK" ]]; then
-        add_failure "replication job ${job} is not enabled with FailCount 0 and State OK"
-      fi
-    done
+low_memory_samples=0
+minimum_mem_available_kib=0
+for ((sample = 1; sample <= MEMORY_SAMPLE_COUNT; sample++)); do
+  mem_available_kib="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo)"
+  if [[ ! "$mem_available_kib" =~ ^[0-9]+$ ]]; then
+    add_failure "MemAvailable could not be read"
+    minimum_mem_available_kib=0
+    break
   fi
+
+  if ((minimum_mem_available_kib == 0 || mem_available_kib < minimum_mem_available_kib)); then
+    minimum_mem_available_kib="$mem_available_kib"
+  fi
+  if ((mem_available_kib < MIN_MEM_AVAILABLE_KIB)); then
+    low_memory_samples=$((low_memory_samples + 1))
+  fi
+
+  if ((sample < MEMORY_SAMPLE_COUNT)); then
+    sleep "$MEMORY_SAMPLE_INTERVAL_SECONDS"
+  fi
+done
+
+if ((low_memory_samples == MEMORY_SAMPLE_COUNT)); then
+  add_failure "MemAvailable remained below the 3 GiB Apophis guardrail for one minute"
 fi
 
-mem_available_kib="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo)"
-if [[ ! "$mem_available_kib" =~ ^[0-9]+$ ]]; then
-  add_failure "MemAvailable could not be read"
-  mem_available_gib="unknown"
+if ((minimum_mem_available_kib > 0)); then
+  minimum_mem_available_gib="$(
+    awk -v kib="$minimum_mem_available_kib" 'BEGIN {printf "%.1f", kib / 1048576}'
+  )"
 else
-  mem_available_gib="$(awk -v kib="$mem_available_kib" 'BEGIN {printf "%.1f", kib / 1048576}')"
-  ((mem_available_kib >= MIN_MEM_AVAILABLE_KIB)) \
-    || add_failure "MemAvailable is below the 3 GiB Apophis guardrail"
+  minimum_mem_available_gib="unknown"
 fi
 
 if ((${#failures[@]} > 0)); then
@@ -142,7 +140,7 @@ if ((${#failures[@]} > 0)); then
   exit 1
 fi
 
-message="PASS: rpool ONLINE with zero counters and no known data errors; NVMe health clean; replication healthy; no recurrence events; MemAvailable ${mem_available_gib} GiB."
+message="PASS: rpool ONLINE with zero counters and no known data errors; NVMe health clean; no recurrence events; MemAvailable minimum ${minimum_mem_available_gib} GiB (${low_memory_samples}/${MEMORY_SAMPLE_COUNT} samples below guardrail)."
 if ! send_notification default "$message"; then
   printf 'Apophis recovery monitor: success notification could not be delivered\n' >&2
   exit 2

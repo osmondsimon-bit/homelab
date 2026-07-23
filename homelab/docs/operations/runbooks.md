@@ -437,9 +437,12 @@ units are first installed. Every run sends an ntfy result; failures use high pri
 
 The monitor checks `rpool` health, the clean recovery scrub result, zero pool/device
 READ/WRITE/CKSUM counters, selected NVMe health fields, post-recovery kernel recurrence signatures,
-jobs `118-0` and `200-0`, and the 3 GiB `MemAvailable` guardrail. Notifications contain no device
-identity, credentials, or raw kernel output. It does not scrub, clear errors, change replication,
-start or stop guests, or mutate storage.
+and the 3 GiB `MemAvailable` guardrail. Memory is sampled six times over one minute and fails only
+when every sample is below the guardrail; the notification reports the minimum and low-sample
+count. Carter-owned replication remains covered continuously by the source-aware
+`ReplicationFailing` and `ReplicationStale` Prometheus alerts. Notifications contain no device
+identity, credentials, or raw kernel output. The monitor does not scrub, clear errors, change
+replication, start or stop guests, or mutate storage.
 
 Deploy from VM 100:
 
