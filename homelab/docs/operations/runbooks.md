@@ -394,7 +394,8 @@ backlog item.)
   - Prometheus: `http://YOUR_MONITORING_IP:9090` (`/targets` for scrape health).
   - Grafana: `http://YOUR_MONITORING_IP:3000` (admin) — LAN/Tailscale only. Import dashboards
     (e.g. 1860 Node Exporter Full); export edits back to the repo per ADR-013.
-- **node_exporter** on apophis + oneill (`:9100`) via `install-node-exporter.yml`.
+- **node_exporter** on apophis, carter, and oneill (`:9100`) via
+  `install-node-exporter.yml`.
 - **Exporters:** pve-exporter (`:9221`, PVE API, read-only `PVEAuditor` token), unpoller
   (`:9130`, UniFi read-only user), Home Assistant `/api/prometheus` (long-lived token). All creds
   are `vars_prompt`/vault — never committed (ADR-006).
@@ -428,9 +429,70 @@ backlog item.)
   can't alert on its own host being down). Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh`
   (silent when healthy).
 
+### Persistent host hardware and ZFS health
+
+`install-node-exporter.yml` deploys a read-only five-minute collector to all three physical hosts.
+It exports each `rpool` state, READ/WRITE/CKSUM counters, known-data-error state, latest scrub time
+and result, SMART/NVMe health and error indicators, disk temperature, NVMe unsafe-shutdown count,
+and current-boot kernel hardware/storage-event count. It also repairs and enables Debian's
+`prometheus-node-exporter-smartmon.timer` on every host.
+
+This monitoring is **failure-only**. Healthy collections only update Prometheus metrics: they do
+not call ntfy and there is no PASS alert. Prometheus alerts only when the collector is absent or
+stale, a health/error metric crosses a failure threshold, or Apophis remains below its accepted
+3 GiB `MemAvailable` guardrail. Alertmanager's normal resolved state may close a real incident, but
+there is no recurring healthy notification.
+
+The same play enables the native monthly `zfs-scrub-monthly@rpool.timer` and
+`zfs-trim-monthly@rpool.timer` units. Continuous `autotrim` remains off deliberately: the
+[OpenZFS TRIM guidance](https://openzfs.github.io/openzfs-docs/Basic%20Concepts/Operations/TRIM.html)
+notes that continuous TRIM can add workload on lower-end devices, while periodic on-demand TRIM is
+the conservative policy for these consumer SSD pools. The
+[OpenZFS scrub service](https://openzfs.github.io/openzfs-docs/man/v2.2/8/zpool-scrub.8.html)
+provides the recurring integrity check. Never start a second scrub or trim merely because its
+timer is active; inspect `zpool status` first.
+
+Deploy the host collectors and then the versioned Prometheus rules from VM 100:
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/install-node-exporter.yml
+ansible-playbook playbooks/deploy-monitoring-rules.yml
+```
+
+The first play disables the superseded fixed-date `apophis-recovery-monitor.timer`, removing its
+recurring PASS notifications. The second stages and validates the candidate rules with `promtool`,
+promotes them atomically, and reloads only Prometheus; it does not recreate API tokens or restart
+the monitoring stack. The old temporary script and journal evidence remain available until a
+separate cleanup is approved.
+
+Verify each host and the monitoring CT:
+
+```bash
+ansible proxmox -m shell -a \
+  'systemctl is-active homelab-host-health.timer prometheus-node-exporter-smartmon.timer zfs-scrub-monthly@rpool.timer zfs-trim-monthly@rpool.timer && cat /var/lib/prometheus/node-exporter/homelab_host_health.prom'
+ssh root@YOUR_NUC_IP \
+  "pct exec 114 -- promtool check rules /etc/prometheus/rules/homelab.yml"
+```
+
+In Prometheus, confirm `homelab_host_health_last_check_timestamp_seconds` has one fresh series for
+each of `apophis`, `carter`, and `oneill`. Do not generate a synthetic disk or ZFS failure merely
+to test delivery; use the existing Alertmanager pipeline test above.
+
+When a host-health alert fires:
+
+1. Stop new and optional writes on the affected host. On Apophis, stop the newest optional media
+   workload first and preserve the 3 GiB memory floor.
+2. Capture `zpool status -v`, `smartctl -x <device>`, `journalctl -k -b`, and the alert labels.
+3. Do **not** run `zpool clear`, another scrub, a SMART self-test, or a reboot until the evidence is
+   reviewed. Those actions can erase timing/context or add load.
+4. Treat a non-ONLINE pool, known data error, new NVMe media error, failed SMART health, or kernel
+   MCE/uncorrectable error as an incident. Use the Apophis recovery procedure as the storage
+   evidence-preservation model; do not assume another DIMM is the cause.
+
 ### Temporary Apophis post-recovery monitor
 
-The completed 2026-07-23 ZFS recovery has a bounded observation window through Sunday 2026-07-26.
+The completed 2026-07-23 ZFS recovery had a bounded observation window through Sunday 2026-07-26.
 `provision-apophis-recovery-monitor.yml` installs a read-only oneshot check plus three fixed systemd
 timer runs at 09:00 AEST on July 24, 25, and 26. The playbook runs the check immediately when the
 units are first installed. Every run sends an ntfy result; failures use high priority.
@@ -465,11 +527,11 @@ ssh root@YOUR_PROXMOX_IP \
   'systemctl status apophis-recovery-monitor.timer --no-pager; systemctl list-timers apophis-recovery-monitor.timer'
 ```
 
-After the July 26 run, the fixed-date timer has no future trigger. Leave the evidence in the journal
-until the observation result is documented, then remove the inert service, timer, script, and
-root-only notification environment deliberately in a later cleanup pass. Any failed result is
-recurrence evidence: stop media workloads, preserve the output, and assess the documented full
-Apophis rebuild fallback before making changes.
+The permanent host-health deployment disables this fixed-date timer so only failure alerts remain.
+Leave the evidence in the journal until the observation result is documented, then remove the
+inert service, timer, script, and root-only notification environment deliberately in a later
+cleanup pass. Any failed historical result is recurrence evidence: stop media workloads, preserve
+the output, and assess the documented full Apophis rebuild fallback before making changes.
 
 #### Temporary media GuestDown silence
 
@@ -1016,6 +1078,39 @@ The optional full-media proposal is not accepted runtime state: it requires vali
 6 GB, moving VM 125 to Carter, then staging CTs 120/121/123/124. Until that work is separately
 approved and tested, their autostart remains off.
 
+### One-at-a-time hardware confidence tests
+
+These are maintenance tests, not monitoring jobs. Run only one host test at a time, with local
+power/console access, current backups, the other cluster node healthy, and both DNS resolvers
+proven. Do not combine a memory test, disk test, firmware change, and reboot into one window:
+separating them preserves the diagnostic signal.
+
+**Carter and Oneill disk self-tests:**
+
+1. Reconfirm the device path immediately before each test with `smartctl --scan-open`. The
+   2026-07-24 paths were `/dev/nvme0` on Carter and `/dev/sda` on Oneill; do not rely on those paths
+   after hardware or reinstall changes.
+2. Start a short test with `smartctl -t short <device>`, wait the duration printed by smartctl, then
+   record `smartctl -l selftest -l error -H -A <device>`.
+3. If the short test passes and ZFS remains clean, schedule the extended test in a later quiet
+   window with `smartctl -t long <device>`. Do not reboot, scrub, trim, or start another self-test
+   while it runs. Record the final self-test log and `zpool status -v`.
+4. Any failed/interrupted test, new media/error count, or ZFS counter increase ends the test plan
+   and enters the failure-response procedure above.
+
+**Carter memory:** boot MemTest86 from trusted removable media and complete at least two full
+passes across both installed DIMMs. Carter has mixed SK Hynix 2667 MT/s and Samsung 2400 MT/s
+modules operating at 2400 MT/s; that is context, not a failure. A single error fails the test.
+Photograph or transcribe the final result and module layout before returning Carter to service.
+
+**Lenovo warm reboots:** validate Carter first in its own window. Confirm independent SSH access to
+Apophis, backups, replication state, and cluster health; then perform one normal Carter reboot and
+verify the new boot, quorum, guests, ZFS, monitoring, and replication. Validate Apophis in a later
+window with Carter healthy, VM 100 access replaced by the independent operator path, and local
+power control available. If Apophis again reaches `reboot.target` without starting a new boot,
+preserve the surviving journal and evaluate `reboot=cold,pci` as a separate change. Never lower
+expected votes during an uncertain network partition and never reboot both cluster nodes together.
+
 ### C. Per-guest: autostart + ordering
 
 Check every guest auto-starts and in a sane order (DNS first → dependencies → HA VM). Audit current
@@ -1045,6 +1140,39 @@ turn `onboot` back on for an excluded capacity-tier guest merely to restore the 
 - **Full power-loss test** (the real proof): in a maintenance window, physically cut power to one
   host (or its UPS outlet) and confirm it powers back on **and** its guests autostart. Do one host
   at a time; never two (quorum). Record the result + recovery time here.
+
+### Power-continuity validation
+
+The documents currently disagree on whether the installed rack is protected directly by a UPS or
+only by the SigEnergy whole-home battery. Treat the power path as **unverified** until the physical
+feeds are traced; firmware auto-power-on is not a substitute for graceful shutdown.
+
+Before testing, record which source/outlet feeds Apophis, Carter, Oneill, the UniFi gateway, and
+the switch. Identify the installed battery/UPS management interface, its observable state-of-charge
+signal, and the mechanism—if any—that can request a clean Proxmox shutdown. Do not create an
+automatic low-charge shutdown from a guessed Home Assistant entity or undocumented vendor API.
+
+Run the validation with a person at the rack, no upgrade/scrub/SMART test active, current backups,
+and a tested recovery path:
+
+1. Prove transfer behavior with a controlled input-power interruption while watching all hosts and
+   network equipment. Confirm the gateway and switch remain powered; record transfer time and any
+   host reboot from `last -x`.
+2. Restore input power and verify every `rpool` is ONLINE with zero error counters, cluster quorum
+   is healthy, replication resumes, PBS is active, and the host-health collectors are fresh.
+3. In a separate exercise, lower the battery only to the vendor-supported test threshold and prove
+   the warning signal reaches the intended controller. Test the clean-shutdown command manually on
+   **one host at a time** before enabling any automation.
+4. Only after the signal and command are proven should a low-state-of-charge policy be designed.
+   It must use a sustained threshold/hysteresis, shut down optional workloads first, preserve DNS
+   and network longest, avoid two-node split-brain behavior, and require stable restored power
+   before restart.
+5. Record the installed topology, thresholds, timestamps, shutdown order, automatic-start result,
+   and recovery time here. A failed transfer, an unexpected reboot, a missing network feed, or a
+   dirty ZFS/kernel result fails the exercise and blocks automation.
+
+The physical power interruption and battery rundown are intentionally operator-run. The repository
+cannot safely complete them until the actual topology and management signal are confirmed.
 
 ---
 

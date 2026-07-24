@@ -1,0 +1,84 @@
+---
+# Validate and atomically deploy the committed Prometheus alert rules without
+# reprovisioning CT 114, recreating PVE API tokens, or restarting the full stack.
+#
+# Run from the mgmt-vm, inside homelab/ansible/:
+#   ansible-playbook playbooks/deploy-monitoring-rules.yml
+
+- name: Deploy validated Prometheus alert rules
+  hosts: oneill
+  gather_facts: false
+
+  vars:
+    monitoring_rules_host_stage: /tmp/homelab-alert-rules.source.yml
+    monitoring_rules_ct_stage: /tmp/homelab-alert-rules.candidate.yml
+    monitoring_rules_live: /etc/prometheus/rules/homelab.yml
+
+  tasks:
+    - name: Stage the committed rules on the Proxmox host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/alert-rules.yml"
+        dest: "{{ monitoring_rules_host_stage }}"
+        mode: "0644"
+
+    - name: Push the candidate rules into the monitoring CT
+      ansible.builtin.command:
+        argv:
+          - pct
+          - push
+          - "{{ monitoring_ctid }}"
+          - "{{ monitoring_rules_host_stage }}"
+          - "{{ monitoring_rules_ct_stage }}"
+      changed_when: true
+
+    - name: Validate the candidate rules before promotion
+      ansible.builtin.command: >-
+        pct exec {{ monitoring_ctid }} --
+        promtool check rules {{ monitoring_rules_ct_stage }}
+      changed_when: false
+
+    - name: Promote the validated rules atomically
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ monitoring_ctid }}"
+          - --
+          - install
+          - -o
+          - root
+          - -g
+          - root
+          - -m
+          - "0644"
+          - "{{ monitoring_rules_ct_stage }}"
+          - "{{ monitoring_rules_live }}"
+      changed_when: true
+
+    - name: Load the validated rules without restarting the monitoring stack
+      ansible.builtin.command: >-
+        pct exec {{ monitoring_ctid }} -- systemctl reload prometheus
+      changed_when: true
+
+    - name: Validate the deployed rules
+      ansible.builtin.command: >-
+        pct exec {{ monitoring_ctid }} --
+        promtool check rules {{ monitoring_rules_live }}
+      changed_when: false
+
+    - name: Remove the host-side staging file
+      ansible.builtin.file:
+        path: "{{ monitoring_rules_host_stage }}"
+        state: absent
+
+    - name: Remove the CT-side staging file
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ monitoring_ctid }}"
+          - --
+          - rm
+          - -f
+          - "{{ monitoring_rules_ct_stage }}"
+      changed_when: true

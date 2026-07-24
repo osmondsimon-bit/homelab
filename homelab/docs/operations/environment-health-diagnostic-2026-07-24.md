@@ -146,24 +146,15 @@ then define and implement the already-planned encrypted off-site “regret set�
 VM 127, HA native backups, and the credential-bearing private recovery repository. A restore drill
 must prove the off-site path.
 
-### High — permanent monitoring does not cover the observed failure class
+### Addressed in code, pending live deployment — observed failure-class monitoring
 
-The temporary Apophis recovery monitor checks ZFS health and counters, NVMe health, kernel hardware
-events, and the 3 GiB memory guardrail, but its fixed schedule ends after 2026-07-26.
-
-The permanent Prometheus rules cover target/guest availability, filesystem capacity, memory
-pressure, PVE storage capacity, replication, backup freshness, and maintenance state. They do not
-currently alert on:
-
-- ZFS pool health or non-zero READ/WRITE/CKSUM counters;
-- ZFS known-data-error state or stale/missing scrub evidence;
-- NVMe critical warnings, media/data-integrity errors, unsafe shutdown growth, wear, or temperature;
-- SMART being unavailable or a physical device becoming unhealthy; or
-- recurring MCE/EDAC, PCIe AER, NVMe reset/timeout, or kernel hardware-error messages.
-
-Collectors being installed is not enough if their important metrics have no rule. Persistent,
-low-noise physical-storage and ZFS alerts should replace the expiring incident checker after live
-metric names are verified on all three hosts.
+`install-node-exporter.yml` and the Prometheus rules now codify a five-minute read-only collector
+for ZFS health/counters/scrub state, SMART/NVMe health and error indicators, device temperature,
+unsafe-shutdown growth, current-boot kernel failure signatures, and the Apophis 3 GiB memory
+guardrail. The play also repairs Carter's SMART timer, enables monthly native ZFS scrub/trim timers,
+and disables the fixed-date PASS notifier. Healthy checks emit metrics only; notifications are
+failure-only. This risk remains operationally open until both playbooks are deployed and fresh
+series for all three hosts are verified.
 
 ### Moderate — Carter and Oneill lack self-test and offline-memory depth
 
@@ -319,13 +310,14 @@ alerts and an appropriate future self-test/scrub cadence.
 ## Recommended sequence after collection
 
 1. Positively verify the off-box PBS encryption-key copy without exposing the key.
-2. Replace the temporary Apophis checker with permanent, metric-backed ZFS/NVMe/SMART alerting,
-   including repair of Carter's inactive SMART collection.
-3. Confirm or establish a scheduled ZFS scrub and SSD trim policy for all three pools.
+2. Deploy and verify the codified permanent, failure-only ZFS/NVMe/SMART/kernel alerting on all
+   three hosts; this also repairs Carter's inactive SMART collection and retires the PASS notifier.
+3. Verify the newly codified native monthly ZFS scrub and periodic SSD trim timers on all pools.
 4. Establish CPU/system thermal collection and trend Oneill's comparatively warm SSD.
 5. Decide the off-site regret-set destination and prove a restore from it.
-6. Consider short/extended SMART tests for Carter and Oneill, then an offline Carter MemTest86 pass,
-   as separately approved maintenance work.
-7. Schedule the two Lenovo warm-reboot tests separately, one node at a time.
-8. Confirm the actual power-continuity path and graceful low-power shutdown behavior.
+6. Execute the documented short/extended SMART tests for Carter and Oneill, then an offline Carter
+   MemTest86 pass, in separate operator maintenance windows.
+7. Execute the documented Lenovo warm-reboot tests separately, one node at a time.
+8. Trace the actual power topology, then execute the documented transfer and graceful low-power
+   validation with a person at the rack.
 9. Reconcile the stale physical-infrastructure inventory in its own focused change.

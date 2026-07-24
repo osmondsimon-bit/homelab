@@ -19,6 +19,99 @@
         maintenance_target_name: "{{ inventory_hostname }}"
         maintenance_target_kind: pve-host
 
+    - name: Install physical-disk health tooling
+      ansible.builtin.apt:
+        name:
+          - prometheus-node-exporter-collectors
+          - smartmontools
+        state: present
+        update_cache: true
+        lock_timeout: 300
+
+    - name: Install the persistent host health collector
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/monitoring/host-health-collector.sh"
+        dest: /usr/local/bin/homelab-host-health-collector
+        mode: "0755"
+
+    - name: Configure the persistent host health collector
+      ansible.builtin.copy:
+        dest: /etc/default/homelab-host-health
+        mode: "0644"
+        content: |
+          NODE_NAME={{ inventory_hostname }}
+          TEXTFILE_DIR=/var/lib/prometheus/node-exporter
+
+    - name: Install the persistent host health service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-host-health.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Collect read-only ZFS, SMART, and kernel failure metrics
+          After=local-fs.target
+
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/homelab-host-health
+          ExecStart=/usr/local/bin/homelab-host-health-collector
+          Nice=10
+          IOSchedulingClass=idle
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=strict
+          ReadWritePaths=/var/lib/prometheus/node-exporter
+
+    - name: Install the five-minute host health timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-host-health.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Collect persistent host health metrics every five minutes
+
+          [Timer]
+          OnBootSec=5m
+          OnUnitActiveSec=5m
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Enable host health, distro SMART, monthly scrub, and monthly trim timers
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        daemon_reload: true
+        enabled: true
+        state: started
+      loop:
+        - homelab-host-health.timer
+        - prometheus-node-exporter-smartmon.timer
+        - zfs-scrub-monthly@rpool.timer
+        - zfs-trim-monthly@rpool.timer
+
+    - name: Collect the initial host health sample
+      ansible.builtin.command: systemctl start homelab-host-health.service
+      changed_when: true
+
+    - name: Confirm persistent host health metrics
+      ansible.builtin.command: cat /var/lib/prometheus/node-exporter/homelab_host_health.prom
+      register: host_health_metrics
+      changed_when: false
+
+    - name: Report persistent host health metrics
+      ansible.builtin.debug:
+        var: host_health_metrics.stdout_lines
+
+    - name: Stop the superseded temporary Apophis recovery timer
+      ansible.builtin.systemd:
+        name: apophis-recovery-monitor.timer
+        enabled: false
+        state: stopped
+      when: inventory_hostname == "apophis"
+      failed_when: false
+
     # Debian's node_exporter deliberately excludes /mnt from the filesystem collector. Monitor the
     # generated mount unit instead: this checks systemd state without calling statfs on the USB disk.
     - name: Configure safe Media USB mount-state monitoring on apophis

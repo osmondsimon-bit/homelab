@@ -9,8 +9,8 @@ Prometheus, native packages, no Docker.
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 114 (unprivileged LXC, Debian 12, `features nesting=1`) |
 | IP / ports | `YOUR_MONITORING_IP` — Grafana `:3000`, Prometheus `:9090`, Alertmanager `:9093` (LAN/Tailscale only, no public exposure) |
 | TSDB | Prometheus data on a quota'd ZFS bind-mount (`rpool/data/monitoring-tsdb`), ~30-day retention. **Not backed up** — history is non-critical, rebuilds from code |
-| Exporters | node (`:9100` on apophis+oneill), pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP-connect probe of the SLZB-06 Zigbee coordinator (`zigbee_coordinator_target`) |
-| Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; apophis dead-man's-switch covers "oneill down" |
+| Exporters | node (`:9100` on apophis+carter+oneill), including five-minute host ZFS/SMART/NVMe/kernel textfile metrics; pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP-connect probe of the SLZB-06 Zigbee coordinator (`zigbee_coordinator_target`) |
+| Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; persistent host-health checks are failure-only (no PASS notifications); apophis dead-man's-switch covers "oneill down" |
 
 ## How it's managed
 
@@ -27,6 +27,12 @@ Prometheus + Grafana + Alertmanager are installed from official repos. Alert rul
 creds, PVE audit token, ntfy topic) are `vars_prompt`/`group_vars`, never committed (ADR-006).
 Login to Grafana as `admin`; the password is only set when you type a non-blank value at the
 prompt (blank = keep current). Reset: `pct exec 114 -- grafana-cli admin reset-admin-password '…'`.
+
+Physical-host telemetry and monthly ZFS scrub/trim scheduling are deployed separately by
+`ansible/playbooks/install-node-exporter.yml`; then `deploy-monitoring-rules.yml` stages,
+`promtool`-validates, and atomically loads the matching failure-only rules without rebuilding the
+stack or recreating its API tokens. Healthy runs only refresh metrics. The collector never sends
+notifications, starts tests, clears ZFS state, scrubs, trims, or reboots a host.
 
 > **Invariant:** dashboards + alert rules are code. Grafana has `allowUiUpdates: true` for live
 > tweaks, but **export edits back to the repo** or they're lost on the next Ansible run.

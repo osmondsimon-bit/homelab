@@ -86,6 +86,184 @@ groups:
           summary: "Low memory: {{ $labels.instance }} <10% available"
           description: "{{ $labels.instance }} has had under 10% memory available for 10m."
 
+      # Apophis has an accepted absolute 3 GiB safety floor under its reduced 16 GB model.
+      # This catches capacity-tier pressure well before the generic 10% threshold.
+      - alert: ApophisMemoryGuardrail
+        expr: node_memory_MemAvailable_bytes{job="node", node="apophis"} < 3221225472
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Apophis below its 3 GiB memory guardrail"
+          description: "Apophis has had less than 3 GiB MemAvailable for 10m. Stop the newest optional media workload and inspect memory pressure before adding load."
+
+      # Physical-host failure telemetry is emitted by host-health-collector.sh every five minutes.
+      # Healthy state is silent: only these failure conditions reach Alertmanager/ntfy.
+      - alert: HostHealthCollectorAbsent
+        expr: >
+          (up{job="node", node=~"apophis|carter|oneill"} == 1)
+          unless on(node)
+          homelab_host_health_last_check_timestamp_seconds
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host health metrics absent on {{ $labels.node }}"
+          description: "node_exporter is reachable but the persistent ZFS/SMART collector has not produced a metric. Re-run install-node-exporter.yml or inspect homelab-host-health.service."
+
+      - alert: HostHealthCollectorStale
+        expr: (time() - homelab_host_health_last_check_timestamp_seconds) > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host health collector stale on {{ $labels.node }}"
+          description: "The last successful ZFS/SMART/kernel health collection is over 15 minutes old. Inspect homelab-host-health.service and its timer."
+
+      - alert: ZFSPoolUnhealthy
+        expr: homelab_zfs_pool_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS pool unhealthy: {{ $labels.node }}/{{ $labels.pool }}"
+          description: "The pool is not ONLINE. Stop optional writes, preserve `zpool status -v`, and do not clear counters or start another scrub before review."
+
+      - alert: ZFSPoolErrors
+        expr: >
+          (homelab_zfs_pool_read_errors
+           + homelab_zfs_pool_write_errors
+           + homelab_zfs_pool_checksum_errors) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS errors on {{ $labels.node }}/{{ $labels.pool }}"
+          description: "A pool READ/WRITE/CKSUM counter is non-zero. Stop optional writes and preserve evidence; do not clear counters before diagnosis."
+
+      - alert: ZFSKnownDataErrors
+        expr: homelab_zfs_known_data_errors > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS known data errors on {{ $labels.node }}/{{ $labels.pool }}"
+          description: "ZFS reports permanent data errors. Preserve `zpool status -v` and stop affected optional workloads before recovery planning."
+
+      - alert: ZFSScrubFailed
+        expr: homelab_zfs_last_scrub_errors > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Latest ZFS scrub found errors on {{ $labels.node }}/{{ $labels.pool }}"
+          description: "The latest completed scrub reported errors. Do not clear or repeat it until the affected objects and hardware evidence are preserved."
+
+      - alert: ZFSScrubStale
+        expr: >
+          homelab_zfs_last_scrub_timestamp_seconds == 0
+          or (time() - homelab_zfs_last_scrub_timestamp_seconds) > 3456000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "ZFS scrub stale on {{ $labels.node }}/{{ $labels.pool }}"
+          description: "No completed scrub is recorded within 40 days. Check zfs-scrub-monthly@{{ $labels.pool }}.timer before starting one manually."
+
+      - alert: SmartDeviceUnhealthy
+        expr: homelab_smart_device_healthy == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMART health failed on {{ $labels.node }} {{ $labels.device }}"
+          description: "smartctl no longer reports PASSED health. Preserve SMART output and reduce writes before considering replacement."
+
+      - alert: SmartMetricsAbsent
+        expr: >
+          (up{job="node", node=~"apophis|carter|oneill"} == 1)
+          unless on(node)
+          homelab_smart_device_healthy
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No SMART device metrics on {{ $labels.node }}"
+          description: "node_exporter and the host-health collector are reachable, but smartctl found no readable physical device. Inspect smartctl --scan-open and the collector journal."
+
+      - alert: SmartMediaIndicators
+        expr: >
+          (homelab_smart_reallocated_sectors > 0)
+          or (homelab_smart_pending_sectors > 0)
+          or (homelab_smart_offline_uncorrectable > 0)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMART media indicators non-zero on {{ $labels.node }} {{ $labels.device }}"
+          description: "The ATA device reports a reallocated, pending, or offline-uncorrectable sector. Preserve SMART and filesystem/pool evidence."
+
+      - alert: SmartCRCErrors
+        expr: delta(homelab_smart_crc_errors[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "New SMART interface CRC error on {{ $labels.node }} {{ $labels.device }}"
+          description: "The device's cumulative interface CRC-error count increased in the last hour. Preserve SMART/kernel evidence and inspect the storage connection."
+
+      - alert: NVMeCriticalWarning
+        expr: homelab_nvme_critical_warning > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NVMe critical warning on {{ $labels.node }} {{ $labels.device }}"
+          description: "The NVMe critical-warning bitmap is non-zero. Preserve the full SMART log and reduce writes."
+
+      - alert: NVMeMediaErrors
+        expr: homelab_nvme_media_errors > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NVMe media errors on {{ $labels.node }} {{ $labels.device }}"
+          description: "The NVMe reports media/data-integrity errors. Preserve SMART, kernel, and ZFS evidence before taking recovery action."
+
+      - alert: NVMeWearHigh
+        expr: homelab_nvme_percentage_used >= 90
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "NVMe endurance usage high on {{ $labels.node }} {{ $labels.device }}"
+          description: "The NVMe percentage-used value has remained at or above 90% for 1h. Confirm the full SMART log and plan replacement before the endurance estimate is exhausted."
+
+      - alert: NVMeUnsafeShutdown
+        expr: delta(homelab_nvme_unsafe_shutdowns[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "New unsafe NVMe shutdown on {{ $labels.node }} {{ $labels.device }}"
+          description: "The cumulative unsafe-shutdown count increased in the last hour. Confirm the power/reboot event was expected and inspect ZFS plus kernel state."
+
+      - alert: DiskTemperatureHigh
+        expr: homelab_smart_device_temperature_celsius >= 70
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk temperature high on {{ $labels.node }} {{ $labels.device }}"
+          description: "The device has remained at or above 70 °C for 15m. Reduce load and inspect cooling before it reaches a device-specific critical threshold."
+
+      - alert: KernelHardwareError
+        expr: homelab_kernel_hardware_error_events > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kernel hardware/storage error on {{ $labels.node }}"
+          description: "The current boot contains an MCE, EDAC, PCIe, NVMe, block-I/O, lockup, watchdog, or OOM failure signature. Inspect `journalctl -k -b` and preserve evidence."
+
       # A PVE storage (datastore/rpool/local-*) running out — pve-exporter metrics.
       # max by(id): clustered nodes (apophis+carter) each report cluster-wide storage,
       # so every clustered storage has 2 identical series — aggregate to one alert per id.

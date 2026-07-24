@@ -204,9 +204,13 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
   three physical hosts show healthy capacity and no current hardware/storage recurrence. Every
   `rpool` is online with zero READ/WRITE/CKSUM counters and no known data errors; primary-disk
   health passes without media/uncorrectable errors; cluster quorum and replication are healthy.
-  Follow-ups: permanent ZFS/SMART/NVMe alerting after the temporary checker ends, Carter's inactive
-  SMART timer, no visible ZFS scrub schedule or CPU/system thermal data, Oneill's comparatively
-  warm 54 °C SSD, missing Carter/Oneill self-test history, and off-site recovery. See
+  Permanent failure-only ZFS/SMART/NVMe/kernel monitoring, Carter SMART-timer repair, native
+  monthly scrub/trim, the Apophis 3 GiB guardrail, and retirement of the fixed-date PASS notifier
+  are now codified in `install-node-exporter.yml` plus the Prometheus rules; live deployment is
+  pending. One-at-a-time Carter/Oneill disk tests, Carter MemTest86, Lenovo warm reboots, and a
+  topology-gated power-continuity exercise are documented as operator maintenance. Deferred
+  follow-ups remain CPU/system thermal visibility, Oneill's comparatively warm 54 °C SSD, and
+  off-site recovery. See
   `docs/operations/environment-health-diagnostic-2026-07-24.md`.
 - [x] **DNS SPOF during oneill maintenance — ANSWERED 2026-06-22 (tested live).** Home-VLAN DHCP hands out **only Technitium (`.6`)** — no secondary — and there is **NO transparent DNS redirect** at the gateway (a DNS query to a bogus IP timed out), so when oneill/Technitium is down **home-VLAN DNS fully breaks** until it returns. BUT the **gateway (`.2.1`) is a working independent resolver** (forwards fine; no ad-blocking). **Quick fix:** add `.2.1` as a **secondary DNS in UniFi DHCP** for the home VLAN → clients fail over automatically (losing only ad-block while Technitium is down). The **2nd Technitium** (Phase 4 step 5) is the better long-term fix (keeps ad-block). Either removes the SPOF — do one **before** the Phase 4 oneill evacuation. **Observed during the 2026-06-22 outage:** a work laptop kept browsing (it uses browser DoH / corporate DNS, bypassing the local resolver) but an iPhone on Wi-Fi couldn't resolve in Safari *despite iCloud Private Relay* — because Private Relay must first resolve its ingress (`mask*.icloud.com`) via the **local** resolver to bootstrap, so a dead local DNS with no secondary breaks even Private Relay devices. Reinforces the secondary-DNS fix.
 - [ ] **CT 111 (and now CT 117 by symmetry) reprovision drill** — both Technitium CTs claim "reproducible-from-code"; neither rebuild has been tested. What's the actual outage window for a forced rebuild? Schedule a 30-min window (e.g. late evening), destroy + re-run `provision-technitium.yml --limit <node>`, record RTO. Until done, DNS recovery is an assumption not a fact. (With the 2nd resolver live, drilling CT 111 is now lower-risk — CT 117 covers DNS during the test.)
