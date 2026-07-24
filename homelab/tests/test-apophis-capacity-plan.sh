@@ -7,6 +7,7 @@ plan="${repo_root}/homelab/PLAN.md"
 adr="${repo_root}/homelab/decisions/009-cluster-ha-zfs.md"
 runbook="${repo_root}/homelab/docs/operations/runbooks.md"
 alerts="${repo_root}/homelab/ansible/files/monitoring/alert-rules.yml"
+monitoring_playbook="${repo_root}/homelab/ansible/playbooks/provision-monitoring.yml"
 vault_playbook="${repo_root}/homelab/ansible/playbooks/provision-vaultwarden.yml"
 
 fail() {
@@ -28,6 +29,10 @@ grep -Fq "$expected_matcher" "$alerts" \
   || fail 'GuestDown must exclude only the accepted cold media tier and VM 128'
 grep -Fq 'Intentional cold/capacity-tier guests' "$alerts" \
   || fail 'GuestDown exclusion must explain the capacity-tier exception'
+grep -Fq 'up{availability!="optional"} == 0' "$alerts" \
+  || fail 'TargetDown must ignore targets explicitly labelled as optional'
+grep -Fq 'labels: { availability: "optional", guest: "qemu/125" }' "$monitoring_playbook" \
+  || fail 'VM 125 node-exporter must be labelled optional while it remains a stopped capacity target'
 grep -Fq 'targets carter' "$vault_playbook" \
   || fail 'Vaultwarden rebuild instructions must preserve its accepted Carter placement'
 

@@ -335,7 +335,12 @@
                 - targets: ["{{ n.host }}:9100"]
                   labels: { node: "{{ n.name }}" }
           {% endfor %}
-                - targets: {{ ([hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100', (jellyseerr_ip | regex_replace('/.*$', '')) ~ ':9100'] + ([(actual_ip | regex_replace('/.*$', '')) ~ ':9100'] if (actual_enabled | default(false) | bool) else [])) | unique | list | to_json }}
+                - targets: {{ ([hostvars['localhost'].ansible_default_ipv4.address ~ ':9100', (vaultwarden_ip | regex_replace('/.*$', '')) ~ ':9100'] + ([(actual_ip | regex_replace('/.*$', '')) ~ ':9100'] if (actual_enabled | default(false) | bool) else [])) | unique | list | to_json }}
+                # VM 125 is a deliberately stopped capacity-tier guest. Keep its
+                # metrics when started, but do not make the healthy stopped state
+                # fire the generic TargetDown alert every repeat interval.
+                - targets: ["{{ (jellyseerr_ip | regex_replace('/.*$', '')) }}:9100"]
+                  labels: { availability: "optional", guest: "qemu/125" }
           {% for n in monitoring_pve_nodes %}
             - job_name: pve-{{ n.name }}
               metrics_path: /pve

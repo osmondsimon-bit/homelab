@@ -414,6 +414,9 @@ backlog item.)
   restore it to the matcher when it becomes a default-on service. A clustered survivor may continue
   reporting a dead node's guests as down, so a whole-host outage can also produce `GuestDown`
   alongside `TargetDown`; the next real node-down drill must confirm whether that is noisy).
+  VM 125's direct node-exporter target is also labelled `availability="optional"` so its accepted
+  stopped state does not generate a repeating `TargetDown`; its metrics are still scraped whenever
+  it is intentionally started. Remove both exceptions when VM 125 becomes default-on.
   - **Test the pipeline:** `pct exec 114 -- amtool --alertmanager.url=http://localhost:9093 alert add
     alertname=PipelineTest severity=critical --annotation=summary="test"` → ntfy push after the 30s
     group_wait (auto-resolves ~5 min later). Confirm delivery without a phone:

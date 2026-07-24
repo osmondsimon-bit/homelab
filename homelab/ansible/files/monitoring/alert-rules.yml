@@ -10,8 +10,10 @@ groups:
   - name: homelab
     rules:
       # Any scrape target unreachable (node/pve/unifi/home-assistant/prometheus self).
+      # Targets explicitly labelled availability="optional" are intentionally allowed
+      # to be stopped; their metrics remain useful whenever they are running.
       - alert: TargetDown
-        expr: up == 0
+        expr: up{availability!="optional"} == 0
         for: 5m
         labels:
           severity: critical
