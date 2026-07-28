@@ -148,12 +148,13 @@ operation without erasing the incident record or its degraded-capacity procedure
 - **Media returns to the default-on tier.** VM 125 and CTs 120/121/123/124 use `onboot=1` again.
   Their provisioning playbooks already held that intended state; only the live Proxmox flags,
   monitoring exceptions, and current-state documentation needed to be restored.
-- **Critical-VM placement does not move merely because RAM returned.** VM 200 and VM 118 remain on
-  Carter with replication to Apophis. This retains the independent placement established during
-  the fault without introducing a migration solely to recreate the old diagram.
-- **Carter-loss recovery keeps management available.** Stop the media stack first, then recover
-  VMs 200/118 on 32 GB Apophis while VM 100 and CT 110 remain running. Keep at least 3 GiB
-  `MemAvailable`; if that guardrail fails, shed optional load before continuing.
+- **VM 200 returns to Apophis; VM 118 stays on Carter.** Home Assistant resumes its standard
+  Apophis placement and replicates to Carter. Vaultwarden retains the independent Carter placement
+  established during the fault and replicates to Apophis.
+- **A node loss affects only the VM owned by that node.** If Carter fails, VM 200 continues on
+  Apophis; stop media load as needed before recovering only VM 118 while VM 100 and CT 110 remain
+  running. If Apophis fails, VM 118 continues on Carter and VM 200 can be recovered from its Carter
+  replica. Keep at least 3 GiB `MemAvailable`; shed optional load before continuing if needed.
 - **Always-on monitoring covers media again.** `GuestDown` includes all five media guests, and VM
   125's direct node-exporter target is no longer optional. Cold recovery VM 128 remains the only
   intentional `GuestDown` exclusion.
@@ -161,4 +162,4 @@ operation without erasing the incident record or its degraded-capacity procedure
   `docs/apophis-16gb-capacity-review-2026-07-22.md` to reapply the service-tier controls rather
   than treating those controls as the normal 32 GB design.
 
-No guest RAM sizes or current VM 118/200 placement change in this refinement.
+No guest RAM sizes change in this refinement.

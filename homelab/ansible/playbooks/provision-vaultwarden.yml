@@ -14,7 +14,7 @@
 #  - Hardened: container cap-drop ALL + no-new-privileges, signups off, Argon2id ADMIN_TOKEN.
 #
 # Play 1 creates+boots the VM on the selected cluster host; play 2 configures it over SSH
-# (key from cloud-init). The accepted 16 GB capacity model targets carter by default.
+# (key from cloud-init). The accepted split placement targets carter by default.
 #
 # Run from the mgmt-vm, inside homelab/ansible/ (targets carter):
 #   ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
@@ -232,4 +232,4 @@
           - "signups_allowed = {{ vaultwarden_signups_allowed | default(false) }}"
           - "NEXT: Tailscale admin -> approve node + disable key expiry + ACL to your devices."
           - "  If first run: re-ran with -e vaultwarden_signups_allowed=true, register, then re-run (default OFF)."
-          - "  Onboarding: pvesr 118-0 -> carter + PBS backup are set up separately (see PLAN/runbook)."
+          - "  Onboarding: pvesr 118-0 -> apophis + PBS backup are set up separately (see PLAN/runbook)."

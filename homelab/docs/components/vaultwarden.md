@@ -27,7 +27,7 @@ deliberately contained to this one guest (oneill's service LXCs stay Docker-free
 
 Provisioned **and** configured by `homelab/ansible/playbooks/provision-vaultwarden.yml` (idempotent;
 two plays — the selected cluster host creates the VM, then configures Docker + Tailscale + the
-container over SSH). Carter is the accepted rebuild target under the 16 GB capacity model:
+container over SSH). Carter remains the accepted rebuild target in the restored split placement:
 
 ```bash
 cd ~/homelab/ansible && ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
