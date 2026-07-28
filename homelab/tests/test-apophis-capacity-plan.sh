@@ -26,6 +26,8 @@ grep -Fq 'Restored 32 GB operating model (2026-07-28)' "$plan" \
   || fail 'PLAN must identify the restored 32 GB operating model'
 grep -Fq 'VM 200 Apophis→Carter; VM 118 Carter→Apophis' "$plan" \
   || fail 'PLAN must record the restored split replication directions'
+grep -Fq 'Current split replication health — ✅ VERIFIED 2026-07-28' "$plan" \
+  || fail 'PLAN must record the operator-verified split replication baseline'
 grep -Fq 'Refinement (2026-07-28 — Apophis restored to 32 GB)' "$adr" \
   || fail 'ADR-009 must record the restored-capacity decision'
 grep -Fq 'VM 200 returns to Apophis; VM 118 stays on Carter' "$adr" \

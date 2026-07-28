@@ -46,7 +46,7 @@
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Running, `onboot=1`.** TV automation; tied to Apophis's USB-media bind mount. |
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Movie automation; tied to Apophis's USB-media bind mount. |
 | seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Running, `onboot=1`.** Request/indexer stack; no media bind mount. |
-| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — returned from Carter to Apophis on 2026-07-28 after the RAM incident; VM 200 replicates Apophis→Carter. Manual replica bootability was proven 2026-06-25. |
+| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — returned from Carter to Apophis on 2026-07-28 after the RAM incident. `pvesr` job `200-0` targets Carter; enabled with `FailCount 0`, `State OK`, and last sync `2026-07-28 17:15:01` verified from Apophis. Manual replica bootability was proven 2026-06-25. |
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
@@ -73,7 +73,7 @@
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
 | technitium2 | 117 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM2_IP | Running — 2nd DNS resolver, config-identical to CT 111 via the `technitium_instances` playbook loop (ADR-011). Independent node from CT 111 (oneill) for DNS redundancy. GuestDown covers `lxc/117`. |
-| vaultwarden | 118 | VM (Ubuntu 24.04) | YOUR_VAULTWARDEN_IP | Running — password manager; tailnet-only. `pvesr` job 118-0 targets Apophis + PBS daily; enabled/current with `FailCount 0`, `State OK` verified 2026-07-22 (ADR-010/018). |
+| vaultwarden | 118 | VM (Ubuntu 24.04) | YOUR_VAULTWARDEN_IP | Running — password manager; tailnet-only. `pvesr` job `118-0` targets Apophis; enabled with `FailCount 0`, `State OK`, and last sync `2026-07-28 17:15:01` verified from Carter. PBS backup runs daily (ADR-010/018). |
 | actual | 127 | VM (Ubuntu 24.04) | YOUR_ACTUAL_IP | Running — Actual Budget in a pinned official Docker container; loopback-only application behind Tailscale Serve, `tag:actual` operator-only; encrypted PBS daily + no-network restore drill proven 2026-07-15 (ADR-023). |
 | mgmt-vm2 | 128 | VM (Ubuntu 24.04) | YOUR_SECONDARY_MGMT_IP | **Cold + validated 2026-07-18** — independent build (not a VM 100 clone), 2 cores / 8 GB / 64 GB thin disk (2.28 GB actual after provisioning), distinct automation key, local-only Ansible config, `onboot=0`, protected while stopped. Ansible `ping` passed against all three PVE hosts. AI-ready refresh codified 2026-07-19: signed stable Claude Code + user-local Codex, with independent manual sign-in; live refresh pending. Activate manually when the primary control node is unavailable (ADR-000). |
 
@@ -261,7 +261,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 ### ▶ Pick up next session (immediate)
 - **[x] Apophis RAM and standard placement restored — ✅ DONE 2026-07-28.** The temporary 16 GB operating model is superseded for normal operation. Media guests CTs 120/121/123/124 and VM 125 are running with `onboot=1`; VM 200 is back on Apophis and replicates to Carter; VM 118 remains on Carter and replicates to Apophis. The 2026-07-22 capacity review remains the fault/degraded-capacity reference.
 - **Historical 16 GB capacity decision (superseded 2026-07-28):** accepted 2026-07-22 after the original Lenovo 16 GB module failed. HA + Vaultwarden moved to Carter, media autostart was disabled, and the stale VM 199 recovery clone was purged. Formal review: `docs/apophis-16gb-capacity-review-2026-07-22.md`.
-- **Current split replication direction (2026-07-28):** `118-0` runs Carter→Apophis; after VM 200 returned home, `200-0` runs Apophis→Carter. Confirm both report `State OK` and `FailCount 0` after the migration.
+- **Current split replication health — ✅ VERIFIED 2026-07-28:** `118-0` runs Carter→Apophis and `200-0` runs Apophis→Carter. Both are enabled and reported `State OK`, `FailCount 0`, with last successful sync `2026-07-28 17:15:01` in the respective source-host output.
 - **Historical incident replication state — ✅ VERIFIED 2026-07-22:** while both critical VMs were temporarily on Carter, jobs `118-0` and `200-0` both targeted Apophis and reported `FailCount 0`, `State OK`.
 - **[ ] Prove a direct operator path to Apophis** that does not depend on VM 100 before relying on the Carter-loss runbook.
 - **Historical 32 GB re-balance (guest shapes remain current):** done 2026-06-18:
