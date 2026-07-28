@@ -10,10 +10,8 @@ groups:
   - name: homelab
     rules:
       # Any scrape target unreachable (node/pve/unifi/home-assistant/prometheus self).
-      # Targets explicitly labelled availability="optional" are intentionally allowed
-      # to be stopped; their metrics remain useful whenever they are running.
       - alert: TargetDown
-        expr: up{availability!="optional"} == 0
+        expr: up == 0
         for: 5m
         labels:
           severity: critical
@@ -303,10 +301,10 @@ groups:
       #         · 123 sonarr · 124 radarr · 126 tailscale2 (HA subnet router #2, on oneill)
       #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 seerr+prowlarr+gluetun
       #         · 127 actual-budget · 128 mgmt-vm2 · 200 home-assistant.
-      # Intentional cold/capacity-tier guests are excluded: media lxc/120,121,123,124 +
-      # qemu/125 under the 16 GB Apophis model, and cold recovery qemu/128.
+      # Intentional cold recovery guest qemu/128 is excluded. The media guests returned to
+      # the default-on tier when Apophis returned to 32 GB on 2026-07-28.
       - alert: GuestDown
-        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!~"lxc/(120|121|123|124)|qemu/(125|128)"}) == 0
+        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) == 0
         for: 5m
         labels:
           severity: critical

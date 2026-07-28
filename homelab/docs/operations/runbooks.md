@@ -406,17 +406,14 @@ backlog item.)
   app). The topic is a secret — gitignored `group_vars/all.yml` (`ntfy_topic`), never committed; the
   bridge reads it from `/etc/am-ntfy/env` (0600). AM's cluster port (`:9094`) is disabled (single
   instance). Rules: `TargetDown`, `NodeFilesystemSpaceLow`, `NodeMemoryHigh`, `PVEStorageFull`,
-  **`GuestDown`** (`min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!~"lxc/(120|121|123|124)|qemu/(125|128)"}) == 0` — a default-on guest stopped/crashed while its host is up;
+  **`GuestDown`** (`min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) == 0` — a default-on guest stopped/crashed while its host is up;
   `up`/TargetDown only covers *scraped* targets, so this is what catches a service LXC like Tailscale
   or Technitium dying on its own. VM 128 is excluded because powered off is the cold standby's
-  healthy state; media guests 120/121/123/124/125 are excluded while they remain the intentional
-  stopped capacity tier. This means an optionally started media guest is not covered by `GuestDown`;
-  restore it to the matcher when it becomes a default-on service. A clustered survivor may continue
-  reporting a dead node's guests as down, so a whole-host outage can also produce `GuestDown`
-  alongside `TargetDown`; the next real node-down drill must confirm whether that is noisy).
-  VM 125's direct node-exporter target is also labelled `availability="optional"` so its accepted
-  stopped state does not generate a repeating `TargetDown`; its metrics are still scraped whenever
-  it is intentionally started. Remove both exceptions when VM 125 becomes default-on.
+  healthy state. Media guests 120/121/123/124/125 are covered after returning to the default-on
+  tier on 2026-07-28. A clustered survivor may continue reporting a dead node's guests as down, so
+  a whole-host outage can also produce `GuestDown` alongside `TargetDown`; the next real node-down
+  drill must confirm whether that is noisy). VM 125's direct node-exporter target is also covered
+  by `TargetDown`.
   - **Test the pipeline:** `pct exec 114 -- amtool --alertmanager.url=http://localhost:9093 alert add
     alertname=PipelineTest severity=critical --annotation=summary="test"` → ntfy push after the 30s
     group_wait (auto-resolves ~5 min later). Confirm delivery without a phone:
@@ -1255,11 +1252,11 @@ window**, one step at a time, honouring every VERIFY gate.
 ## Rebuild carter (the primary critical-VM host) — DR runbook
 
 Carter normally hosts **VM 200 (HA)**, **VM 118 (Vaultwarden)**, **CT 117 `technitium2`**, and
-stateful **VM 127 `actual`**. VMs 118/200 replicate to 16 GB Apophis. A Carter loss therefore needs
-the capacity-aware manual failover below before rebuild work: Apophis cannot run VM 100 plus both
-critical replicas. Actual remains unavailable until its encrypted PBS image is restored, and DNS
-rides on CT 111 (oneill) alone. Do this in a maintenance window. This mirrors the Apophis 4b
-rebuild, with the added 16 GB capacity gate.
+stateful **VM 127 `actual`**. VMs 118/200 replicate to 32 GB Apophis. A Carter loss therefore needs
+the capacity-aware manual failover below before rebuild work: stop the default-on media stack first,
+then keep VM 100 available while recovering both critical replicas. Actual remains unavailable
+until its encrypted PBS image is restored, and DNS rides on CT 111 (oneill) alone. Do this in a
+maintenance window. This mirrors the Apophis 4b rebuild with an explicit media-load shedding gate.
 
 > **Key fact — `/etc/pve` is cluster-shared.** Reinstalling carter wipes only its *node-local*
 > state. On `pvecm add`, carter pulls the cluster filesystem from apophis, so **users, 2FA, ACLs,
@@ -1272,10 +1269,10 @@ rebuild, with the added 16 GB capacity gate.
 
 1. **Evacuate or recover VMs 118/200 first.** If Carter is alive for planned maintenance, stop all
    Apophis media, prove direct operator access to Apophis, use VM 100 for pre-flight checks, then
-   shut down VM 100 and normally migrate VMs 118/200 to Apophis with `--bwlimit 100000`. If Carter
-   is already dead, follow [Capacity-aware manual failover](#capacity-aware-manual-failover-vms-118200-when-carter-is-truly-dead--adr-009).
-   **VERIFY:** HA + Vaultwarden work on Apophis, CT 110 is up, VM 100 and all media are stopped, and
-   `free -h` reports at least 3 GiB available.
+   normally migrate VMs 118/200 to Apophis with `--bwlimit 100000`. If Carter is already dead,
+   follow [Capacity-aware manual failover](#capacity-aware-manual-failover-vms-118200-when-carter-is-truly-dead--adr-009).
+   **VERIFY:** HA + Vaultwarden work on Apophis, CT 110 and VM 100 are up, all media are stopped,
+   and `free -h` reports at least 3 GiB available.
 2. **Remove carter from the cluster** (do this *before* wiping it). On apophis:
    confirm Carter is powered off, run `pvecm expected 1`, then `pvecm delnode carter`; if the node
    dir lingers, remove `/etc/pve/nodes/carter` only after confirming VMs 118/200 configs now belong
@@ -1306,7 +1303,8 @@ rebuild, with the added 16 GB capacity gate.
    `pvesr create-local-job 200-0 apophis --schedule '*/15'` and
    `pvesr create-local-job 118-0 apophis --schedule '*/15'`, then run each job explicitly.
    **VERIFY:** HA + Vaultwarden work on Carter; `pvesr status` on Carter shows both enabled, State
-   OK, FailCount 0; Apophis has fresh `__replicate__` snapshots. Only then restart VM 100.
+   OK, FailCount 0; Apophis has fresh `__replicate__` snapshots. Only then restore media
+   `onboot=1` and start the media guests required for normal operation.
 8. **Reprovision CT 117 `technitium2`** (reproducible from code; admin password pasted from Vaultwarden
    at the prompt): `ansible-playbook playbooks/provision-technitium.yml --limit carter`. **VERIFY:**
    `dig @YOUR_TECHNITIUM2_IP example.com +short` resolves and a blocked domain returns NXDOMAIN.
@@ -1332,15 +1330,17 @@ start replicas during an uncertain network partition**: duplicate owners can cor
 1. **Confirm Carter is actually dead**, not merely unreachable through a shared gateway/switch
    fault. Confirm Apophis itself is stable and CT 126 on oneill preserves the independent remote
    route.
-2. On **Apophis**, stop every media guest and keep it stopped:
+2. On **Apophis**, temporarily disable autostart for every media guest, then stop each one:
    ```bash
+   for vmid in 120 121 123 124; do
+     pct set "$vmid" --onboot 0
+     pct stop "$vmid"
+   done
+   qm set 125 --onboot 0
    qm stop 125
-   pct stop 120
-   pct stop 121
-   pct stop 123
-   pct stop 124
    ```
-   `stopped`/not-found responses are harmless. Confirm all five remain `onboot=0`.
+   An already-stopped response is harmless. Confirm all five report `onboot: 0`; this prevents a
+   host reboot from reintroducing media load during recovery.
 3. Check `pvecm status`. Only when Carter is confirmed dead, run `pvecm expected 1`. This makes
    `/etc/pve` writable solely for vital recovery work; do not make unrelated cluster changes.
 4. Confirm the replicas exist before moving ownership:
@@ -1358,17 +1358,23 @@ start replicas during an uncertain network partition**: duplicate owners can cor
    mv /etc/pve/nodes/carter/qemu-server/200.conf /etc/pve/nodes/apophis/qemu-server/200.conf
    ```
    **VERIFY:** both destination config files exist and neither source config remains.
-6. VM 100 cannot coexist safely with both replicas on 16 GB Apophis. While VM 100 is still up,
-   finish all diagnostics and prove a separate operator desktop can administer Apophis. From the
-   Apophis host shell—not from inside VM 100—run `qm shutdown 100 --timeout 60`; use `qm stop 100`
-   only if the graceful shutdown fails.
+6. Keep VM 100 and CT 110 running on 32 GB Apophis so the primary management and remote-access paths
+   remain available throughout recovery.
 7. Start `qm start 200`, then `qm start 118`. **VERIFY:** HA loads, Zigbee2MQTT reconnects and a
-   Zigbee device responds; Vaultwarden loads; `free -h` shows at least 3 GiB available. Keep VM 100
-   and all media stopped until Carter returns.
+   Zigbee device responds; Vaultwarden loads; VM 100 and CT 110 remain healthy; and `free -h` shows
+   at least 3 GiB available. Keep all media stopped until Carter returns.
 8. Rebuild/rejoin Carter using the section above. To fail back, delete the stale replication job
    definitions with `pvesr delete <jobid> --force 1`, normally migrate VMs 118/200 to Carter with
-   `--bwlimit 100000`, recreate both Carter→Apophis jobs, run them, and verify fresh replicas before
-   restarting VM 100.
+   `--bwlimit 100000`, recreate both Carter→Apophis jobs, run them, and verify fresh replicas. Then
+   restore the normal media boot flags:
+   ```bash
+   for vmid in 120 121 123 124; do
+     pct set "$vmid" --onboot 1
+   done
+   qm set 125 --onboot 1
+   ```
+   Start the media guests needed immediately; otherwise they start automatically at the next
+   Apophis boot.
 
 If Apophis dies in the accepted placement, HA/Vaultwarden already remain on Carter; start cold VM
 128 for an independent management plane rather than moving either critical VM.

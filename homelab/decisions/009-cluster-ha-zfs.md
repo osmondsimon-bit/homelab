@@ -1,11 +1,11 @@
 # ADR-009: 3-node Proxmox cluster + ZFS replication for resilience (manual failover, local storage)
 
 **Date:** 2026-06-14 (HA approach revised 2026-06-22 — automatic HA manager rejected; see Refinements)  
-**Status:** Accepted — **Phase 4 complete (2026-06-25)**; capacity model refined
-2026-07-22. The 2-node cluster `homelab` (apophis + carter) is live; oneill stays
+**Status:** Accepted — **Phase 4 complete (2026-06-25)**; capacity model last refined
+2026-07-28. The 2-node cluster `homelab` (apophis + carter) is live; oneill stays
 standalone; `pvesr` replication + manual failover for VMs 118/200 is in production. The
 "3-node" framing in the title/Context below is the original direction — see **Refinements**
-for the as-built 2-node and asymmetric-capacity decisions.
+for the as-built 2-node design and later capacity decisions.
 
 ## Context
 
@@ -139,3 +139,26 @@ operating model with explicit service tiers.
 
 This refinement does not resize guests, move VM 125, or re-enable media. Those remain deliberate,
 separately validated operations.
+
+## Refinement (2026-07-28 — Apophis restored to 32 GB)
+
+Apophis is back to 32 GB RAM. This supersedes the 2026-07-22 service-tier restriction for normal
+operation without erasing the incident record or its degraded-capacity procedure.
+
+- **Media returns to the default-on tier.** VM 125 and CTs 120/121/123/124 use `onboot=1` again.
+  Their provisioning playbooks already held that intended state; only the live Proxmox flags,
+  monitoring exceptions, and current-state documentation needed to be restored.
+- **Critical-VM placement does not move merely because RAM returned.** VM 200 and VM 118 remain on
+  Carter with replication to Apophis. This retains the independent placement established during
+  the fault without introducing a migration solely to recreate the old diagram.
+- **Carter-loss recovery keeps management available.** Stop the media stack first, then recover
+  VMs 200/118 on 32 GB Apophis while VM 100 and CT 110 remain running. Keep at least 3 GiB
+  `MemAvailable`; if that guardrail fails, shed optional load before continuing.
+- **Always-on monitoring covers media again.** `GuestDown` includes all five media guests, and VM
+  125's direct node-exporter target is no longer optional. Cold recovery VM 128 remains the only
+  intentional `GuestDown` exclusion.
+- **The 16 GB review remains the degraded-capacity fallback.** If Apophis loses RAM again, use
+  `docs/apophis-16gb-capacity-review-2026-07-22.md` to reapply the service-tier controls rather
+  than treating those controls as the normal 32 GB design.
+
+No guest RAM sizes or current VM 118/200 placement change in this refinement.

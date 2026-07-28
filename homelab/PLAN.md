@@ -3,7 +3,7 @@
 ## Current infrastructure
 
 ### apophis (Proxmox host)
-- Intel i7-8700T, **16 GB RAM** — the original Lenovo 16 GB SO-DIMM failed 2026-07-22; the later aftermarket 16 GB module remains healthy. The temporary 32 GB configuration ran 2026-06-18→2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
+- Intel i7-8700T, **32 GB RAM** — restored to 32 GB on 2026-07-28 after the original Lenovo 16 GB SO-DIMM failed on 2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
 - IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.3, **cluster member** (2-node `homelab` with carter; ADR-009)
 - **ZFS corruption recovery completed 2026-07-23:** VM 100 was restored from the validated July 21
   PBS image; VM 118's corrupt Apophis replica was fully recreated from Carter. The installed 16 GB
@@ -34,18 +34,18 @@
   deployed Prometheus rule is behind the repository's capacity-tier matcher; reconcile the live
   rule deliberately after the observation instead of broadening the temporary silence.
 - Firmware updated and confirmed live 2026-07-20: BIOS `M1UKT79A`, DMI release date `2026-03-12`, expected ThinkCentre M720q model. Linux-exposed settings survived the update, and a physical disconnect/reconnect confirmed unattended AC-restore startup; controlled warm-reboot validation remains pending.
-- **Accepted 16 GB operating model (2026-07-22):** VM 100 + CT 110 are the default workload; all media guests are `onboot=0`. HA/Vaultwarden run on Carter and replicate back. Maintain ≥3 GiB `MemAvailable`; see ADR-009 and `docs/apophis-16gb-capacity-review-2026-07-22.md`.
+- **Restored 32 GB operating model (2026-07-28):** media guests CTs 120/121/123/124 and VM 125 are default-on again with `onboot=1`. HA/Vaultwarden remain on Carter and replicate back; restoring RAM does not by itself change their accepted placement. Maintain ≥3 GiB `MemAvailable`; see ADR-009. The 16 GB incident decision remains recorded in `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - vmbr0 is VLAN-aware — completed
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
 | mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
 | tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — first member of the HA subnet-router pair, advertises YOUR_LAN_CIDR (ADR-003/005). CT 126 on oneill is the independent failover router. |
-| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running staged trial, `onboot=0` — capacity tier.** Media server with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Do not add another media guest until representative load preserves the 3 GiB guardrail. |
-| qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Stopped, `onboot=0` — capacity tier.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
-| sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Stopped, `onboot=0` — capacity tier.** TV automation; remains tied to Apophis's USB-media bind mount. |
-| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Stopped, `onboot=0` — capacity tier.** Movie automation; remains tied to Apophis's USB-media bind mount. |
-| seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Stopped, `onboot=0` — capacity tier.** Optional future move to Carter only after VM 100 sizing and staged-media validation; no media bind mount. |
+| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Default-on, `onboot=1`.** Media server with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). |
+| qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Default-on, `onboot=1`.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
+| sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Default-on, `onboot=1`.** TV automation; tied to Apophis's USB-media bind mount. |
+| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Default-on, `onboot=1`.** Movie automation; tied to Apophis's USB-media bind mount. |
+| seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Default-on, `onboot=1`.** Request/indexer stack; no media bind mount. |
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
@@ -67,7 +67,7 @@
 - Intel i5-8500 (6c/6t, Coffee Lake — matched to apophis for live migration), **32 GB RAM**, ~256 GB SSD (**ZFS-on-root**, `rpool`)
 - IP: YOUR_CARTER_IP — Proxmox VE 9.2.4, kernel `7.0.14-4-pve`, **cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
 - Firmware updated and confirmed live 2026-07-19: BIOS `M1UKT79A`, DMI release date `2026-03-12`, machine type/model `30CES0DW00`. This is Lenovo's current model-compatible recommended release (package published 2026-03-30). The operator confirmed the recorded BIOS settings survived the update; controlled warm-reboot validation remains pending.
-- Role: primary home for HA/Vaultwarden under the accepted 16 GB Apophis model + 2nd DNS resolver + Actual Budget + cold independent management. VMs 118/200 replicate Carter→Apophis for manual recovery. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
+- Role: primary home for HA/Vaultwarden + 2nd DNS resolver + Actual Budget + cold independent management. VMs 118/200 replicate Carter→Apophis for manual recovery; that placement remains accepted after Apophis returned to 32 GB. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
 
 | VM/LXC | VMID | Type | IP | Status |
 |--------|------|------|----|--------|
@@ -85,11 +85,11 @@
 
 | Node | Role | Status | Intended to run |
 |------|------|--------|-----------------|
-| apophis | 16 GB cluster member; management + media hardware | **Live (cluster)** — VM 100 + CT 110; media stopped by default | Primary management; replica target for VMs 118/200; Jellyfin/media capacity tier only when ≥3 GiB host headroom remains |
+| apophis | 32 GB cluster member; management + media hardware | **Live (cluster)** — VM 100 + CT 110 + default-on media stack | Primary management and media; replica target for VMs 118/200; maintain ≥3 GiB host headroom |
 | carter (ThinkStation P330 Tiny 30CE, i5-8500 / 32 GB / ZFS) | Primary critical-VM host + cluster survivor | **Live (cluster)** — HA (VM 200), Vaultwarden (VM 118), technitium2 (CT 117), Actual (VM 127) + cold mgmt-vm2 (VM 128) | Critical VMs + 2nd DNS + independent recovery control node; replicates 118/200 to Apophis |
 | KAMRUI Essenx E2 (**oneill**, N150 / 16 GB / ZFS) | Low-power, **standalone** | **Live (standalone)** — Technitium, PBS, HA-share, Monitoring, Glance, infra-portal, Tailscale2 | Simple services offloaded from apophis; CT 126 provides an independent Tailscale subnet-router path |
 
-Offloading the simple services to oneill preserves its independent recovery role. The apophis+carter pair (matched Coffee-Lake CPUs) supports live migration; recovery for VMs 118/200 is **manual** from the latest replicated snapshot. Capacity is asymmetric: Apophis loss is covered by Carter + cold VM 128, while Carter loss requires stopping media and then VM 100 before both critical replicas can run on 16 GB Apophis. oneill being standalone means a node-down there is a DNS/monitoring/backup outage, not a quorum event — CT 117 on Carter preserves DNS.
+Offloading the simple services to oneill preserves its independent recovery role. The apophis+carter pair (matched Coffee-Lake CPUs) supports live migration; recovery for VMs 118/200 is **manual** from the latest replicated snapshot. Apophis loss is covered by Carter + cold VM 128. During a Carter loss, stop the media stack to free capacity; 32 GB Apophis can then keep VM 100 available while running both critical replicas, subject to the ≥3 GiB guardrail. oneill being standalone means a node-down there is a DNS/monitoring/backup outage, not a quorum event — CT 117 on Carter preserves DNS.
 
 ## Provisioning & tooling
 
@@ -112,11 +112,11 @@ Offloading the simple services to oneill preserves its independent recovery role
 | ~~Actual Budget~~ | VM (VM 127) | **carter** | ✅ Live 2026-07-15 — Ubuntu 24.04 + pinned official Docker image; tailnet-only HTTPS through Tailscale Serve; server password + budget E2EE configured; portable ZIP taken; daily encrypted PBS image and isolated restore drill proven (ADR-023). |
 | Minecraft server | VM/LXC | TBD | Game server for future use — low priority, size/placement TBD |
 
-Per-service RAM/disk sizing is set when each is built. The 16 GB Apophis ceiling binds again as of 2026-07-22: media is a stopped capacity tier until staged testing proves the ≥3 GiB host-memory guardrail. Jellyfin stays on Apophis for the iGPU.
+Per-service RAM/disk sizing is set when each is built. Apophis returned to 32 GB on 2026-07-28, so the complete media stack is default-on again. The ≥3 GiB host-memory guardrail remains; Jellyfin stays on Apophis for the iGPU.
 
 **Media stack (ADR-021):** qBittorrent in an LXC behind a **native WireGuard + nftables killswitch** running the ProtonVPN Plus tunnel (all torrent traffic exits via ProtonVPN, drops if the tunnel dies — Gluetun/Docker rejected as default to keep service LXCs Docker-free). Jellyfin (unprivileged LXC, QuickSync) serves media; shared download path via host bind-mount on a **500 GB USB-C SSD** (ext4, not backed up — replaceable; NAS deferred to new house). Split: **6a** Jellyfin + storage (no VPN dep), **6b** torrents (gated on Proton Plus). Low priority — revisit once media importance is clearer.
 
-**Password manager (ADR-010): ✅ LIVE — Vaultwarden** (VM 118 on Carter; built on Apophis when Phase 5 closed 2026-06-26, moved under the accepted 16 GB capacity model). Self-hosted, Bitwarden-compatible, zero-knowledge — the server stores only ciphertext, so theft of a node never exposes passwords and encrypted backups are safe to store anywhere. Infra/machine tokens stay in gitignored env files on the mgmt-vm (Tier 3, ADR-018); `ansible-vault` is not in use (dropped 2026-06-25 as never-wired-in).
+**Password manager (ADR-010): ✅ LIVE — Vaultwarden** (VM 118 on Carter; built on Apophis when Phase 5 closed 2026-06-26, moved during the 2026-07-22 RAM incident and retained on Carter after Apophis returned to 32 GB). Self-hosted, Bitwarden-compatible, zero-knowledge — the server stores only ciphertext, so theft of a node never exposes passwords and encrypted backups are safe to store anywhere. Infra/machine tokens stay in gitignored env files on the mgmt-vm (Tier 3, ADR-018); `ansible-vault` is not in use (dropped 2026-06-25 as never-wired-in).
 
 ## Updates & patching
 
@@ -259,14 +259,15 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 - [x] **Reserve `YOUR_PORTAL_IP` in UniFi** — ✅ done 2026-06-20.
 
 ### ▶ Pick up next session (immediate)
-- **[x] Apophis 16 GB capacity decision — ✅ ACCEPTED 2026-07-22.** The original Lenovo 16 GB module failed; the later aftermarket 16 GB module is healthy. HA + Vaultwarden run on Carter and replicate to Apophis; VM 100 + CT 110 are Apophis's default workload; all media guests are `onboot=0`. No immediate RAM purchase. Reconsider 32 GB only on the explicit ADR-009 purchase triggers. The stale, stopped VM 199 recovery clone on Carter was purged after its absent NIC, disks, and snapshots were verified; its owned ZFS volumes are removed. Formal review: `docs/apophis-16gb-capacity-review-2026-07-22.md`.
+- **[x] Apophis RAM restored to 32 GB — ✅ DONE 2026-07-28.** The temporary 16 GB operating model is superseded for normal operation. Media guests CTs 120/121/123/124 and VM 125 return to `onboot=1`; HA + Vaultwarden remain on Carter and replicate to Apophis. The 2026-07-22 capacity review remains the fault/degraded-capacity reference.
+- **Historical 16 GB capacity decision (superseded 2026-07-28):** accepted 2026-07-22 after the original Lenovo 16 GB module failed. HA + Vaultwarden moved to Carter, media autostart was disabled, and the stale VM 199 recovery clone was purged. Formal review: `docs/apophis-16gb-capacity-review-2026-07-22.md`.
 - **[x] Critical replication direction and health — ✅ VERIFIED 2026-07-22.** Carter jobs `118-0` and `200-0` both target Apophis, are enabled, and reported `FailCount 0`, `State OK`; VM 118 completed a fresh sync at 21:41:43 and VM 200 at 21:30:01.
 - **[ ] Prove a direct operator path to Apophis** that does not depend on VM 100 before relying on the Carter-loss runbook.
-- **Historical 32 GB re-balance (superseded 2026-07-22):** done 2026-06-18 while both modules worked:
+- **Historical 32 GB re-balance (guest shapes remain current):** done 2026-06-18:
   - **home-assistant (VM 200)** was 4 GB, 24h peak 92% → set **8 GB** and **rebooted — live** ✅.
   - **mgmt-vm (VM 100)** was 4 GB, 24h peak 86% → **now 10 GB ✅ confirmed live** (bumped 6→10 GB on 2026-06-20, rebooted; no hotplug so it needed the reboot).
   - tailscale 256 MB — peak 66% → optional bump to 512 MB (`tailscale_ram_mb` in group_vars → reprovision). technitium / pbs / monitoring / glance / ha-share all <30% peak — left as is.
-  - The 8 GB HA / 10 GB management shapes remain current, but they no longer fit together on 16 GB Apophis. Any future resize requires new peak evidence and a controlled restart.
+  - The 8 GB HA / 10 GB management shapes remain current and fit the restored 32 GB recovery model. Any future resize requires new peak evidence and a controlled restart.
   - **Note — these two VMs are hand-built, not in code (intentional).** Terraform import remains deferred; PLAN holds their current shape until that import.
 - **Phase 5 (Secrets track) ✓ CLOSED 2026-06-26** (`/phase-gate` — doc-auditor + continuity-reviewer + security-review all clear, record in `docs/phases/5-secrets-track.md`). Vaultwarden live (VM 118, Ubuntu+Docker, Tailscale-only, hardened, replicated + PBS-imaged, **restore drill ✅ PASS**); tiered secrets model (ADR-018, `ansible-vault` dropped); access audit + 18 Tier-1 items imported + secrets-register; SSH key-only-root hardening; 2FA recovery codes → Keychain; carter-rebuild runbook written. **Phase 5 was split at the gate:** the **HA-expansion sub-track** (Node-RED/ESPHome/HA→Grafana/wall-tablet; HACS done) is **deferred to a standalone project**. **Next: Phase 6** (Media — Jellyfin + qBittorrent/Gluetun). **Carried forward:** off-site backup unresolved; CT 111/117 reprovision + node-down alert drills outstanding (non-gating).
 - **Phase 4 ✓ CLOSED 2026-06-25** (`/phase-gate` — doc-auditor + continuity-reviewer + security-review, record in `docs/phases/4-multinode-ha.md`). 2-node cluster (apophis + carter), apophis rebuilt on ZFS, `pvesr` replication + manual failover for VM 200, 2nd Technitium (CT 117) for DNS redundancy, corosync ride-out, monitoring deduped + replication-health alerts. **Next: Phase 5** (Secrets + HA expansion — Vaultwarden; swapped ahead of Media 2026-06-25). **Carried forward (continuity gaps — see backlog):** ~~VM 200 manual-failover drill~~ ✅ PASS 2026-06-25; ~~carter-rebuild runbook~~ ✅ written 2026-06-26; ~~VM 118 Vaultwarden restore drill~~ ✅ PASS 2026-06-26; off-site backup still unresolved; CT 111/117 reprovision drills outstanding.

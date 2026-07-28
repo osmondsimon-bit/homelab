@@ -42,10 +42,9 @@ powered off. The Glance workload resource queries omit it for the same reason. V
 `onboot=0`, protection flag and activation test are verified by its provisioning playbook/runbook,
 not by an always-up alert.
 
-VM 125's node-exporter target is labelled `availability="optional"` while it remains in Apophis's
-stopped capacity tier. Prometheus still collects its CPU/disk/memory and maintenance metrics
-whenever it is started, but generic `TargetDown` does not alert while its accepted state is off.
-Remove that label when VM 125 returns to the default-on service tier.
+The media guests returned to the default-on service tier with Apophis's 32 GB restoration on
+2026-07-28. `GuestDown` therefore covers CTs 120/121/123/124 and VM 125 again, and VM 125's direct
+node-exporter target participates in the generic `TargetDown` alert.
 
 ## Operations
 
