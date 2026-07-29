@@ -190,8 +190,8 @@ glance_hosts:                                               # Proxmox nodes — 
   - { name: carter,  node_exporter_instance: "YOUR_CARTER_IP:9100",  pve_instance: "YOUR_CARTER_IP" }
 
 # Glance "Service Status" tiles — ONE place to add a new service (ADR-017 onboarding).
-# URLs reference the existing *_ip vars (IPs stay DRY); optional: check_url, allow_insecure,
-# alt_status_codes (for endpoints that answer 401/403 when healthy).
+# URLs reference the existing *_ip vars (IPs stay DRY); optional: check_url, enabled,
+# allow_insecure, alt_status_codes (for endpoints that answer 401/403 when healthy).
 glance_services:
   - { title: "Home Assistant", node: apophis, workload: "VM 200", url: "http://{{ ha_ip | regex_replace('/.*$','') }}:8123", icon: "di:home-assistant" }
   - { title: "Jellyfin", node: apophis, workload: "CT 120", url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}", check_url: "http://{{ jellyfin_ip | regex_replace('/.*$','') }}:{{ jellyfin_port }}/System/Info/Public", icon: "di:jellyfin" }
@@ -202,6 +202,10 @@ glance_services:
   - { title: "Seerr", node: apophis, workload: "VM 125", url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}", check_url: "http://{{ jellyseerr_ip | regex_replace('/.*$','') }}:{{ jellyseerr_port }}/api/v1/status", icon: "di:seerr" }
   - { title: "Technitium DNS", node: oneill, workload: "CT 111", url: "http://{{ technitium_instances[0].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
   - { title: "Technitium DNS 2", node: carter, workload: "CT 117", url: "http://{{ technitium_instances[1].ip | regex_replace('/.*$','') }}:5380", icon: "di:technitium", alt_status_codes: [401, 403] }
+  # These applications are tailnet-only, so their links stay private while the LAN-reachable
+  # node_exporter endpoint provides an honest VM-reachability check without exposing the app port.
+  - { title: "Vaultwarden", node: carter, workload: "VM 118", url: "{{ vaultwarden_domain }}", check_url: "http://{{ vaultwarden_ip | regex_replace('/.*$','') }}:9100/metrics", icon: "di:vaultwarden" }
+  - { title: "Actual Budget", node: carter, workload: "VM 127", url: "{{ actual_domain }}", check_url: "http://{{ actual_ip | regex_replace('/.*$','') }}:9100/metrics", icon: "di:actual-budget", enabled: "{{ actual_enabled | default(false) | bool }}" }
   - { title: "Grafana", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
   - { title: "Prometheus", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
   - { title: "Alertmanager", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }

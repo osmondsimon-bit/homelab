@@ -291,7 +291,7 @@ pages:
                 title: << h.name >>
                 cache: 1m
                 sites:
-                  <% for s in glance_services if s.node == h.name %>
+                  <% for s in glance_services if s.node == h.name and (s.enabled | default(true) | bool) %>
                   - title: << s.title >> · << s.workload >>
                     url: << s.url >>
                   <% if s.check_url is defined %>

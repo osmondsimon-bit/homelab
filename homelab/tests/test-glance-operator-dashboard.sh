@@ -32,6 +32,18 @@ if grep -Fq -- 'No concerns' "$template"; then
   fail 'summary must not claim that native service checks and version currency are healthy'
 fi
 require_text "$template" 'title: Service Directory' 'service launcher must be retained on Overview'
+require_text "$vars" 'title: "Vaultwarden", node: carter, workload: "VM 118"' \
+  'Vaultwarden must appear under Carter in the service directory'
+require_text "$vars" 'title: "Actual Budget", node: carter, workload: "VM 127"' \
+  'Actual Budget must appear under Carter in the service directory'
+require_text "$vars" 'check_url: "http://{{ vaultwarden_ip | regex_replace(' \
+  'Vaultwarden status must use VM reachability without exposing its application port'
+require_text "$vars" 'check_url: "http://{{ actual_ip | regex_replace(' \
+  'Actual status must use VM reachability without exposing its application port'
+require_text "$vars" 'enabled: "{{ actual_enabled | default(false) | bool }}"' \
+  'Actual Budget must remain hidden until its deployment is enabled'
+require_text "$template" 's.enabled | default(true) | bool' \
+  'optional service entries must honor their enablement guard'
 require_text "$template" 'title: Largest Media' 'Media page must rank physical usage by movie and series'
 require_text "$template" 'title: Largest Files' 'Media page must expose the largest individual files'
 require_text "$template" 'title: Now Playing' 'Media page must expose Jellyfin sessions when credentials are enabled'
