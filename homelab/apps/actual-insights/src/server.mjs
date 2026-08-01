@@ -9,6 +9,12 @@ import { renderPage } from './render.mjs';
 import { previousCompletedMonth } from './months.mjs';
 
 const identityHeader = 'Tailscale-User-Login';
+const safeClientErrors = new Map([
+  ['invalid request origin', 'Invalid request origin\n'],
+  ['invalid CSRF token', 'Invalid CSRF token\n'],
+  ['month must use YYYY-MM', 'Invalid completed month\n'],
+  ['request body is too large', 'Request body is too large\n'],
+]);
 
 function normalizedPath(url) {
   const path = new URL(url, 'http://localhost').pathname;
@@ -57,6 +63,7 @@ export function createInsightsServer({
   generateMemo,
   generateTrendMemo,
   listMemos,
+  publicOrigin,
   timeZone = 'Etc/UTC',
   logger = console,
 }) {
@@ -111,7 +118,7 @@ export function createInsightsServer({
     if (request.method === 'POST' && generationPath) {
       try {
         const protocol = request.headers['x-forwarded-proto'] || 'http';
-        const expectedOrigin = `${protocol}://${request.headers.host}`;
+        const expectedOrigin = publicOrigin || `${protocol}://${request.headers.host}`;
         if (request.headers.origin !== expectedOrigin) {
           throw new Error('invalid request origin');
         }
@@ -131,12 +138,13 @@ export function createInsightsServer({
         response.writeHead(303, { location: '/insights/' });
         response.end();
       } catch (error) {
-        const badRequest = /origin|CSRF|month|body/.test(error.message);
-        if (!badRequest) logger.error('monthly memo generation failed');
+        const clientMessage = safeClientErrors.get(error.message);
+        const badRequest = clientMessage !== undefined;
+        if (!badRequest) logger.error('insight generation failed');
         response.writeHead(badRequest ? 400 : 502, {
           'content-type': 'text/plain; charset=utf-8',
         });
-        response.end(badRequest ? 'Invalid request\n' : 'Memo generation failed\n');
+        response.end(badRequest ? clientMessage : 'Memo generation failed\n');
       }
       return;
     }

@@ -38,6 +38,8 @@ grep -Fq -- '--https=8443 --set-path=/insights http://127.0.0.1:5007' "$playbook
   || fail 'Tailscale Serve must expose the overlay on a separate browser origin'
 grep -Fq 'Tailscale-User-Login' "${app_dir}/src/server.mjs" \
   || fail 'the overlay must authenticate the operator through Tailscale identity'
+grep -Fq 'ACTUAL_INSIGHTS_PUBLIC_ORIGIN=https://{{ actual_ts_dnsname.stdout }}:8443' "$playbook" \
+  || fail 'form origin validation must use the explicit public proxy origin'
 grep -Fq 'tmpfs:' "$playbook" \
   || fail 'the decrypted Actual API cache must use ephemeral tmpfs'
 grep -Fq 'read_only: true' "$playbook" \

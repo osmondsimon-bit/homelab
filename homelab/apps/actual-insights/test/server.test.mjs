@@ -98,3 +98,52 @@ test('health is available locally without exposing financial state', async t => 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok' });
 });
+
+test('accepts the configured public origin when the proxy rewrites the backend host', async t => {
+  let calls = 0;
+  const publicOrigin = 'https://actual.example.ts.net:8443';
+  const server = await startServer({
+    publicOrigin,
+    generateTrendMemo: async () => {
+      calls += 1;
+      return { id: 2 };
+    },
+  });
+  t.after(() => server.close());
+  const { port } = server.address();
+  const identity = { 'tailscale-user-login': 'operator@example.com' };
+  const pageResponse = await fetch(`http://127.0.0.1:${port}/insights/`, {
+    headers: identity,
+  });
+  const cookie = pageResponse.headers.get('set-cookie').split(';')[0];
+  const csrf = (await pageResponse.text()).match(/name="csrf" value="([^"]+)"/)?.[1];
+
+  const response = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+    method: 'POST',
+    headers: {
+      ...identity,
+      cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+      host: `127.0.0.1:${port}`,
+      origin: publicOrigin,
+    },
+    body: new URLSearchParams({ csrf }),
+    redirect: 'manual',
+  });
+  assert.equal(response.status, 303);
+  assert.equal(calls, 1);
+
+  const rejected = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+    method: 'POST',
+    headers: {
+      ...identity,
+      cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+      origin: 'https://wrong.example',
+    },
+    body: new URLSearchParams({ csrf }),
+  });
+  assert.equal(rejected.status, 400);
+  assert.equal(await rejected.text(), 'Invalid request origin\n');
+  assert.equal(calls, 1);
+});
