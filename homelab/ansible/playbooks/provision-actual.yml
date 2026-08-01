@@ -90,6 +90,15 @@
   hosts: _actual_target
   gather_facts: false
   become: true
+  vars:
+    actual_insights_server_password_value: >-
+      {{ lookup('file', actual_insights_server_password_file | default(lookup('env', 'HOME') ~ '/.actual-insights-server-password'), errors='ignore') | trim }}
+    actual_insights_sync_id_value: >-
+      {{ lookup('file', actual_insights_sync_id_file | default(lookup('env', 'HOME') ~ '/.actual-insights-sync-id'), errors='ignore') | trim }}
+    actual_insights_e2ee_password_value: >-
+      {{ lookup('file', actual_insights_e2ee_password_file | default(lookup('env', 'HOME') ~ '/.actual-insights-e2ee-password'), errors='ignore') | trim }}
+    actual_insights_openai_api_key_value: >-
+      {{ lookup('file', actual_insights_openai_api_key_file | default(lookup('env', 'HOME') ~ '/.actual-insights-openai-api-key'), errors='ignore') | trim }}
 
   tasks:
     - name: Install base packages
@@ -161,6 +170,69 @@
         - { path: /opt/actual, mode: "0750" }
         - { path: /opt/actual/data, mode: "0750" }
 
+    - name: Validate the optional monthly insights inputs
+      ansible.builtin.assert:
+        that:
+          - "'YOUR_' not in actual_insights_operator_login"
+          - actual_insights_operator_login is search('@')
+          - (actual_insights_model | default('gpt-5.6-terra')) is match('^[A-Za-z0-9._-]+$')
+          - (actual_insights_currency | default('AUD')) is match('^[A-Z]{3}$')
+          - actual_insights_server_password_value | length > 0
+          - actual_insights_sync_id_value | length > 0
+          - actual_insights_e2ee_password_value | length > 0
+          - actual_insights_openai_api_key_value is match('^sk-')
+        fail_msg: >-
+          Stage the Actual password, Sync ID, E2EE password, and project-scoped OpenAI key
+          in their configured controller files before enabling monthly insights.
+        quiet: true
+      no_log: true
+      when: actual_insights_enabled | default(false) | bool
+
+    - name: Create the monthly insights directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /opt/actual/insights, owner: root, group: root, mode: "0755" }
+        - { path: /opt/actual/insights/src, owner: root, group: root, mode: "0755" }
+        - { path: /opt/actual/insights/public, owner: root, group: root, mode: "0755" }
+        - { path: /opt/actual/insights-data, owner: "1000", group: "1000", mode: "0700" }
+        - { path: /opt/actual/secrets, owner: "1000", group: "1000", mode: "0700" }
+      when: actual_insights_enabled | default(false) | bool
+
+    - name: Install the monthly insights application files
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: preserve
+      loop:
+        - { src: "{{ playbook_dir }}/../../apps/actual-insights/package.json", dest: /opt/actual/insights/package.json }
+        - { src: "{{ playbook_dir }}/../../apps/actual-insights/package-lock.json", dest: /opt/actual/insights/package-lock.json }
+        - { src: "{{ playbook_dir }}/../../apps/actual-insights/Dockerfile", dest: /opt/actual/insights/Dockerfile }
+        - { src: "{{ playbook_dir }}/../../apps/actual-insights/src/", dest: /opt/actual/insights/src/ }
+        - { src: "{{ playbook_dir }}/../../apps/actual-insights/public/", dest: /opt/actual/insights/public/ }
+      when: actual_insights_enabled | default(false) | bool
+
+    - name: Install the monthly insights secret files
+      ansible.builtin.copy:
+        dest: "/opt/actual/secrets/{{ item.name }}"
+        content: "{{ item.value }}\n"
+        owner: "1000"
+        group: "1000"
+        mode: "0400"
+      loop:
+        - { name: server-password, value: "{{ actual_insights_server_password_value }}" }
+        - { name: sync-id, value: "{{ actual_insights_sync_id_value }}" }
+        - { name: e2ee-password, value: "{{ actual_insights_e2ee_password_value }}" }
+        - { name: openai-api-key, value: "{{ actual_insights_openai_api_key_value }}" }
+      no_log: true
+      when: actual_insights_enabled | default(false) | bool
+
     - name: Install the hardened Compose definition
       ansible.builtin.copy:
         dest: /opt/actual/docker-compose.yml
@@ -184,11 +256,56 @@
                 - no-new-privileges:true
               cap_drop:
                 - ALL
+          {% if actual_insights_enabled | default(false) | bool %}
+            insights:
+              build:
+                context: ./insights
+                args:
+                  NODE_IMAGE: {{ actual_insights_node_image | default('node:24.18.0-bookworm-slim') }}
+              container_name: actual-insights
+              restart: unless-stopped
+              depends_on:
+                - actual
+              environment:
+                - ACTUAL_SERVER_URL=http://actual:5006
+                - ACTUAL_SERVER_PASSWORD_FILE=/run/secrets/server-password
+                - ACTUAL_SYNC_ID_FILE=/run/secrets/sync-id
+                - ACTUAL_E2EE_PASSWORD_FILE=/run/secrets/e2ee-password
+                - OPENAI_API_KEY_FILE=/run/secrets/openai-api-key
+                - ACTUAL_INSIGHTS_OPERATOR_LOGIN={{ actual_insights_operator_login }}
+                - ACTUAL_INSIGHTS_MODEL={{ actual_insights_model | default('gpt-5.6-terra') }}
+                - ACTUAL_INSIGHTS_CURRENCY={{ actual_insights_currency | default('AUD') }}
+                - ACTUAL_INSIGHTS_TIME_ZONE={{ actual_insights_timezone | default(patching_timezone | default('Etc/UTC')) }}
+                - ACTUAL_INSIGHTS_HISTORY_MONTHS={{ actual_insights_history_months | default(12) }}
+                - ACTUAL_INSIGHTS_PORT=5007
+                - ACTUAL_INSIGHTS_DATABASE=/data/insights.sqlite
+              volumes:
+                - ./insights-data:/data
+                - ./secrets/server-password:/run/secrets/server-password:ro
+                - ./secrets/sync-id:/run/secrets/sync-id:ro
+                - ./secrets/e2ee-password:/run/secrets/e2ee-password:ro
+                - ./secrets/openai-api-key:/run/secrets/openai-api-key:ro
+              ports:
+                - "127.0.0.1:5007:5007"
+              tmpfs:
+                - /tmp:rw,noexec,nosuid,nodev,size=256m,mode=1777
+              read_only: true
+              security_opt:
+                - no-new-privileges:true
+              cap_drop:
+                - ALL
+              pids_limit: 128
+              mem_limit: 768m
+              cpus: 0.75
+          {% endif %}
       register: actual_compose
 
     - name: Deploy or update Actual
       ansible.builtin.command:
-        cmd: docker compose up -d {{ '--force-recreate' if actual_compose.changed else '' }}
+        cmd: >-
+          docker compose up -d --remove-orphans
+          {{ '--build' if actual_insights_enabled | default(false) | bool else '' }}
+          {{ '--force-recreate' if actual_compose.changed else '' }}
         chdir: /opt/actual
       changed_when: true
 
@@ -196,10 +313,20 @@
       ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:5006
       changed_when: true
 
+    - name: Configure the monthly insights path in Tailscale Serve
+      ansible.builtin.command: >-
+        tailscale serve --bg --https=443 --set-path=/insights http://127.0.0.1:5007
+      changed_when: true
+      when: actual_insights_enabled | default(false) | bool
+
     - name: Verify loopback-only binding and application response
       ansible.builtin.shell: |
         ss -tlnp | grep -q '127.0.0.1:5006' || { echo "Actual is not loopback-only"; exit 1; }
         curl -fsS --max-time 8 http://127.0.0.1:5006 >/dev/null
+        {% if actual_insights_enabled | default(false) | bool %}
+        ss -tlnp | grep -q '127.0.0.1:5007' || { echo "Actual insights is not loopback-only"; exit 1; }
+        curl -fsS --max-time 8 http://127.0.0.1:5007/healthz >/dev/null
+        {% endif %}
       register: actual_health
       changed_when: false
       retries: 12
@@ -225,6 +352,9 @@
       ansible.builtin.debug:
         msg:
           - "Actual Budget is available at https://{{ actual_ts_dnsname.stdout }} (tailnet-only)."
+          - >-
+            Monthly category insights are {{ (actual_insights_enabled | default(false) | bool)
+            | ternary('available at https://' ~ actual_ts_dnsname.stdout ~ '/insights and run only when manually requested', 'disabled') }}.
           - "FIRST RUN: set the server password, enable budget E2EE with a different password, and create/export the initial budget."
           - "Patching and maintenance metrics are enrolled; NEXT: render central monitoring/Glance, then restore-test the PBS image."
 

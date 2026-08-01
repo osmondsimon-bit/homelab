@@ -1,0 +1,63 @@
+/* Small layout layer on top of the lockfile-installed Pico.css. */
+:root {
+  --pico-font-size: 100%;
+}
+
+body {
+  background: #f5f7f6;
+}
+
+.container {
+  max-width: 64rem;
+  padding-block: 3rem;
+}
+
+.page-header,
+.memo-header {
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  color: #52605a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.submit-wrap {
+  align-items: end;
+  display: flex;
+}
+
+.submit-wrap button {
+  margin-bottom: var(--pico-spacing);
+  width: 100%;
+}
+
+.findings {
+  display: grid;
+  gap: 1rem;
+}
+
+.finding {
+  border-left: 0.3rem solid #7b8982;
+}
+
+.severity-watch {
+  border-left-color: #b26a00;
+}
+
+.severity-action {
+  border-left-color: #a42828;
+}
+
+.evidence {
+  color: #36443e;
+  font-variant-numeric: tabular-nums;
+}
+
+footer {
+  color: #36443e;
+}

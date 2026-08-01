@@ -98,6 +98,21 @@ actual_ts_authkey_file: "{{ lookup('env', 'HOME') }}/.tailscale-actual-authkey" 
 actual_image: actualbudget/actual-server:26.7.0           # PINNED stable release; operator deploys deliberately
 actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"
 
+# Optional monthly AI memo overlay at /insights (ADR-024). It is manually triggered and sends
+# category-level aggregates only. Stage each value in its own chmod-0600 controller file first.
+actual_insights_enabled: false                            # opt in only after all four secret files exist
+actual_insights_operator_login: YOUR_TAILSCALE_LOGIN     # exact Tailscale-User-Login allowed by the overlay
+actual_insights_model: gpt-5.6-terra                     # balanced reasoning/cost; Responses API, store=false
+actual_insights_currency: AUD                             # explicit because Actual 26.7.0 does not export preferences
+actual_insights_timezone: "{{ patching_timezone | default('Etc/UTC') }}" # completed-month boundary and UI default
+actual_insights_history_months: 12                       # local comparison window; never raw transactions
+# renovate: datasource=docker depName=node
+actual_insights_node_image: node:24.18.0-bookworm-slim   # PINNED LTS build base for the companion image
+actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"
+actual_insights_sync_id_file: "{{ lookup('env', 'HOME') }}/.actual-insights-sync-id"
+actual_insights_e2ee_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-e2ee-password"
+actual_insights_openai_api_key_file: "{{ lookup('env', 'HOME') }}/.actual-insights-openai-api-key"
+
 # --- Proxmox Backup Server LXC (backup hub on oneill, ADR-012) ---------------
 # Unprivileged LXC; datastore on a quota'd ZFS dataset bind-mount. Run --limit oneill.
 pbs_ctid: 112

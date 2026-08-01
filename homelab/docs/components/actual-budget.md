@@ -69,3 +69,7 @@ have already been migrated by a newer release.
   playbook during the monthly maintenance window. Never deploy a floating `latest` tag.
 
 Related: ADR-023, ADR-012, ADR-015, ADR-017, ADR-018.
+
+Optional companion: [Actual Budget monthly AI insights](actual-ai-insights.md) (ADR-024). It is
+category-only, manually triggered, and remains disabled until its separate acceptance procedure is
+completed.

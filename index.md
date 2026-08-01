@@ -27,6 +27,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
       tech-radar.md           capability tracking (adopted/deferred/monitoring)
       <topic>.md              flat files for hardware, network, etc. when needed
     ansible/                 configures (ADR-005); inventory/ + playbooks/ live here
+    apps/                    small repo-owned application companions deployed by Ansible
     terraform/               creates VMs/LXCs (bpg/proxmox, ADR-008)
     scripts/                 bash fallbacks/utilities (backup-local-config.sh, …)
     physical_infra/          gitignored design surface — house/network/rack YAML (ADR-019)
@@ -41,7 +42,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
 | An operational procedure | `homelab/docs/operations/runbooks.md` | a service file |
 | A phase completion record | `homelab/docs/phases/<N>-<name>.md` | PLAN.md |
 | Hardware / network / topology notes | a flat file `homelab/docs/<topic>.md` | a new top-level dir |
-| Ansible/Terraform/script code | `homelab/ansible|terraform|scripts/` | docs/ |
+| Ansible/Terraform/script/app code | `homelab/ansible|terraform|scripts|apps/` | docs/ |
 | A live fact (IP, VMID, status, hostname) | `homelab/PLAN.md` only (others link) | duplicated prose |
 
 **Don't create a new top-level directory** for a single file or an empty "we might need
