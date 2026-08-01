@@ -55,6 +55,7 @@ async function readForm(request) {
 export function createInsightsServer({
   operatorLogin,
   generateMemo,
+  generateTrendMemo,
   listMemos,
   timeZone = 'Etc/UTC',
   logger = console,
@@ -99,14 +100,15 @@ export function createInsightsServer({
       return;
     }
 
-    if (path === '/generate' && request.method !== 'POST') {
+    const generationPath = path === '/generate' || path === '/generate-trends';
+    if (generationPath && request.method !== 'POST') {
       response.setHeader('Allow', 'POST');
       response.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
       response.end('Method not allowed\n');
       return;
     }
 
-    if (request.method === 'POST' && path === '/generate') {
+    if (request.method === 'POST' && generationPath) {
       try {
         const protocol = request.headers['x-forwarded-proto'] || 'http';
         const expectedOrigin = `${protocol}://${request.headers.host}`;
@@ -117,11 +119,15 @@ export function createInsightsServer({
         if (!equalTokens(cookies(request).actual_insights_csrf, form.get('csrf'))) {
           throw new Error('invalid CSRF token');
         }
-        const month = form.get('month');
-        if (!/^\d{4}-\d{2}$/.test(month || '')) {
-          throw new Error('month must use YYYY-MM');
+        if (path === '/generate') {
+          const month = form.get('month');
+          if (!/^\d{4}-\d{2}$/.test(month || '')) {
+            throw new Error('month must use YYYY-MM');
+          }
+          await generateMemo(month);
+        } else {
+          await generateTrendMemo();
         }
-        await generateMemo(month);
         response.writeHead(303, { location: '/insights/' });
         response.end();
       } catch (error) {

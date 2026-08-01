@@ -4,7 +4,9 @@ import test from 'node:test';
 
 import {
   assertCategoryOnlyPayload,
+  assertTrendOnlyPayload,
   buildCategoryPayload,
+  buildTrendPayload,
 } from '../src/snapshot.mjs';
 
 const months = [
@@ -108,7 +110,9 @@ test('builds a monthly payload containing category aggregates only', () => {
         previous_month_actual_cents: 400000,
         prior_3_month_average_actual_cents: 400000,
         prior_12_month_average_actual_cents: 400000,
+        prior_24_month_average_actual_cents: 400000,
         actual_vs_prior_3_month_basis_points: 250,
+        actual_vs_prior_24_month_basis_points: 250,
         budget_variance_cents: null,
       },
     },
@@ -127,7 +131,9 @@ test('builds a monthly payload containing category aggregates only', () => {
         previous_month_actual_cents: 45000,
         prior_3_month_average_actual_cents: 45000,
         prior_12_month_average_actual_cents: 45000,
+        prior_24_month_average_actual_cents: 45000,
         actual_vs_prior_3_month_basis_points: 3333,
+        actual_vs_prior_24_month_basis_points: 3333,
         budget_variance_cents: -8000,
       },
     },
@@ -197,4 +203,92 @@ test('requires a completed target month and at least one category', () => {
       }),
     /target month is not available/,
   );
+});
+
+test('builds locally derived category trends from twenty-four completed months', () => {
+  const trendMonths = Array.from({ length: 24 }, (_, index) => {
+    const date = new Date(Date.UTC(2024, index, 1)).toISOString().slice(0, 7);
+    const actual = 10000 + index * 1000;
+    return {
+      month: date,
+      categoryGroups: [
+        {
+          id: 'group-never-send',
+          name: 'Living costs',
+          is_income: false,
+          categories: [
+            {
+              id: 'category-never-send',
+              name: 'Groceries',
+              budgeted: 15000,
+              spent: -actual,
+              balance: 15000 - actual,
+            },
+          ],
+        },
+      ],
+      transactions: [{ payee_name: 'Never send this' }],
+    };
+  });
+
+  const payload = buildTrendPayload({ currency: 'AUD', budgetMonths: trendMonths });
+
+  assert.equal(payload.analysis_type, 'long_term_category_trends');
+  assert.equal(payload.start_month, '2024-01');
+  assert.equal(payload.end_month, '2025-12');
+  assert.equal(payload.months_in_period, 24);
+  assert.deepEqual(payload.categories, [
+    {
+      ref: 'c001',
+      group: 'Living costs',
+      category: 'Groceries',
+      type: 'expense',
+      months_observed: 24,
+      active_in_latest_month: true,
+      metrics: {
+        total_actual_cents: 516000,
+        full_period_average_actual_cents: 21500,
+        first_6_month_average_actual_cents: 12500,
+        latest_6_month_average_actual_cents: 30500,
+        latest_12_month_average_actual_cents: 27500,
+        latest_6_vs_first_6_basis_points: 14400,
+        annualized_trend_basis_points: 5581,
+        variability_basis_points: 3220,
+        months_with_budget: 24,
+        months_over_budget: 18,
+        largest_month_actual_cents: 33000,
+        largest_month: '2025-12',
+      },
+    },
+  ]);
+  assert.doesNotThrow(() => assertTrendOnlyPayload(payload));
+
+  const serialized = JSON.stringify(payload).toLowerCase();
+  for (const forbidden of ['never-send', 'transaction', 'payee', 'account', 'note']) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
+});
+
+test('long-term trends include a category that is no longer active', () => {
+  const trendMonths = [
+    {
+      month: '2024-01',
+      categoryGroups: [
+        {
+          name: 'Past costs',
+          is_income: false,
+          categories: [{ id: 'old-local-id', name: 'Old category', spent: -5000 }],
+        },
+      ],
+    },
+    {
+      month: '2024-02',
+      categoryGroups: [],
+    },
+  ];
+
+  const payload = buildTrendPayload({ currency: 'AUD', budgetMonths: trendMonths });
+  assert.equal(payload.categories[0].active_in_latest_month, false);
+  assert.equal(payload.categories[0].months_observed, 1);
+  assert.equal(JSON.stringify(payload).includes('old-local-id'), false);
 });

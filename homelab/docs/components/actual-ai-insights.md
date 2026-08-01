@@ -1,18 +1,18 @@
-# Actual Budget monthly AI insights
+# Actual Budget category AI insights
 
-Manual category-only narrative overlay for Actual Budget on VM 127. The implementation is codified
-but **disabled by default** until the operator stages its four local secret files, opts in, deploys,
-and completes the live acceptance checks below.
+Manual category-only long-term and monthly narrative overlay for Actual Budget on VM 127. The
+implementation remains opt-in in the example inventory; the real deployment requires its four local
+secret files and the live acceptance checks below.
 
 | | |
 |---|---|
 | Placement | companion container in Actual VM 127 on Carter |
-| URL | `https://actual.<tailnet>.ts.net/insights` |
-| Trigger | operator clicks **Generate monthly memo** for a completed month |
+| URL | `https://actual.<tailnet>.ts.net:8443/insights` |
+| Triggers | operator explicitly generates the 24-month baseline or a completed-month memo |
 | Schedule | none; no timer, cron, webhook, or background generation |
 | Actual access | official `@actual-app/api` `26.7.0`; category budget reads only |
 | Model | OpenAI Responses API, default `gpt-5.6-terra`, low reasoning, `store: false`, no tools |
-| Model input | category/group labels and locally derived category aggregates only |
+| Model input | category/group labels and locally derived category aggregates/trends only |
 | Local state | `/opt/actual/insights-data/insights.sqlite` |
 | Decrypted cache | per-run `/tmp` directory on container tmpfs; always destroyed |
 | Authentication | exact operator `Tailscale-User-Login` through Tailscale Serve |
@@ -20,15 +20,21 @@ and completes the live acceptance checks below.
 
 ## Exactly what leaves VM 127
 
-The request contains the completed target month, currency code, a synthetic category reference,
-category group/name, income/expense type, target budgeted/actual/balance integer-cent amounts,
-available-history count, previous-month actual, prior three/twelve-month category averages,
-target-versus-three-month basis points, and budget variance.
+The monthly request contains the completed target month, currency code, a synthetic category
+reference, category group/name, income/expense type, target budgeted/actual/balance integer-cent
+amounts, available-history count, previous-month actual, prior three/twelve/twenty-four-month
+category averages, target-versus-three/twenty-four-month basis points, and budget variance.
+
+The initial baseline covers the latest 24 completed months available locally and sends one derived
+row per category observed anywhere in that window. That row contains observation coverage, whether
+the category is still active, full-period total/average, first/latest six-month and latest
+twelve-month averages, locally calculated direction and variability basis points, budgeted and
+over-budget month counts, and the largest category month/amount.
 
 Category and group names are sent verbatim. No Actual identifier is sent. The request contains no
 transactions, payees, accounts, notes, imported descriptions, rules, schedules, tags, budget name,
 Sync ID, credential, raw database, net worth, or account balance. Historical budget months are read
-locally only to calculate category averages.
+locally only to calculate category metrics. The full month-by-month series is not sent.
 
 OpenAI states that API input is not used for training by default, but ordinary API requests may be
 retained in abuse-monitoring logs for up to 30 days. `store: false` disables Responses application
@@ -50,7 +56,8 @@ state; it does not grant Zero Data Retention. If category-level disclosure is no
    ```yaml
    actual_insights_operator_login: YOUR_TAILSCALE_LOGIN
    actual_insights_currency: AUD
-   actual_insights_timezone: Australia/Adelaide
+actual_insights_timezone: Australia/Sydney
+actual_insights_history_months: 24
    actual_insights_enabled: true
    ```
 
@@ -64,8 +71,9 @@ state; it does not grant Zero Data Retention. If category-level disclosure is no
    ```
 
 The playbook builds the local companion image, stages mode-`0400` read-only secret mounts, retains
-Actual at the root URL, adds `/insights` to the existing Tailscale Serve listener, and verifies both
-loopback ports. Deploying does not call the model; only the UI button does.
+Actual at the root URL, resets stale routes on this dedicated Tailscale node, exposes `/insights` on
+HTTPS 8443 as a separate browser origin, and verifies both loopback ports. Deploying does not call
+the model; only either UI button does.
 
 ## First live acceptance
 
@@ -73,8 +81,11 @@ Before treating the overlay as available:
 
 1. Confirm `docker compose ps` shows both containers healthy.
 2. Confirm `ss -tlnp` shows ports 5006 and 5007 only on `127.0.0.1`.
-3. Confirm `/insights` returns `403` without a Tailscale identity and opens for the configured operator.
-4. Close and sync a non-sensitive completed month in Actual, then generate its memo manually.
+3. Confirm port 443 still opens Actual and `:8443/insights` returns `403` without a Tailscale identity
+   but opens for the configured operator. The separate port prevents Actual's root-scoped browser
+   state from redirecting the companion route.
+4. Generate the 24-month baseline manually, then close and sync a completed month and generate its
+   monthly memo.
 5. Inspect the stored snapshot using a local SQLite/JSON view and confirm it matches the allowlist
    above. Specifically search for known account and payee labels and confirm they are absent.
 6. Confirm model prose contains no numeric claims and that exact evidence amounts are rendered by the
@@ -85,16 +96,27 @@ Before treating the overlay as available:
 This repository cannot perform the live checks because the private VM and credentials are outside
 the agent's network boundary.
 
+## Initial baseline workflow
+
+1. Reconcile and categorize the available completed history in Actual and let it sync.
+2. Open `:8443/insights` from the configured operator device.
+3. Click **Generate twenty-four-month trend analysis** once.
+4. Review the locally rendered evidence. Repeat only after material historical category corrections.
+
+The baseline requires at least 12 completed months and uses at most the latest 24. It never sends the
+raw monthly category series to the model.
+
 ## Monthly workflow
 
 1. Finish reconciliation and categorization in Actual for the previous month and let Actual sync.
-2. Open `/insights` from an operator device.
+2. Open `:8443/insights` from an operator device.
 3. Select the completed month and click **Generate monthly memo** once.
 4. Review the category evidence in Actual before acting. The memo is an observation layer, not
    financial advice and not an automatic budget edit.
 
-The application refuses the current or a future month and rejects concurrent generation. Repeating a
-completed month creates another audit record, which is useful after category corrections.
+The monthly comparison uses up to 24 prior months. The application refuses the current or a future
+month and rejects concurrent generation across both actions. Repeating an analysis creates another
+audit record, which is useful after category corrections.
 
 ## Operations
 
@@ -109,9 +131,8 @@ sensitive context. Diagnose credentials by checking file existence/mode and rota
 secret rather than enabling verbose logs.
 
 To disable, set `actual_insights_enabled: false` and rerun the playbook. The container is removed as
-an orphan, but the SQLite audit and secret files are retained deliberately. Remove the `/insights`
-Serve route manually if disabling for an extended period. Do not delete state or credentials as part
-of an ordinary disable operation.
+an orphan, Tailscale Serve is rebuilt with only Actual on 443, and the SQLite audit and secret files
+are retained deliberately. Do not delete state or credentials as part of an ordinary disable.
 
 ## Upgrade and recovery
 

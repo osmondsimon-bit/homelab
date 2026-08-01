@@ -2,13 +2,13 @@
 
 **Date:** 2026-08-01
 
-**Status:** Accepted; implementation codified, deployment disabled pending operator secrets and live acceptance
+**Status:** Accepted; deployed on separate origin, first model-backed acceptance pending
 
 ## Context
 
 Actual Budget provides deterministic budget figures but does not produce a concise narrative about
-which monthly category movements merit attention. The desired feature is a small overlay alongside
-Actual, not a general finance chatbot and not an autonomous budgeting agent.
+long-term or monthly category movements that merit attention. The desired feature is a small overlay
+alongside Actual, not a general finance chatbot and not an autonomous budgeting agent.
 
 Actual does not expose a REST API. Its official `@actual-app/api` package downloads a budget to a
 local client, decrypts E2EE data there, and exposes the same headless budget engine used by Actual.
@@ -26,11 +26,13 @@ and network complexity without creating a read-only Actual credential.
 
 ## Decision
 
-Run an optional `actual-insights` companion container on **VM 127**, mounted at `/insights` on the
-existing Actual Tailscale Serve hostname.
+Run an optional `actual-insights` companion container on **VM 127**, mounted at `/insights` on HTTPS
+port 8443 of the existing Actual Tailscale Serve hostname. The non-default port creates a separate
+browser origin so Actual's root-scoped web application state cannot intercept the companion route.
 
-The overlay is **manually triggered once per completed month**. There is no cron job, timer,
-background generation loop, webhook, or weekly memo.
+The overlay provides two explicit actions: an initial, repeatable long-term baseline over the latest
+24 completed months and the ongoing completed-month memo. Both are **manually triggered**. There is
+no cron job, timer, background generation loop, webhook, or weekly memo.
 
 ### LLM data boundary
 
@@ -50,14 +52,23 @@ The model receives only this allowlisted data:
 | Target-versus-three-month-average basis points | Locally calculated; the model does no arithmetic |
 | Budget variance | Locally calculated budgeted minus actual amount |
 | Available history count | Prevents the model overstating thin comparisons |
+| Prior twenty-four-month category average and target comparison | Adds a long-term reference to each monthly memo |
+| First/latest six-month and latest twelve-month category averages | Describes opening, recent, and medium-term direction in the baseline |
+| Full-period total and average | Describes the category's scale over the baseline period |
+| Annualized linear direction and variability | Locally calculated basis-point trend measures |
+| Months observed, budgeted, and over budget | Distinguishes coverage from repeated category pressure |
+| Largest category month and amount | Locally selected category-level peak; no underlying transactions |
+| Active in latest month | Identifies categories no longer present at the end of the period |
 
 The model does **not** receive Actual IDs, transactions, split details, payees, accounts, balances,
 notes, imported descriptions, rules, tags, schedules, budget names, Sync ID, credentials, overall
 net worth, or the decrypted Actual database. The extractor does not call APIs that return those
 objects. Top-level totals returned by `getBudgetMonth` are discarded.
 
-Historical category rows are used locally to calculate comparisons; the model receives the derived
-category comparisons, not the full month-by-month history.
+Historical category rows are used locally to calculate comparisons and the initial baseline. The
+model receives derived category metrics, not the full month-by-month series. The baseline uses the
+union of categories observed anywhere in the window, retaining the most recent label locally while
+discarding Actual IDs.
 
 ### Extraction
 
@@ -83,11 +94,11 @@ Use the OpenAI Responses API with:
 - no tools, retrieval, files, conversation, or model-managed state;
 - strict JSON Schema output.
 
-The model may prioritize up to five category findings and explain what to review. It returns only a
-synthetic category reference and allowlisted evidence names. It may not put digits, currency symbols,
-percentages, or numeric claims in prose. The application rejects unknown category references,
-unavailable evidence, unexpected fields, and numeric prose, then locally rehydrates the category
-label and exact amount evidence for the UI.
+The monthly model may prioritize up to five findings; the broader baseline may prioritize up to
+eight. Both explain what to review and return only a synthetic category reference and allowlisted
+evidence names. They may not put digits, currency symbols, percentages, dates, or numeric claims in
+prose. The application rejects unknown category references, unavailable evidence, unexpected fields,
+and numeric prose, then locally rehydrates the category label and exact evidence for the UI.
 
 This separation makes the model a narrative ranking layer, not a calculator or financial authority.
 The memo is informational and must not provide tax, investment, credit, or automated budget advice.
@@ -95,7 +106,9 @@ The memo is informational and must not provide tax, investment, credit, or autom
 ### Access and state
 
 - Bind the container only to VM loopback at `127.0.0.1:5007`.
-- Tailscale Serve mounts it at `/insights`; Funnel is not used.
+- Tailscale Serve mounts it at `https://<actual-tailnet-name>:8443/insights`; Funnel is not used.
+- Keep Actual on HTTPS 443 and the companion on 8443 because browser service workers are isolated
+  by origin, which includes the port.
 - Require an exact allowlisted `Tailscale-User-Login` identity for every UI and asset request.
 - Protect manual POSTs with an origin check and a constant-time CSRF token comparison.
 - Use a strict CSP, same-site secure cookie, HTML escaping, and no client-side JavaScript.
@@ -121,8 +134,8 @@ required by Actual's local engine. A production dependency audit must remain cle
 
 ## Consequences
 
-- The operator gets a focused monthly memo without exposing granular purchases or enabling model
-  access to Actual.
+- The operator gets a long-term baseline and focused monthly memos without exposing granular
+  purchases or enabling model access to Actual.
 - Category and group names are disclosed to OpenAI; they can themselves be sensitive and must be
   named accordingly in Actual if this is unacceptable.
 - Default OpenAI retention is still a cloud-processing trade-off. Do not enable the overlay if
@@ -133,7 +146,8 @@ required by Actual's local engine. A production dependency audit must remain cle
   operator clicks Generate. Compromise of the companion container could therefore exceed its intended
   read-only behavior even though normal code paths cannot. Container hardening and the single-user,
   tailnet-only boundary reduce but do not eliminate this risk.
-- A memo is never generated merely because a month ends. Missing a month has no operational impact.
+- Neither the baseline nor a memo is generated merely because a month ends. Missing a month has no
+  operational impact.
 - Local LLM inference remains deferred; `gpt-oss-20b` requires roughly 16 GB and does not fit the
   existing 2 GB Actual VM design.
 
@@ -142,7 +156,10 @@ required by Actual's local engine. A production dependency audit must remain cle
 - **Raw transactions to a hosted model:** unnecessary disclosure and a larger prompt-injection surface.
 - **Model tools connected to Actual:** would turn full-capability credentials into an agent action path.
 - **Interactive chat:** invites arbitrary queries and unclear data scope; not required for a monthly memo.
-- **Automatic weekly/monthly generation:** the operator requested an explicit monthly review action.
+- **Raw 24-month category series to the model:** unnecessary when deterministic local trend metrics
+  support the requested long-term review with less disclosure and less model arithmetic.
+- **Automatic weekly/monthly generation:** the operator requested explicit baseline and monthly
+  review actions.
 - **Browser-side Actual API:** experimental, requires cross-origin isolation, and leaves decrypted data
   in browser IndexedDB.
 - **Separate VM:** adds infrastructure without fixing Actual's lack of read-only credentials.

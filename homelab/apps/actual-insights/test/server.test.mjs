@@ -8,6 +8,7 @@ async function startServer(options = {}) {
   const server = createInsightsServer({
     operatorLogin: 'operator@example.com',
     generateMemo: async month => ({ month, id: 1 }),
+    generateTrendMemo: async () => ({ id: 2 }),
     listMemos: () => [],
     ...options,
   });
@@ -26,10 +27,15 @@ test('requires the Tailscale operator identity', async t => {
 
 test('generation exists only as an authenticated manual POST', async t => {
   let calls = 0;
+  let trendCalls = 0;
   const server = await startServer({
     generateMemo: async month => {
       calls += 1;
       return { month, id: 1 };
+    },
+    generateTrendMemo: async () => {
+      trendCalls += 1;
+      return { id: 2 };
     },
   });
   t.after(() => server.close());
@@ -66,6 +72,21 @@ test('generation exists only as an authenticated manual POST', async t => {
   });
   assert.equal(postResponse.status, 303);
   assert.equal(calls, 1);
+
+  const trendResponse = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      cookie: cookie.split(';')[0],
+      'content-type': 'application/x-www-form-urlencoded',
+      host: `127.0.0.1:${port}`,
+      origin: `http://127.0.0.1:${port}`,
+    },
+    body: new URLSearchParams({ csrf }),
+    redirect: 'manual',
+  });
+  assert.equal(trendResponse.status, 303);
+  assert.equal(trendCalls, 1);
 });
 
 test('health is available locally without exposing financial state', async t => {

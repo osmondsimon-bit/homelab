@@ -4,7 +4,9 @@ import test from 'node:test';
 
 import {
   buildModelRequest,
+  buildTrendModelRequest,
   validateMemo,
+  validateTrendMemo,
 } from '../src/model.mjs';
 
 const payload = {
@@ -27,7 +29,9 @@ const payload = {
         previous_month_actual_cents: 45000,
         prior_3_month_average_actual_cents: 47000,
         prior_12_month_average_actual_cents: 46000,
+        prior_24_month_average_actual_cents: 45500,
         actual_vs_prior_3_month_basis_points: 2766,
+        actual_vs_prior_24_month_basis_points: 3187,
         budget_variance_cents: -8000,
       },
     },
@@ -97,4 +101,77 @@ test('rejects unknown category references and numeric claims in model prose', ()
   base.findings[0].category_ref = 'c001';
   base.summary = 'Spending rose by 27 percent.';
   assert.throws(() => validateMemo({ memo: base, payload }), /numeric model prose/);
+});
+
+const trendPayload = {
+  schema_version: 1,
+  analysis_type: 'long_term_category_trends',
+  start_month: '2024-01',
+  end_month: '2025-12',
+  currency: 'AUD',
+  months_in_period: 24,
+  categories: [
+    {
+      ref: 'c001',
+      group: 'Living costs',
+      category: 'Groceries',
+      type: 'expense',
+      months_observed: 24,
+      active_in_latest_month: true,
+      metrics: {
+        total_actual_cents: 516000,
+        full_period_average_actual_cents: 21500,
+        first_6_month_average_actual_cents: 12500,
+        latest_6_month_average_actual_cents: 30500,
+        latest_12_month_average_actual_cents: 27500,
+        latest_6_vs_first_6_basis_points: 14400,
+        annualized_trend_basis_points: 5581,
+        variability_basis_points: 3220,
+        months_with_budget: 24,
+        months_over_budget: 18,
+        largest_month_actual_cents: 33000,
+        largest_month: '2025-12',
+      },
+    },
+  ],
+};
+
+test('builds a no-tools structured request for long-term category trends', () => {
+  const request = buildTrendModelRequest({
+    payload: trendPayload,
+    model: 'gpt-5.6-terra',
+  });
+
+  assert.equal(request.store, false);
+  assert.equal(request.tools, undefined);
+  assert.equal(request.text.format.name, 'actual_long_term_category_memo');
+  assert.deepEqual(JSON.parse(request.input.at(-1).content), trendPayload);
+});
+
+test('validates long-term findings against locally available evidence', () => {
+  const memo = {
+    start_month: '2024-01',
+    end_month: '2025-12',
+    headline: 'Long-term pressure is concentrated',
+    summary: 'The category pattern has strengthened across the available history.',
+    findings: [
+      {
+        category_ref: 'c001',
+        severity: 'watch',
+        pattern: 'rising',
+        title: 'A sustained upward pattern merits review',
+        observation: 'Recent activity is above the opening portion of the period.',
+        evidence: ['first_vs_latest_six', 'annualized_trend', 'budget_frequency'],
+        suggested_review: 'Review whether the long-term category allocation still fits.',
+      },
+    ],
+    caveats: ['Category totals cannot explain individual purchases.'],
+  };
+
+  assert.deepEqual(validateTrendMemo({ memo, payload: trendPayload }), memo);
+  memo.findings[0].evidence = ['unknown'];
+  assert.throws(
+    () => validateTrendMemo({ memo, payload: trendPayload }),
+    /unknown trend evidence type/,
+  );
 });

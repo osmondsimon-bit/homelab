@@ -6,10 +6,19 @@ import { join } from 'node:path';
 import * as actualApi from '@actual-app/api';
 import OpenAI from 'openai';
 
-import { extractCategoryMonths } from './actual-client.mjs';
+import {
+  extractCategoryMonths,
+  extractCompletedCategoryHistory,
+} from './actual-client.mjs';
 import { loadConfig } from './config.mjs';
-import { createMemoGenerator } from './generate.mjs';
-import { requestMemo } from './model.mjs';
+import {
+  createMemoGenerator,
+  createTrendGenerator,
+} from './generate.mjs';
+import {
+  requestMemo,
+  requestTrendMemo,
+} from './model.mjs';
 import { currentMonthInTimeZone } from './months.mjs';
 import { createInsightsServer } from './server.mjs';
 import { MemoStore } from './store.mjs';
@@ -34,17 +43,50 @@ const extract = targetMonth =>
     syncId: config.syncId,
     encryptionPassword: config.encryptionPassword,
   });
+const extractTrend = () =>
+  extractCompletedCategoryHistory({
+    api: actualApi,
+    completedBeforeMonth: currentMonthInTimeZone(config.timeZone),
+    historyMonths: 24,
+    currency: config.currency,
+    cacheRoot: mkdtempSync(join(tmpdir(), 'actual-insights-')),
+    serverUrl: config.serverUrl,
+    serverPassword: config.serverPassword,
+    syncId: config.syncId,
+    encryptionPassword: config.encryptionPassword,
+  });
 const request = ({ payload, model }) => requestMemo({ client: openai, payload, model });
-const generateMemo = createMemoGenerator({
+const requestTrend = ({ payload, model }) =>
+  requestTrendMemo({ client: openai, payload, model });
+const monthlyGenerator = createMemoGenerator({
   extract,
   request,
   store,
   model: config.model,
   currentMonth: () => currentMonthInTimeZone(config.timeZone),
 });
+const trendGenerator = createTrendGenerator({
+  extract: extractTrend,
+  request: requestTrend,
+  store,
+  model: config.model,
+});
+let generationRunning = false;
+async function exclusiveGeneration(operation) {
+  if (generationRunning) {
+    throw new Error('another insight generation is already in progress');
+  }
+  generationRunning = true;
+  try {
+    return await operation();
+  } finally {
+    generationRunning = false;
+  }
+}
 const server = createInsightsServer({
   operatorLogin: config.operatorLogin,
-  generateMemo,
+  generateMemo: month => exclusiveGeneration(() => monthlyGenerator(month)),
+  generateTrendMemo: () => exclusiveGeneration(() => trendGenerator()),
   listMemos: () => store.list(),
   timeZone: config.timeZone,
 });

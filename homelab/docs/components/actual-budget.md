@@ -70,6 +70,5 @@ have already been migrated by a newer release.
 
 Related: ADR-023, ADR-012, ADR-015, ADR-017, ADR-018.
 
-Optional companion: [Actual Budget monthly AI insights](actual-ai-insights.md) (ADR-024). It is
-category-only, manually triggered, and remains disabled until its separate acceptance procedure is
-completed.
+Optional companion: [Actual Budget category AI insights](actual-ai-insights.md) (ADR-024). It offers
+a manually generated 24-month baseline plus monthly memos from locally derived category metrics only.

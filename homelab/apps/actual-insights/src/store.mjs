@@ -13,6 +13,7 @@ export class MemoStore {
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS memos (
         id INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL DEFAULT 'monthly',
         month TEXT NOT NULL,
         created_at TEXT NOT NULL,
         snapshot_hash TEXT NOT NULL,
@@ -25,14 +26,18 @@ export class MemoStore {
       CREATE INDEX IF NOT EXISTS memos_month_created
         ON memos(month, created_at DESC);
     `);
+    const memoColumns = this.database.prepare('PRAGMA table_info(memos)').all();
+    if (!memoColumns.some(column => column.name === 'kind')) {
+      this.database.exec("ALTER TABLE memos ADD COLUMN kind TEXT NOT NULL DEFAULT 'monthly'");
+    }
     this.insert = this.database.prepare(`
       INSERT INTO memos (
-        month, created_at, snapshot_hash, payload_json, memo_json,
+        kind, month, created_at, snapshot_hash, payload_json, memo_json,
         model, response_id, usage_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.selectRecent = this.database.prepare(`
-      SELECT id, month, created_at, snapshot_hash, payload_json, memo_json,
+      SELECT id, kind, month, created_at, snapshot_hash, payload_json, memo_json,
              model, response_id, usage_json
       FROM memos
       ORDER BY created_at DESC, id DESC
@@ -40,8 +45,12 @@ export class MemoStore {
     `);
   }
 
-  save({ month, snapshotHash, payload, memo, model, responseId, usage }) {
+  save({ kind = 'monthly', month, snapshotHash, payload, memo, model, responseId, usage }) {
+    if (!['monthly', 'long_term'].includes(kind)) {
+      throw new Error('unsupported memo kind');
+    }
     const result = this.insert.run(
+      kind,
       month,
       new Date().toISOString(),
       snapshotHash,
@@ -60,6 +69,7 @@ export class MemoStore {
       const memo = JSON.parse(row.memo_json);
       return {
         id: row.id,
+        kind: row.kind,
         month: row.month,
         createdAt: row.created_at,
         snapshotHash: row.snapshot_hash,

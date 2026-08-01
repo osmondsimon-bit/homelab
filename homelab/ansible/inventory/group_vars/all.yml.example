@@ -98,14 +98,14 @@ actual_ts_authkey_file: "{{ lookup('env', 'HOME') }}/.tailscale-actual-authkey" 
 actual_image: actualbudget/actual-server:26.7.0           # PINNED stable release; operator deploys deliberately
 actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"
 
-# Optional monthly AI memo overlay at /insights (ADR-024). It is manually triggered and sends
-# category-level aggregates only. Stage each value in its own chmod-0600 controller file first.
+# Optional category AI overlay at :8443/insights (ADR-024). Both the 24-month baseline and monthly
+# memo are manually triggered and send derived category metrics only. Stage the secret files first.
 actual_insights_enabled: false                            # opt in only after all four secret files exist
 actual_insights_operator_login: YOUR_TAILSCALE_LOGIN     # exact Tailscale-User-Login allowed by the overlay
 actual_insights_model: gpt-5.6-terra                     # balanced reasoning/cost; Responses API, store=false
 actual_insights_currency: AUD                             # explicit because Actual 26.7.0 does not export preferences
 actual_insights_timezone: "{{ patching_timezone | default('Etc/UTC') }}" # completed-month boundary and UI default
-actual_insights_history_months: 12                       # local comparison window; never raw transactions
+actual_insights_history_months: 24                       # local comparison window; never raw transactions
 # renovate: datasource=docker depName=node
 actual_insights_node_image: node:24.18.0-bookworm-slim   # PINNED LTS build base for the companion image
 actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"

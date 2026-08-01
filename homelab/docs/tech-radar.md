@@ -32,7 +32,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Updates / patching | unattended-upgrades + maintenance intent metrics | ADR-015 live. Debian LXCs + Ubuntu VMs: security auto-patch at midday, no auto-reboot; other packages and reboots stay monthly/manual. PVE hosts remain manual. Glance shows pending/reboot/enrollment state; ntfy alerts only for overdue/security failures. Docker pins: Renovate proposals, manual deployment. |
 | Dependency updates | Renovate | Docker-image proposals only: custom manager watches committed Ansible defaults; no automerge or automatic deployment. Broader package automation remains deferred. |
 | Infra portal | Python + D2 generator → CT 116 nginx | Phase 3 ✓ — `infra-portal-generate.py` on mgmt-vm, daily systemd timer, rsync to CT 116 via restricted deploy key. Switch VLAN/PoE view, rack layout, network topology SVG (ADR-020). |
-| Hosted monthly budget insight | OpenAI Responses API + deterministic category extractor | **Codified 2026-08-01, deployment opt-in pending** — manual Actual overlay sends category/group labels and category aggregates only; no raw transactions, model tools, chat, or automatic generation (ADR-024). Local LLM inference remains separately deferred. |
+| Hosted category budget insight | OpenAI Responses API + deterministic category extractor | **Deployed 2026-08-01; live model acceptance pending** — manual Actual overlay provides an initial 24-month baseline and monthly memos from locally derived category metrics; no raw monthly series, transactions, model tools, chat, or automatic generation (ADR-024). Local LLM inference remains separately deferred. |
 
 ---
 

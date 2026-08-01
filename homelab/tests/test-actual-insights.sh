@@ -28,10 +28,14 @@ grep -Fq 'gpt-5.6-terra' "$example_vars" \
   || fail 'the balanced insight model must be explicit and configurable'
 grep -Fq 'actual_insights_enabled: false' "$example_vars" \
   || fail 'the overlay must be opt-in until its secrets are staged'
+grep -Fq 'actual_insights_history_months: 24' "$example_vars" \
+  || fail 'monthly comparisons must retain the confirmed twenty-four-month history window'
 grep -Fq '127.0.0.1:5007:5007' "$playbook" \
   || fail 'the overlay must bind only to VM loopback'
-grep -Fq -- '--set-path=/insights http://127.0.0.1:5007' "$playbook" \
-  || fail 'Tailscale Serve must expose the overlay only at /insights'
+grep -Fq 'tailscale serve reset' "$playbook" \
+  || fail 'the dedicated Actual node must clear stale Serve routes before deterministic setup'
+grep -Fq -- '--https=8443 --set-path=/insights http://127.0.0.1:5007' "$playbook" \
+  || fail 'Tailscale Serve must expose the overlay on a separate browser origin'
 grep -Fq 'Tailscale-User-Login' "${app_dir}/src/server.mjs" \
   || fail 'the overlay must authenticate the operator through Tailscale identity'
 grep -Fq 'tmpfs:' "$playbook" \

@@ -276,7 +276,7 @@
                 - ACTUAL_INSIGHTS_MODEL={{ actual_insights_model | default('gpt-5.6-terra') }}
                 - ACTUAL_INSIGHTS_CURRENCY={{ actual_insights_currency | default('AUD') }}
                 - ACTUAL_INSIGHTS_TIME_ZONE={{ actual_insights_timezone | default(patching_timezone | default('Etc/UTC')) }}
-                - ACTUAL_INSIGHTS_HISTORY_MONTHS={{ actual_insights_history_months | default(12) }}
+                - ACTUAL_INSIGHTS_HISTORY_MONTHS={{ actual_insights_history_months | default(24) }}
                 - ACTUAL_INSIGHTS_PORT=5007
                 - ACTUAL_INSIGHTS_DATABASE=/data/insights.sqlite
               volumes:
@@ -309,13 +309,17 @@
         chdir: /opt/actual
       changed_when: true
 
-    - name: Configure Tailscale Serve HTTPS
+    - name: Reset the dedicated node Tailscale Serve routes
+      ansible.builtin.command: tailscale serve reset
+      changed_when: true
+
+    - name: Configure Tailscale Serve HTTPS for Actual
       ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:5006
       changed_when: true
 
-    - name: Configure the monthly insights path in Tailscale Serve
+    - name: Configure monthly insights on a separate browser origin
       ansible.builtin.command: >-
-        tailscale serve --bg --https=443 --set-path=/insights http://127.0.0.1:5007
+        tailscale serve --bg --https=8443 --set-path=/insights http://127.0.0.1:5007
       changed_when: true
       when: actual_insights_enabled | default(false) | bool
 
@@ -354,7 +358,7 @@
           - "Actual Budget is available at https://{{ actual_ts_dnsname.stdout }} (tailnet-only)."
           - >-
             Monthly category insights are {{ (actual_insights_enabled | default(false) | bool)
-            | ternary('available at https://' ~ actual_ts_dnsname.stdout ~ '/insights and run only when manually requested', 'disabled') }}.
+            | ternary('available at https://' ~ actual_ts_dnsname.stdout ~ ':8443/insights and run only when manually requested', 'disabled') }}.
           - "FIRST RUN: set the server password, enable budget E2EE with a different password, and create/export the initial budget."
           - "Patching and maintenance metrics are enrolled; NEXT: render central monitoring/Glance, then restore-test the PBS image."
 

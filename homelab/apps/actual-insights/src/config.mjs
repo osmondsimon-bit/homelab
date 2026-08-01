@@ -50,7 +50,7 @@ export function loadConfig() {
     model,
     currency,
     timeZone,
-    historyMonths: integer('ACTUAL_INSIGHTS_HISTORY_MONTHS', 12, 1, 24),
+    historyMonths: integer('ACTUAL_INSIGHTS_HISTORY_MONTHS', 24, 12, 24),
     port: integer('ACTUAL_INSIGHTS_PORT', 5007, 1024, 65535),
     databasePath: process.env.ACTUAL_INSIGHTS_DATABASE || '/data/insights.sqlite',
   };

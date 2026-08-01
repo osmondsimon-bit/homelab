@@ -26,7 +26,9 @@ test('escapes category labels and renders exact local evidence', () => {
                 previous_month_actual_cents: 45000,
                 prior_3_month_average_actual_cents: 48000,
                 prior_12_month_average_actual_cents: 47000,
+                prior_24_month_average_actual_cents: 46000,
                 actual_vs_prior_3_month_basis_points: 2500,
+                actual_vs_prior_24_month_basis_points: 3043,
                 budget_variance_cents: -10000,
               },
             },
@@ -56,4 +58,68 @@ test('escapes category labels and renders exact local evidence', () => {
   assert.match(html, /prior three-month average \$480\.00/);
   assert.match(html, /change 25\.0%/);
   assert.match(html, /Budget variance -\$100\.00/);
+  assert.match(html, /Generate twenty-four-month trend analysis/);
+});
+
+test('renders long-term model prose with exact trend evidence calculated locally', () => {
+  const html = renderPage({
+    csrf: 'csrf-token',
+    defaultMonth: '2026-06',
+    memos: [
+      {
+        kind: 'long_term',
+        month: '2025-12',
+        model: 'gpt-5.6-terra',
+        payload: {
+          start_month: '2024-01',
+          end_month: '2025-12',
+          months_in_period: 24,
+          currency: 'AUD',
+          categories: [
+            {
+              ref: 'c001',
+              group: 'Living costs',
+              category: 'Groceries',
+              months_observed: 24,
+              metrics: {
+                full_period_average_actual_cents: 21500,
+                first_6_month_average_actual_cents: 12500,
+                latest_6_month_average_actual_cents: 30500,
+                latest_12_month_average_actual_cents: 27500,
+                latest_6_vs_first_6_basis_points: 14400,
+                annualized_trend_basis_points: 5581,
+                variability_basis_points: 3220,
+                months_with_budget: 24,
+                months_over_budget: 18,
+                largest_month_actual_cents: 33000,
+                largest_month: '2025-12',
+              },
+            },
+          ],
+        },
+        memo: {
+          headline: 'A long-term category pattern merits review',
+          summary: 'The available history shows sustained pressure.',
+          findings: [
+            {
+              category_ref: 'c001',
+              severity: 'watch',
+              pattern: 'rising',
+              title: 'The category has moved upward',
+              observation: 'Recent activity is above the opening period.',
+              evidence: ['first_vs_latest_six', 'annualized_trend', 'budget_frequency'],
+              suggested_review: 'Review whether its long-term allocation still fits.',
+            },
+          ],
+          caveats: [],
+        },
+      },
+    ],
+  });
+
+  assert.match(html, /Twenty-four-month baseline/);
+  assert.match(html, /Opening six-month average \$125\.00/);
+  assert.match(html, /latest six-month average \$305\.00/);
+  assert.match(html, /Annualized direction 55\.8%/);
+  assert.match(html, /Over budget in 18 of 24 budgeted months/);
 });

@@ -1,7 +1,10 @@
 // Orchestrates one explicitly requested month from Actual extraction through validated model persistence.
 import { createHash } from 'node:crypto';
 
-import { buildCategoryPayload } from './snapshot.mjs';
+import {
+  buildCategoryPayload,
+  buildTrendPayload,
+} from './snapshot.mjs';
 
 export function createMemoGenerator({
   extract,
@@ -27,6 +30,7 @@ export function createMemoGenerator({
         .digest('hex');
       const result = await request({ payload, model });
       const id = store.save({
+        kind: 'monthly',
         month: targetMonth,
         snapshotHash,
         payload,
@@ -36,6 +40,45 @@ export function createMemoGenerator({
         usage: result.usage,
       });
       return { id, month: targetMonth, ...result };
+    } finally {
+      running = false;
+    }
+  };
+}
+
+export function createTrendGenerator({ extract, request, store, model }) {
+  let running = false;
+  return async function generateTrendMemo() {
+    if (running) {
+      throw new Error('long-term memo generation is already in progress');
+    }
+    running = true;
+    try {
+      const { currency, budgetMonths } = await extract();
+      if (budgetMonths.length < 12) {
+        throw new Error('long-term analysis requires at least twelve completed months');
+      }
+      const payload = buildTrendPayload({ currency, budgetMonths });
+      const snapshotHash = createHash('sha256')
+        .update(JSON.stringify(payload))
+        .digest('hex');
+      const result = await request({ payload, model });
+      const id = store.save({
+        kind: 'long_term',
+        month: payload.end_month,
+        snapshotHash,
+        payload,
+        memo: result.memo,
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      });
+      return {
+        id,
+        startMonth: payload.start_month,
+        endMonth: payload.end_month,
+        ...result,
+      };
     } finally {
       running = false;
     }
