@@ -56,8 +56,8 @@ state; it does not grant Zero Data Retention. If category-level disclosure is no
    ```yaml
    actual_insights_operator_login: YOUR_TAILSCALE_LOGIN
    actual_insights_currency: AUD
-actual_insights_timezone: Australia/Sydney
-actual_insights_history_months: 24
+   actual_insights_timezone: Australia/Sydney
+   actual_insights_history_months: 24
    actual_insights_enabled: true
    ```
 
@@ -130,6 +130,13 @@ audit record, which is useful after category corrections.
 Application errors deliberately omit upstream details because Actual and model errors can contain
 sensitive context. Diagnose credentials by checking file existence/mode and rotating the individual
 secret rather than enabling verbose logs.
+
+`OpenAI API quota unavailable` means the request passed the local extraction and OpenAI request
+validation boundaries, but the API project returned `insufficient_quota`. Confirm that API billing
+is active and that the dedicated project has usable spend limits before retrying. The failed run is
+not persisted as a memo. Strict response schemas must remain within OpenAI's supported Structured
+Outputs subset; prose lengths and duplicate evidence are enforced again by the application after
+generation.
 
 To disable, set `actual_insights_enabled: false` and rerun the playbook. The container is removed as
 an orphan, Tailscale Serve is rebuilt with only Actual on 443, and the SQLite audit and secret files

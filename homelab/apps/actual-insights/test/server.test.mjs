@@ -147,3 +147,41 @@ test('uses a one-time server-side token independent of rewritten proxy headers',
   assert.equal(await replayed.text(), 'Invalid or expired CSRF token\n');
   assert.equal(calls, 1);
 });
+
+test('reports OpenAI quota exhaustion without leaking provider details', async t => {
+  const providerError = Object.assign(new Error('sensitive provider response'), {
+    code: 'insufficient_quota',
+    status: 429,
+  });
+  const logged = [];
+  const server = await startServer({
+    generateTrendMemo: async () => {
+      throw providerError;
+    },
+    logger: { error: message => logged.push(message) },
+  });
+  t.after(() => server.close());
+  const { port } = server.address();
+  const identity = { 'tailscale-user-login': 'operator@example.com' };
+  const pageResponse = await fetch(`http://127.0.0.1:${port}/insights/`, {
+    headers: identity,
+  });
+  const csrf = (await pageResponse.text()).match(/name="csrf" value="([^"]+)"/)?.[1];
+
+  const response = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+    method: 'POST',
+    headers: {
+      ...identity,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ csrf }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(
+    await response.text(),
+    'OpenAI API quota unavailable. Check project billing and limits.\n',
+  );
+  assert.deepEqual(logged, ['insight generation failed: openai_insufficient_quota']);
+  assert.equal(logged.join(' ').includes('sensitive provider response'), false);
+});

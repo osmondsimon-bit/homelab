@@ -5,9 +5,30 @@ import test from 'node:test';
 import {
   buildModelRequest,
   buildTrendModelRequest,
+  memoSchema,
+  trendMemoSchema,
   validateMemo,
   validateTrendMemo,
 } from '../src/model.mjs';
+
+function schemaKeywords(value, found = new Set()) {
+  if (!value || typeof value !== 'object') return found;
+  for (const [key, child] of Object.entries(value)) {
+    found.add(key);
+    schemaKeywords(child, found);
+  }
+  return found;
+}
+
+test('uses only constraints accepted by OpenAI Structured Outputs', () => {
+  const unsupported = ['minLength', 'maxLength', 'uniqueItems'];
+  for (const schema of [memoSchema, trendMemoSchema]) {
+    const keywords = schemaKeywords(schema);
+    for (const keyword of unsupported) {
+      assert.equal(keywords.has(keyword), false, keyword);
+    }
+  }
+});
 
 const payload = {
   schema_version: 1,
@@ -101,6 +122,29 @@ test('rejects unknown category references and numeric claims in model prose', ()
   base.findings[0].category_ref = 'c001';
   base.summary = 'Spending rose by 27 percent.';
   assert.throws(() => validateMemo({ memo: base, payload }), /numeric model prose/);
+});
+
+test('enforces prose lengths and unique evidence outside the model schema', () => {
+  const memo = {
+    month: '2026-06',
+    headline: 'A'.repeat(121),
+    summary: 'Review the monthly category pattern.',
+    findings: [
+      {
+        category_ref: 'c001',
+        severity: 'watch',
+        title: 'Category pattern changed',
+        observation: 'Activity is above its recent baseline.',
+        evidence: ['actual_vs_prior_3_month', 'actual_vs_prior_3_month'],
+        suggested_review: 'Check whether the category plan still fits.',
+      },
+    ],
+    caveats: ['Category totals do not explain individual purchases.'],
+  };
+
+  assert.throws(() => validateMemo({ memo, payload }), /headline is too long/);
+  memo.headline = 'Review the monthly category pattern';
+  assert.throws(() => validateMemo({ memo, payload }), /evidence must be unique/);
 });
 
 const trendPayload = {

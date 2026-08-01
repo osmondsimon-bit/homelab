@@ -28,8 +28,8 @@ export const memoSchema = {
   required: ['month', 'headline', 'summary', 'findings', 'caveats'],
   properties: {
     month: { type: 'string', pattern: '^\\d{4}-\\d{2}$' },
-    headline: { type: 'string', minLength: 1, maxLength: 120 },
-    summary: { type: 'string', minLength: 1, maxLength: 500 },
+    headline: { type: 'string' },
+    summary: { type: 'string' },
     findings: {
       type: 'array',
       maxItems: 5,
@@ -47,22 +47,21 @@ export const memoSchema = {
         properties: {
           category_ref: { type: 'string', pattern: '^c\\d{3,}$' },
           severity: { type: 'string', enum: ['info', 'watch', 'action'] },
-          title: { type: 'string', minLength: 1, maxLength: 120 },
-          observation: { type: 'string', minLength: 1, maxLength: 360 },
+          title: { type: 'string' },
+          observation: { type: 'string' },
           evidence: {
             type: 'array',
             minItems: 1,
-            uniqueItems: true,
             items: { type: 'string', enum: evidenceTypes },
           },
-          suggested_review: { type: 'string', minLength: 1, maxLength: 300 },
+          suggested_review: { type: 'string' },
         },
       },
     },
     caveats: {
       type: 'array',
       maxItems: 4,
-      items: { type: 'string', minLength: 1, maxLength: 240 },
+      items: { type: 'string' },
     },
   },
 };
@@ -74,8 +73,8 @@ export const trendMemoSchema = {
   properties: {
     start_month: { type: 'string', pattern: '^\\d{4}-\\d{2}$' },
     end_month: { type: 'string', pattern: '^\\d{4}-\\d{2}$' },
-    headline: { type: 'string', minLength: 1, maxLength: 120 },
-    summary: { type: 'string', minLength: 1, maxLength: 600 },
+    headline: { type: 'string' },
+    summary: { type: 'string' },
     findings: {
       type: 'array',
       maxItems: 8,
@@ -107,22 +106,21 @@ export const trendMemoSchema = {
               'limited_history',
             ],
           },
-          title: { type: 'string', minLength: 1, maxLength: 120 },
-          observation: { type: 'string', minLength: 1, maxLength: 400 },
+          title: { type: 'string' },
+          observation: { type: 'string' },
           evidence: {
             type: 'array',
             minItems: 1,
-            uniqueItems: true,
             items: { type: 'string', enum: trendEvidenceTypes },
           },
-          suggested_review: { type: 'string', minLength: 1, maxLength: 320 },
+          suggested_review: { type: 'string' },
         },
       },
     },
     caveats: {
       type: 'array',
       maxItems: 5,
-      items: { type: 'string', minLength: 1, maxLength: 240 },
+      items: { type: 'string' },
     },
   },
 };
@@ -198,12 +196,21 @@ function assertFields(value, expected, location) {
   }
 }
 
-function assertString(value, location) {
+function assertString(value, location, maxLength) {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new TypeError(`${location} must be a non-empty string`);
   }
+  if (value.length > maxLength) {
+    throw new Error(`${location} is too long`);
+  }
   if (/[\d$£€¥%]/u.test(value)) {
     throw new Error(`numeric model prose is not permitted in ${location}`);
+  }
+}
+
+function assertUniqueEvidence(evidence, location) {
+  if (new Set(evidence).size !== evidence.length) {
+    throw new Error(`${location} must be unique`);
   }
 }
 
@@ -229,8 +236,8 @@ export function validateMemo({ memo, payload }) {
   if (memo.month !== payload.target_month) {
     throw new Error('memo month does not match the category payload');
   }
-  assertString(memo.headline, 'headline');
-  assertString(memo.summary, 'summary');
+  assertString(memo.headline, 'headline', 120);
+  assertString(memo.summary, 'summary', 500);
   if (!Array.isArray(memo.findings) || memo.findings.length > 5) {
     throw new Error('memo findings must be an array with at most five items');
   }
@@ -248,12 +255,13 @@ export function validateMemo({ memo, payload }) {
     if (!['info', 'watch', 'action'].includes(finding.severity)) {
       throw new Error('invalid finding severity');
     }
-    assertString(finding.title, `findings[${index}].title`);
-    assertString(finding.observation, `findings[${index}].observation`);
-    assertString(finding.suggested_review, `findings[${index}].suggested_review`);
+    assertString(finding.title, `findings[${index}].title`, 120);
+    assertString(finding.observation, `findings[${index}].observation`, 360);
+    assertString(finding.suggested_review, `findings[${index}].suggested_review`, 300);
     if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) {
       throw new Error('each finding requires evidence');
     }
+    assertUniqueEvidence(finding.evidence, 'evidence');
     for (const evidence of finding.evidence) {
       if (!evidenceTypes.includes(evidence)) {
         throw new Error(`unknown evidence type: ${evidence}`);
@@ -266,7 +274,7 @@ export function validateMemo({ memo, payload }) {
   if (!Array.isArray(memo.caveats) || memo.caveats.length > 4) {
     throw new Error('memo caveats must be an array with at most four items');
   }
-  memo.caveats.forEach((caveat, index) => assertString(caveat, `caveats[${index}]`));
+  memo.caveats.forEach((caveat, index) => assertString(caveat, `caveats[${index}]`, 240));
   return memo;
 }
 
@@ -294,8 +302,8 @@ export function validateTrendMemo({ memo, payload }) {
   if (memo.start_month !== payload.start_month || memo.end_month !== payload.end_month) {
     throw new Error('trend memo period does not match the category payload');
   }
-  assertString(memo.headline, 'trend headline');
-  assertString(memo.summary, 'trend summary');
+  assertString(memo.headline, 'trend headline', 120);
+  assertString(memo.summary, 'trend summary', 600);
   if (!Array.isArray(memo.findings) || memo.findings.length > 8) {
     throw new Error('trend findings must be an array with at most eight items');
   }
@@ -326,12 +334,13 @@ export function validateTrendMemo({ memo, payload }) {
     if (!patterns.includes(finding.pattern)) {
       throw new Error('invalid trend pattern');
     }
-    assertString(finding.title, `trend findings[${index}].title`);
-    assertString(finding.observation, `trend findings[${index}].observation`);
-    assertString(finding.suggested_review, `trend findings[${index}].suggested_review`);
+    assertString(finding.title, `trend findings[${index}].title`, 120);
+    assertString(finding.observation, `trend findings[${index}].observation`, 400);
+    assertString(finding.suggested_review, `trend findings[${index}].suggested_review`, 320);
     if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) {
       throw new Error('each trend finding requires evidence');
     }
+    assertUniqueEvidence(finding.evidence, 'trend evidence');
     for (const evidence of finding.evidence) {
       if (!trendEvidenceTypes.includes(evidence)) {
         throw new Error(`unknown trend evidence type: ${evidence}`);
@@ -344,7 +353,9 @@ export function validateTrendMemo({ memo, payload }) {
   if (!Array.isArray(memo.caveats) || memo.caveats.length > 5) {
     throw new Error('trend caveats must be an array with at most five items');
   }
-  memo.caveats.forEach((caveat, index) => assertString(caveat, `trend caveats[${index}]`));
+  memo.caveats.forEach((caveat, index) =>
+    assertString(caveat, `trend caveats[${index}]`, 240),
+  );
   return memo;
 }
 
