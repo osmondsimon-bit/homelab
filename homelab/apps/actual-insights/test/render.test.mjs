@@ -59,6 +59,9 @@ test('escapes category labels and renders exact local evidence', () => {
   assert.match(html, /change 25\.0%/);
   assert.match(html, /Budget variance -\$100\.00/);
   assert.match(html, /Generate twenty-four-month trend analysis/);
+  assert.match(html, /href="\/insights\/assets\/pico\.min\.css"/);
+  assert.match(html, /action="\/insights\/generate-trends"/);
+  assert.match(html, /action="\/insights\/generate"/);
 });
 
 test('renders long-term model prose with exact trend evidence calculated locally', () => {
