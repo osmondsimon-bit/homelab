@@ -101,6 +101,13 @@ test('builds a monthly payload containing category aggregates only', () => {
       category: 'Salary',
       type: 'income',
       months_of_history: 1,
+      available_evidence: [
+        'target_actual',
+        'previous_month_actual',
+        'actual_vs_prior_3_month',
+        'actual_vs_prior_12_month',
+        'actual_vs_prior_24_month',
+      ],
       target: {
         budgeted_cents: null,
         actual_cents: 410000,
@@ -122,6 +129,16 @@ test('builds a monthly payload containing category aggregates only', () => {
       category: 'Groceries',
       type: 'expense',
       months_of_history: 1,
+      available_evidence: [
+        'target_actual',
+        'target_budgeted',
+        'target_balance',
+        'previous_month_actual',
+        'actual_vs_prior_3_month',
+        'actual_vs_prior_12_month',
+        'actual_vs_prior_24_month',
+        'budget_variance',
+      ],
       target: {
         budgeted_cents: 52000,
         actual_cents: 60000,
@@ -245,6 +262,16 @@ test('builds locally derived category trends from twenty-four completed months',
       type: 'expense',
       months_observed: 24,
       active_in_latest_month: true,
+      available_evidence: [
+        'full_period_average',
+        'latest_twelve',
+        'observation_coverage',
+        'first_vs_latest_six',
+        'annualized_trend',
+        'variability',
+        'budget_frequency',
+        'largest_month',
+      ],
       metrics: {
         total_actual_cents: 516000,
         full_period_average_actual_cents: 21500,
@@ -290,5 +317,11 @@ test('long-term trends include a category that is no longer active', () => {
   const payload = buildTrendPayload({ currency: 'AUD', budgetMonths: trendMonths });
   assert.equal(payload.categories[0].active_in_latest_month, false);
   assert.equal(payload.categories[0].months_observed, 1);
+  assert.deepEqual(payload.categories[0].available_evidence, [
+    'full_period_average',
+    'latest_twelve',
+    'observation_coverage',
+    'largest_month',
+  ]);
   assert.equal(JSON.stringify(payload).includes('old-local-id'), false);
 });

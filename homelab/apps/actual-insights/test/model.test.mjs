@@ -6,6 +6,7 @@ import {
   buildModelRequest,
   buildTrendModelRequest,
   memoSchema,
+  requestTrendMemo,
   trendMemoSchema,
   validateMemo,
   validateTrendMemo,
@@ -41,6 +42,16 @@ const payload = {
       category: 'Groceries',
       type: 'expense',
       months_of_history: 6,
+      available_evidence: [
+        'target_actual',
+        'target_budgeted',
+        'target_balance',
+        'previous_month_actual',
+        'actual_vs_prior_3_month',
+        'actual_vs_prior_12_month',
+        'actual_vs_prior_24_month',
+        'budget_variance',
+      ],
       target: {
         budgeted_cents: 52000,
         actual_cents: 60000,
@@ -71,6 +82,7 @@ test('sends only the category payload to the model with storage disabled', () =>
   assert.equal(request.tools, undefined);
   assert.equal(request.text.format.type, 'json_schema');
   assert.equal(request.text.format.strict, true);
+  assert.match(request.input[0].content, /available_evidence/);
 
   const userInput = request.input.find(item => item.role === 'user').content;
   assert.deepEqual(JSON.parse(userInput), payload);
@@ -162,6 +174,16 @@ const trendPayload = {
       type: 'expense',
       months_observed: 24,
       active_in_latest_month: true,
+      available_evidence: [
+        'full_period_average',
+        'first_vs_latest_six',
+        'latest_twelve',
+        'annualized_trend',
+        'variability',
+        'budget_frequency',
+        'largest_month',
+        'observation_coverage',
+      ],
       metrics: {
         total_actual_cents: 516000,
         full_period_average_actual_cents: 21500,
@@ -218,4 +240,115 @@ test('validates long-term findings against locally available evidence', () => {
     () => validateTrendMemo({ memo, payload: trendPayload }),
     /unknown trend evidence type/,
   );
+});
+
+test('rejects trend evidence outside the category availability allowlist', () => {
+  const limitedPayload = structuredClone(trendPayload);
+  limitedPayload.categories[0].available_evidence = [
+    'full_period_average',
+    'observation_coverage',
+  ];
+  const memo = {
+    start_month: '2024-01',
+    end_month: '2025-12',
+    headline: 'Limited history requires care',
+    summary: 'The available category history supports only a narrow observation.',
+    findings: [
+      {
+        category_ref: 'c001',
+        severity: 'info',
+        pattern: 'limited_history',
+        title: 'The short record limits interpretation',
+        observation: 'Only the available history should guide review.',
+        evidence: ['first_vs_latest_six'],
+        suggested_review: 'Wait for more category history before drawing a direction.',
+      },
+    ],
+    caveats: ['Coverage is limited for this category.'],
+  };
+
+  assert.throws(
+    () => validateTrendMemo({ memo, payload: limitedPayload }),
+    /outside available_evidence/,
+  );
+});
+
+test('retries one locally invalid trend response without retrying API errors', async () => {
+  const validMemo = {
+    start_month: '2024-01',
+    end_month: '2025-12',
+    headline: 'Long-term pressure is concentrated',
+    summary: 'The category pattern has strengthened across the available history.',
+    findings: [
+      {
+        category_ref: 'c001',
+        severity: 'watch',
+        pattern: 'rising',
+        title: 'A sustained upward pattern merits review',
+        observation: 'Recent activity is above the opening portion of the period.',
+        evidence: ['first_vs_latest_six', 'annualized_trend'],
+        suggested_review: 'Review whether the long-term category allocation still fits.',
+      },
+    ],
+    caveats: ['Category totals cannot explain individual purchases.'],
+  };
+  const invalidMemo = { ...validMemo, summary: 'Activity increased by 25 percent.' };
+  const responses = [invalidMemo, validMemo];
+  let calls = 0;
+  const client = {
+    responses: {
+      create: async () => ({
+        id: `response-${calls}`,
+        model: 'gpt-5.6-terra',
+        output_text: JSON.stringify(responses[calls++]),
+        usage: null,
+      }),
+    },
+  };
+
+  const result = await requestTrendMemo({
+    client,
+    payload: trendPayload,
+    model: 'gpt-5.6-terra',
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(result.memo, validMemo);
+
+  const apiError = Object.assign(new Error('provider unavailable'), { code: 'api_error' });
+  const failingClient = { responses: { create: async () => { throw apiError; } } };
+  await assert.rejects(
+    requestTrendMemo({
+      client: failingClient,
+      payload: trendPayload,
+      model: 'gpt-5.6-terra',
+    }),
+    error => error === apiError,
+  );
+});
+
+test('classifies repeated invalid trend output without exposing model prose', async () => {
+  let calls = 0;
+  const client = {
+    responses: {
+      create: async () => {
+        calls += 1;
+        return {
+          id: `invalid-${calls}`,
+          model: 'gpt-5.6-terra',
+          output_text: '{"sensitive":"unvalidated model prose"}',
+          usage: null,
+        };
+      },
+    },
+  };
+
+  await assert.rejects(
+    requestTrendMemo({ client, payload: trendPayload, model: 'gpt-5.6-terra' }),
+    error => {
+      assert.equal(error.code, 'model_output_invalid');
+      assert.equal(error.message.includes('sensitive'), false);
+      return true;
+    },
+  );
+  assert.equal(calls, 2);
 });

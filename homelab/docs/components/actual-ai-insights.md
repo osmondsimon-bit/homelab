@@ -24,12 +24,15 @@ The monthly request contains the completed target month, currency code, a synthe
 reference, category group/name, income/expense type, target budgeted/actual/balance integer-cent
 amounts, available-history count, previous-month actual, prior three/twelve/twenty-four-month
 category averages, target-versus-three/twenty-four-month basis points, and budget variance.
+Each category also includes an `available_evidence` list derived from its non-null local metrics so
+the model cannot assume that a comparison exists for a short-history category.
 
 The initial baseline covers the latest 24 completed months available locally and sends one derived
 row per category observed anywhere in that window. That row contains observation coverage, whether
 the category is still active, full-period total/average, first/latest six-month and latest
 twelve-month averages, locally calculated direction and variability basis points, budgeted and
 over-budget month counts, and the largest category month/amount.
+The baseline category row carries the same locally derived evidence-availability allowlist.
 
 Category and group names are sent verbatim. No Actual identifier is sent. The request contains no
 transactions, payees, accounts, notes, imported descriptions, rules, schedules, tags, budget name,
@@ -137,6 +140,11 @@ is active and that the dedicated project has usable spend limits before retrying
 not persisted as a memo. Strict response schemas must remain within OpenAI's supported Structured
 Outputs subset; prose lengths and duplicate evidence are enforced again by the application after
 generation.
+
+If a structurally valid model response fails the stricter local memo contract, the application makes
+one fresh model request with the same category-only payload. It never applies this retry to API,
+authentication, quota, or transport errors. A second validation failure returns a safe
+`model_output_invalid` diagnostic without logging unvalidated model prose, and no memo is stored.
 
 To disable, set `actual_insights_enabled: false` and rerun the playbook. The container is removed as
 an orphan, Tailscale Serve is rebuilt with only Actual on 443, and the SQLite audit and secret files

@@ -150,8 +150,11 @@ export function createInsightsServer({
         const clientMessage = safeClientErrors.get(error.message);
         const badRequest = clientMessage !== undefined;
         const quotaUnavailable = error.code === 'insufficient_quota';
+        const invalidModelOutput = error.code === 'model_output_invalid';
         if (quotaUnavailable) {
           logger.error('insight generation failed: openai_insufficient_quota');
+        } else if (invalidModelOutput) {
+          logger.error('insight generation failed: model_output_invalid');
         } else if (!badRequest) {
           logger.error('insight generation failed');
         }
@@ -163,7 +166,9 @@ export function createInsightsServer({
             ? clientMessage
             : quotaUnavailable
               ? 'OpenAI API quota unavailable. Check project billing and limits.\n'
-              : 'Memo generation failed\n',
+              : invalidModelOutput
+                ? 'Model response did not pass memo safety checks after one retry.\n'
+                : 'Memo generation failed\n',
         );
       }
       return;

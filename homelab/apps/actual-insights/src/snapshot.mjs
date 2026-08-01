@@ -7,6 +7,7 @@ const categoryFields = new Set([
   'category',
   'type',
   'months_of_history',
+  'available_evidence',
   'target',
   'comparisons',
 ]);
@@ -36,7 +37,28 @@ const trendCategoryFields = new Set([
   'type',
   'months_observed',
   'active_in_latest_month',
+  'available_evidence',
   'metrics',
+]);
+const monthlyEvidenceTypes = new Set([
+  'target_actual',
+  'target_budgeted',
+  'target_balance',
+  'previous_month_actual',
+  'actual_vs_prior_3_month',
+  'actual_vs_prior_12_month',
+  'actual_vs_prior_24_month',
+  'budget_variance',
+]);
+const trendEvidenceTypes = new Set([
+  'full_period_average',
+  'first_vs_latest_six',
+  'latest_twelve',
+  'annualized_trend',
+  'variability',
+  'budget_frequency',
+  'largest_month',
+  'observation_coverage',
 ]);
 const trendMetricFields = new Set([
   'total_actual_cents',
@@ -94,6 +116,17 @@ function assertCategoryLabel(category) {
   }
 }
 
+function assertEvidenceList(value, allowed, location) {
+  if (!Array.isArray(value) || value.length === 0 || new Set(value).size !== value.length) {
+    throw new Error(`${location} must be a non-empty unique evidence list`);
+  }
+  for (const evidence of value) {
+    if (!allowed.has(evidence)) {
+      throw new Error(`${location} contains unsupported evidence`);
+    }
+  }
+}
+
 export function assertCategoryOnlyPayload(payload) {
   assertExactFields(payload, rootFields, 'payload');
   if (payload.schema_version !== 1) {
@@ -126,6 +159,11 @@ export function assertCategoryOnlyPayload(payload) {
     }
     refs.add(category.ref);
     assertCategoryLabel(category);
+    assertEvidenceList(
+      category.available_evidence,
+      monthlyEvidenceTypes,
+      `${category.ref}.available_evidence`,
+    );
     if (!Number.isSafeInteger(category.months_of_history) || category.months_of_history < 0) {
       throw new TypeError('months_of_history must be a non-negative integer');
     }
@@ -173,6 +211,11 @@ export function assertTrendOnlyPayload(payload) {
     }
     refs.add(category.ref);
     assertCategoryLabel(category);
+    assertEvidenceList(
+      category.available_evidence,
+      trendEvidenceTypes,
+      `${category.ref}.available_evidence`,
+    );
     if (
       !Number.isSafeInteger(category.months_observed) ||
       category.months_observed < 1 ||
@@ -243,6 +286,24 @@ function flattenMonth(budgetMonth) {
   return categories;
 }
 
+function availableMonthlyEvidence(row) {
+  const evidence = ['target_actual'];
+  if (row.budgeted !== null) evidence.push('target_budgeted');
+  if (row.balance !== null) evidence.push('target_balance');
+  if (row.previous_month_actual_cents !== null) evidence.push('previous_month_actual');
+  if (row.actual_vs_prior_3_month_basis_points !== null) {
+    evidence.push('actual_vs_prior_3_month');
+  }
+  if (row.prior_12_month_average_actual_cents !== null) {
+    evidence.push('actual_vs_prior_12_month');
+  }
+  if (row.prior_24_month_average_actual_cents !== null) {
+    evidence.push('actual_vs_prior_24_month');
+  }
+  if (row.budget_variance_cents !== null) evidence.push('budget_variance');
+  return evidence;
+}
+
 export function buildCategoryPayload({ targetMonth, currency, budgetMonths }) {
   if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
     throw new Error('target month must use YYYY-MM');
@@ -294,6 +355,7 @@ export function buildCategoryPayload({ targetMonth, currency, budgetMonths }) {
       category: row.category,
       type: row.type,
       months_of_history: row.months_of_history,
+      available_evidence: availableMonthlyEvidence(row),
       target: {
         budgeted_cents: row.budgeted,
         actual_cents: row.actual,
@@ -341,6 +403,18 @@ function annualizedTrendBasisPoints(points, mean) {
     return null;
   }
   return Math.round((((numerator / denominator) * 12) / Math.abs(mean)) * 10000);
+}
+
+function availableTrendEvidence(metrics, monthsObserved) {
+  const evidence = ['full_period_average', 'latest_twelve', 'observation_coverage'];
+  if (monthsObserved >= 12 && metrics.latest_6_vs_first_6_basis_points !== null) {
+    evidence.push('first_vs_latest_six');
+  }
+  if (metrics.annualized_trend_basis_points !== null) evidence.push('annualized_trend');
+  if (metrics.variability_basis_points !== null) evidence.push('variability');
+  if (metrics.months_with_budget > 0) evidence.push('budget_frequency');
+  if (metrics.largest_month_actual_cents !== null) evidence.push('largest_month');
+  return evidence;
 }
 
 export function buildTrendPayload({ currency, budgetMonths }) {
@@ -419,6 +493,7 @@ export function buildTrendPayload({ currency, budgetMonths }) {
       type: row.type,
       months_observed: row.points.length,
       active_in_latest_month: row.active_in_latest_month,
+      available_evidence: availableTrendEvidence(row.metrics, row.points.length),
       metrics: row.metrics,
     })),
   };

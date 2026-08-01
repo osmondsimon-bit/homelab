@@ -185,3 +185,40 @@ test('reports OpenAI quota exhaustion without leaking provider details', async t
   assert.deepEqual(logged, ['insight generation failed: openai_insufficient_quota']);
   assert.equal(logged.join(' ').includes('sensitive provider response'), false);
 });
+
+test('reports repeated model validation failure with a safe diagnostic code', async t => {
+  const validationError = Object.assign(new Error('sensitive unvalidated prose'), {
+    code: 'model_output_invalid',
+  });
+  const logged = [];
+  const server = await startServer({
+    generateTrendMemo: async () => {
+      throw validationError;
+    },
+    logger: { error: message => logged.push(message) },
+  });
+  t.after(() => server.close());
+  const { port } = server.address();
+  const identity = { 'tailscale-user-login': 'operator@example.com' };
+  const pageResponse = await fetch(`http://127.0.0.1:${port}/insights/`, {
+    headers: identity,
+  });
+  const csrf = (await pageResponse.text()).match(/name="csrf" value="([^"]+)"/)?.[1];
+
+  const response = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+    method: 'POST',
+    headers: {
+      ...identity,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ csrf }),
+  });
+
+  assert.equal(response.status, 502);
+  assert.equal(
+    await response.text(),
+    'Model response did not pass memo safety checks after one retry.\n',
+  );
+  assert.deepEqual(logged, ['insight generation failed: model_output_invalid']);
+  assert.equal(logged.join(' ').includes('sensitive'), false);
+});
