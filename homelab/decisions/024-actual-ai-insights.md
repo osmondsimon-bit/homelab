@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-01
 
-**Status:** Accepted; deployed on separate origin, first model-backed acceptance pending
+**Status:** Accepted and deployed
 
 ## Context
 
@@ -46,17 +46,19 @@ The model receives only this allowlisted data:
 | Category group name | Sent verbatim as category context |
 | Category name | Sent verbatim as category context |
 | Category type | `expense` or `income` |
-| Target budgeted, actual, and balance amounts | Integer cents; unavailable values are `null` |
+| Target actual, positive budgeted, and positive-budget balance amounts | Integer cents; zero/unset budgets become `null` |
 | Previous-month actual | Locally derived category comparison |
 | Prior three- and twelve-month average actuals | Locally derived category comparisons |
 | Target-versus-three-month-average basis points | Locally calculated; the model does no arithmetic |
 | Budget variance | Locally calculated budgeted minus actual amount |
 | Available history count | Prevents the model overstating thin comparisons |
 | Prior twenty-four-month category average and target comparison | Adds a long-term reference to each monthly memo |
-| First/latest six-month and latest twelve-month category averages | Describes opening, recent, and medium-term direction in the baseline |
+| First/latest six-month and latest/previous twelve-month metrics | Describes opening, recent, and annual direction in the baseline |
 | Full-period total and average | Describes the category's scale over the baseline period |
+| Latest annual total, calendar average, active-month average, median, and deviation | Describes typical spend and category lumpiness |
+| Exceptional category flag | Identifies locally configured categories excluded from underlying run rate |
 | Annualized linear direction and variability | Locally calculated basis-point trend measures |
-| Months observed, budgeted, and over budget | Distinguishes coverage from repeated category pressure |
+| Months observed, positively budgeted, and over a positive budget | Prevents zero budgets creating false pressure |
 | Largest category month and amount | Locally selected category-level peak; no underlying transactions |
 | Active in latest month | Identifies categories no longer present at the end of the period |
 
@@ -85,6 +87,13 @@ discarding Actual IDs.
 All amount normalization, averaging, variance, percentage, and evidence rendering happens locally.
 Expense activity is normalized so positive integer cents means net spending; income activity remains
 positive receipts.
+
+If no expense category has a positive budget, the payload is explicitly `spend_only` and the local
+validator rejects budget language and budget-pressure findings. The dashboard reports both all-in
+expense and an underlying run rate. Exact configured exceptional categories remain visible in all-in
+totals and category statistics but are excluded from underlying totals, calendar average, median,
+standard deviation, and annual comparison. Configuration names must match categories in the analysis
+window or generation fails closed before any model request.
 
 Use the OpenAI Responses API with:
 
@@ -136,7 +145,7 @@ required by Actual's local engine. A production dependency audit must remain cle
 
 ## Consequences
 
-- The operator gets a long-term baseline and focused monthly memos without exposing granular
+- The operator gets a deterministic spend dashboard, long-term narrative baseline, and focused monthly memos without exposing granular
   purchases or enabling model access to Actual.
 - Category and group names are disclosed to OpenAI; they can themselves be sensitive and must be
   named accordingly in Actual if this is unacceptable.

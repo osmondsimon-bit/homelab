@@ -10,7 +10,7 @@ secret files and the live acceptance checks below.
 | URL | `https://actual.<tailnet>.ts.net:8443/insights` |
 | Triggers | operator explicitly generates the 24-month baseline or a completed-month memo |
 | Schedule | none; no timer, cron, webhook, or background generation |
-| Actual access | official `@actual-app/api` `26.7.0`; category budget reads only |
+| Actual access | official `@actual-app/api` `26.7.0`; category aggregate reads only |
 | Model | OpenAI Responses API, default `gpt-5.6-terra`, low reasoning, `store: false`, no tools |
 | Model input | category/group labels and locally derived category aggregates/trends only |
 | Local state | `/opt/actual/insights-data/insights.sqlite` |
@@ -21,18 +21,28 @@ secret files and the live acceptance checks below.
 ## Exactly what leaves VM 127
 
 The monthly request contains the completed target month, currency code, a synthetic category
-reference, category group/name, income/expense type, target budgeted/actual/balance integer-cent
-amounts, available-history count, previous-month actual, prior three/twelve/twenty-four-month
-category averages, target-versus-three/twenty-four-month basis points, and budget variance.
+reference, category group/name, income/expense type, target actual integer-cent amount,
+available-history count, previous-month actual, prior three/twelve/twenty-four-month category
+averages, and target-versus-three/twenty-four-month basis points. Budget and balance evidence is
+included only when Actual contains a positive category budget; zero and unset budgets are treated as
+absent.
 Each category also includes an `available_evidence` list derived from its non-null local metrics so
 the model cannot assume that a comparison exists for a short-history category.
 
 The initial baseline covers the latest 24 completed months available locally and sends one derived
 row per category observed anywhere in that window. That row contains observation coverage, whether
-the category is still active, full-period total/average, first/latest six-month and latest
-twelve-month averages, locally calculated direction and variability basis points, budgeted and
-over-budget month counts, and the largest category month/amount.
+the category is still active, full-period total/average, first/latest six-month values, latest and
+previous twelve-month totals, calendar-month average, active-month average/count, median, standard
+deviation, annual change, locally calculated direction/variability, and the largest category
+month/amount. Positive-budget counts exist only if a real positive budget is present.
 The baseline category row carries the same locally derived evidence-availability allowlist.
+
+The local dashboard additionally calculates total expense and an underlying run rate. Configured
+exceptional categories remain in the all-in total and category table, but are removed from the
+underlying total, average, median, standard deviation, and annual comparison. This classification is
+local and deterministic; the model receives only the resulting category flag and aggregate metrics.
+The UI, not the model, renders every amount and supports sorting the expense table by category,
+latest total, average, change, or deviation.
 
 Category and group names are sent verbatim. No Actual identifier is sent. The request contains no
 transactions, payees, accounts, notes, imported descriptions, rules, schedules, tags, budget name,
@@ -61,6 +71,9 @@ state; it does not grant Zero Data Retention. If category-level disclosure is no
    actual_insights_currency: AUD
    actual_insights_timezone: Australia/Sydney
    actual_insights_history_months: 24
+   actual_insights_exceptional_categories:
+     - House Build
+     - Rent
    actual_insights_enabled: true
    ```
 
@@ -108,7 +121,10 @@ the agent's network boundary.
 4. Review the locally rendered evidence. Repeat only after material historical category corrections.
 
 The baseline requires at least 12 completed months and uses at most the latest 24. It never sends the
-raw monthly category series to the model.
+raw monthly category series to the model. Exceptional category names must exactly match an expense
+category present in that window; generation fails before the model call if a configured name does
+not match. A regenerated spend-first baseline supersedes earlier baseline records in the UI without
+deleting their audit history.
 
 ## Monthly workflow
 
@@ -118,7 +134,8 @@ raw monthly category series to the model.
 4. Review the category evidence in Actual before acting. The memo is an observation layer, not
    financial advice and not an automatic budget edit.
 
-The monthly comparison uses up to 24 prior months. The application refuses the current or a future
+The monthly comparison uses up to 24 prior months. Zero or unset category budgets never produce
+budget variance or over-budget language. The application refuses the current or a future
 month and rejects concurrent generation across both actions. Repeating an analysis creates another
 audit record, which is useful after category corrections.
 

@@ -32,7 +32,8 @@ test('uses only constraints accepted by OpenAI Structured Outputs', () => {
 });
 
 const payload = {
-  schema_version: 1,
+  schema_version: 2,
+  analysis_mode: 'budget_and_spend',
   target_month: '2026-06',
   currency: 'AUD',
   categories: [
@@ -112,6 +113,27 @@ test('accepts a memo that references known category evidence', () => {
   assert.deepEqual(validateMemo({ memo, payload }), memo);
 });
 
+test('rejects budget language in a spend-only monthly memo', () => {
+  const spendOnlyPayload = structuredClone(payload);
+  spendOnlyPayload.analysis_mode = 'spend_only';
+  spendOnlyPayload.categories[0].available_evidence = ['target_actual'];
+  spendOnlyPayload.categories[0].target.budgeted_cents = null;
+  spendOnlyPayload.categories[0].target.balance_cents = null;
+  spendOnlyPayload.categories[0].comparisons.budget_variance_cents = null;
+  const memo = {
+    month: '2026-06',
+    headline: 'Budget pressure merits attention',
+    summary: 'The category moved above its recent pattern.',
+    findings: [],
+    caveats: [],
+  };
+
+  assert.throws(
+    () => validateMemo({ memo, payload: spendOnlyPayload }),
+    /budget language is not permitted/,
+  );
+});
+
 test('rejects unknown category references and numeric claims in model prose', () => {
   const base = {
     month: '2026-06',
@@ -160,12 +182,24 @@ test('enforces prose lengths and unique evidence outside the model schema', () =
 });
 
 const trendPayload = {
-  schema_version: 1,
+  schema_version: 2,
   analysis_type: 'long_term_category_trends',
+  analysis_mode: 'budget_and_spend',
   start_month: '2024-01',
   end_month: '2025-12',
   currency: 'AUD',
   months_in_period: 24,
+  spend_summary: {
+    latest_12_total_actual_cents: 330000,
+    previous_12_total_actual_cents: 186000,
+    latest_12_underlying_actual_cents: 330000,
+    previous_12_underlying_actual_cents: 186000,
+    latest_12_average_monthly_underlying_cents: 27500,
+    latest_12_median_monthly_underlying_cents: 27500,
+    latest_12_standard_deviation_monthly_underlying_cents: 3452,
+    latest_12_vs_previous_12_underlying_basis_points: 7742,
+    latest_12_exceptional_actual_cents: 0,
+  },
   categories: [
     {
       ref: 'c001',
@@ -174,10 +208,17 @@ const trendPayload = {
       type: 'expense',
       months_observed: 24,
       active_in_latest_month: true,
+      is_exceptional: false,
       available_evidence: [
         'full_period_average',
         'first_vs_latest_six',
         'latest_twelve',
+        'latest_twelve_total',
+        'previous_twelve_total',
+        'latest_vs_previous_twelve',
+        'monthly_median',
+        'monthly_deviation',
+        'active_month_average',
         'annualized_trend',
         'variability',
         'budget_frequency',
@@ -190,11 +231,19 @@ const trendPayload = {
         first_6_month_average_actual_cents: 12500,
         latest_6_month_average_actual_cents: 30500,
         latest_12_month_average_actual_cents: 27500,
+        latest_12_total_actual_cents: 330000,
+        previous_12_total_actual_cents: 186000,
+        previous_12_month_average_actual_cents: 15500,
+        latest_12_median_actual_cents: 27500,
+        latest_12_standard_deviation_cents: 3452,
+        latest_12_active_month_average_actual_cents: 27500,
+        latest_12_active_months: 12,
+        latest_12_vs_previous_12_basis_points: 7742,
         latest_6_vs_first_6_basis_points: 14400,
         annualized_trend_basis_points: 5581,
         variability_basis_points: 3220,
-        months_with_budget: 24,
-        months_over_budget: 18,
+        months_with_positive_budget: 24,
+        months_over_positive_budget: 18,
         largest_month_actual_cents: 33000,
         largest_month: '2025-12',
       },
@@ -212,6 +261,42 @@ test('builds a no-tools structured request for long-term category trends', () =>
   assert.equal(request.tools, undefined);
   assert.equal(request.text.format.name, 'actual_long_term_category_memo');
   assert.deepEqual(JSON.parse(request.input.at(-1).content), trendPayload);
+  assert.match(request.input[0].content, /analysis_mode is spend_only/);
+});
+
+test('rejects budget language and budget pressure in spend-only analysis', () => {
+  const spendOnlyPayload = structuredClone(trendPayload);
+  spendOnlyPayload.analysis_mode = 'spend_only';
+  spendOnlyPayload.categories[0].available_evidence = ['latest_twelve_total'];
+  spendOnlyPayload.categories[0].metrics.months_with_positive_budget = 0;
+  spendOnlyPayload.categories[0].metrics.months_over_positive_budget = 0;
+  const memo = {
+    start_month: '2024-01',
+    end_month: '2025-12',
+    headline: 'Budget pressure deserves attention',
+    summary: 'The category has a sustained pattern.',
+    findings: [],
+    caveats: [],
+  };
+
+  assert.throws(
+    () => validateTrendMemo({ memo, payload: spendOnlyPayload }),
+    /budget language is not permitted/,
+  );
+  memo.headline = 'Spending pressure deserves attention';
+  memo.findings = [{
+    category_ref: 'c001',
+    severity: 'watch',
+    pattern: 'budget_pressure',
+    title: 'The category has a sustained pattern',
+    observation: 'Activity remains elevated.',
+    evidence: ['latest_twelve_total'],
+    suggested_review: 'Review the category pattern.',
+  }];
+  assert.throws(
+    () => validateTrendMemo({ memo, payload: spendOnlyPayload }),
+    /budget pressure is not permitted/,
+  );
 });
 
 test('validates long-term findings against locally available evidence', () => {

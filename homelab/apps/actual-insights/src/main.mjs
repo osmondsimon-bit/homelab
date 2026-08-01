@@ -70,6 +70,7 @@ const trendGenerator = createTrendGenerator({
   request: requestTrend,
   store,
   model: config.model,
+  exceptionalCategories: config.exceptionalCategories,
 });
 let generationRunning = false;
 async function exclusiveGeneration(operation) {

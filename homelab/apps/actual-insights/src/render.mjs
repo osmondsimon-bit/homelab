@@ -53,16 +53,30 @@ function trendEvidenceText(category, evidence, currency) {
       return `Opening six-month average ${money(metrics.first_6_month_average_actual_cents, currency)} · latest six-month average ${money(metrics.latest_6_month_average_actual_cents, currency)} · change ${percentage(metrics.latest_6_vs_first_6_basis_points)}`;
     case 'latest_twelve':
       return `Latest twelve-month average ${money(metrics.latest_12_month_average_actual_cents, currency)}`;
+    case 'latest_twelve_total':
+      return `Latest twelve-month total ${money(metrics.latest_12_total_actual_cents, currency)}`;
+    case 'previous_twelve_total':
+      return `Previous twelve-month total ${money(metrics.previous_12_total_actual_cents, currency)}`;
+    case 'latest_vs_previous_twelve':
+      return `Latest twelve-month change ${percentage(metrics.latest_12_vs_previous_12_basis_points)}`;
+    case 'monthly_median':
+      return `Latest twelve-month median ${money(metrics.latest_12_median_actual_cents, currency)}`;
+    case 'monthly_deviation':
+      return `Latest twelve-month standard deviation ${money(metrics.latest_12_standard_deviation_cents, currency)}`;
+    case 'active_month_average':
+      return `Active-month average ${money(metrics.latest_12_active_month_average_actual_cents, currency)} across ${metrics.latest_12_active_months} active months`;
     case 'annualized_trend':
       return `Annualized direction ${percentage(metrics.annualized_trend_basis_points)}`;
     case 'variability':
       return `Monthly variability ${percentage(metrics.variability_basis_points)} of the category average`;
     case 'budget_frequency':
-      return `Over budget in ${metrics.months_over_budget} of ${metrics.months_with_budget} budgeted months`;
+      return `Over budget in ${metrics.months_over_positive_budget ?? metrics.months_over_budget} of ${metrics.months_with_positive_budget ?? metrics.months_with_budget} positively budgeted months`;
     case 'largest_month':
       return `Largest month ${escapeHtml(metrics.largest_month)} at ${money(metrics.largest_month_actual_cents, currency)}`;
     case 'observation_coverage':
       return `Observed in ${category.months_observed} months`;
+    case 'exceptional_status':
+      return 'Configured as exceptional and excluded from the underlying run rate';
     default:
       return 'Evidence unavailable';
   }
@@ -105,27 +119,102 @@ function renderTrendFinding(finding, categories, currency) {
   </article>`;
 }
 
-function renderTrendMemo(record) {
+function comparison(value) {
+  return value === null || value === undefined ? 'Not available' : percentage(value);
+}
+
+function sortExpenseCategories(categories, categorySort) {
+  const rows = categories.filter(category => category.type === 'expense');
+  const numericField = {
+    latest12: 'latest_12_total_actual_cents',
+    average: 'latest_12_month_average_actual_cents',
+    change: 'latest_12_vs_previous_12_basis_points',
+    deviation: 'latest_12_standard_deviation_cents',
+  }[categorySort];
+  return [...rows].sort((left, right) => {
+    if (categorySort === 'category') {
+      return left.category.localeCompare(right.category) || left.group.localeCompare(right.group);
+    }
+    const leftValue = left.metrics[numericField || 'latest_12_total_actual_cents'];
+    const rightValue = right.metrics[numericField || 'latest_12_total_actual_cents'];
+    if (leftValue === null || leftValue === undefined) return 1;
+    if (rightValue === null || rightValue === undefined) return -1;
+    return rightValue - leftValue || left.category.localeCompare(right.category);
+  });
+}
+
+function renderSpendDashboard(record, categorySort) {
+  const { currency, spend_summary: summary } = record.payload;
+  const categories = sortExpenseCategories(record.payload.categories, categorySort);
+  const rows = categories.map(category => {
+    const metrics = category.metrics;
+    const exceptional = category.is_exceptional
+      ? '<span class="category-flag">Excluded from underlying run rate</span>'
+      : '';
+    return `<tr><th scope="row">${escapeHtml(category.category)}<small>${escapeHtml(category.group)}</small>${exceptional}</th>
+      <td>${money(metrics.latest_12_total_actual_cents, currency)}</td>
+      <td>${metrics.previous_12_total_actual_cents === null ? '—' : money(metrics.previous_12_total_actual_cents, currency)}</td>
+      <td>${money(metrics.latest_12_month_average_actual_cents, currency)}</td>
+      <td>${metrics.latest_12_active_month_average_actual_cents === null ? '—' : money(metrics.latest_12_active_month_average_actual_cents, currency)}</td>
+      <td>${money(metrics.latest_12_median_actual_cents, currency)}</td>
+      <td>${money(metrics.latest_12_standard_deviation_cents, currency)}</td>
+      <td>${metrics.latest_12_active_months}</td>
+      <td>${comparison(metrics.latest_12_vs_previous_12_basis_points)}</td></tr>`;
+  }).join('');
+  return `<section aria-labelledby="dashboard-heading"><header class="memo-header"><p class="eyebrow">Deterministic local calculations</p><h2 id="dashboard-heading">Spend dashboard</h2><p>Latest twelve completed months. Underlying spend excludes configured exceptional categories; total spend still includes them.</p></header>
+    <div class="metric-grid">
+      <article><small>Total spend</small><strong>${money(summary.latest_12_total_actual_cents, currency)}</strong></article>
+      <article><small>Underlying spend</small><strong>${money(summary.latest_12_underlying_actual_cents, currency)}</strong></article>
+      <article><small>Underlying monthly average</small><strong>${money(summary.latest_12_average_monthly_underlying_cents, currency)}</strong></article>
+      <article><small>Underlying median month</small><strong>${money(summary.latest_12_median_monthly_underlying_cents, currency)}</strong></article>
+      <article><small>Underlying monthly deviation</small><strong>${money(summary.latest_12_standard_deviation_monthly_underlying_cents, currency)}</strong></article>
+      <article><small>Underlying annual change</small><strong>${comparison(summary.latest_12_vs_previous_12_underlying_basis_points)}</strong></article>
+      <article><small>Exceptional spend</small><strong>${money(summary.latest_12_exceptional_actual_cents, currency)}</strong></article>
+    </div>
+    <div class="table-wrap"><table><caption>Expense category statistics for the latest twelve completed months</caption><thead><tr>
+      <th scope="col"><a href="/insights/?sort=category">Category</a></th>
+      <th scope="col"><a href="/insights/?sort=latest12">Latest total</a></th>
+      <th scope="col">Previous total</th>
+      <th scope="col"><a href="/insights/?sort=average">Monthly average</a></th>
+      <th scope="col">Active-month average</th><th scope="col">Median</th>
+      <th scope="col"><a href="/insights/?sort=deviation">Deviation</a></th>
+      <th scope="col">Active months</th><th scope="col"><a href="/insights/?sort=change">Change</a></th>
+    </tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function renderTrendMemo(record, { earlierBaselines = 0, categorySort = 'latest12' } = {}) {
   const categories = new Map(record.payload.categories.map(category => [category.ref, category]));
   const findings = record.memo.findings
     .map(finding => renderTrendFinding(finding, categories, record.payload.currency))
     .join('');
   const caveats = record.memo.caveats.map(caveat => `<li>${escapeHtml(caveat)}</li>`).join('');
-  return `<section aria-labelledby="trend-heading">
-    <header class="memo-header"><p class="eyebrow">Twenty-four-month baseline · ${escapeHtml(record.payload.start_month)} to ${escapeHtml(record.payload.end_month)} · ${escapeHtml(record.model)}</p><h2 id="trend-heading">${escapeHtml(record.memo.headline)}</h2><p>${escapeHtml(record.memo.summary)}</p></header>
+  const isSpendV2 = record.payload.schema_version === 2;
+  const baselineLabel = isSpendV2
+    ? 'Twenty-four-month spend baseline'
+    : 'Twenty-four-month baseline · Legacy budget-oriented';
+  const superseded = earlierBaselines > 0
+    ? `<p class="baseline-note">Supersedes ${earlierBaselines} earlier baseline${earlierBaselines === 1 ? '' : 's'}.</p>`
+    : '';
+  const dashboard = isSpendV2 ? renderSpendDashboard(record, categorySort) : '';
+  return `${dashboard}<section aria-labelledby="trend-heading">
+    <header class="memo-header"><p class="eyebrow">${baselineLabel} · ${escapeHtml(record.payload.start_month)} to ${escapeHtml(record.payload.end_month)} · ${escapeHtml(record.model)}</p>${superseded}<h2 id="trend-heading">${escapeHtml(record.memo.headline)}</h2><p>${escapeHtml(record.memo.summary)}</p></header>
     <div class="findings">${findings || '<p>No material long-term category findings were returned.</p>'}</div>
     ${caveats ? `<details><summary>Limits of this baseline</summary><ul>${caveats}</ul></details>` : ''}
   </section>`;
 }
 
-export function renderPage({ csrf, memos, defaultMonth }) {
+export function renderPage({ csrf, memos, defaultMonth, categorySort = 'latest12' }) {
   const monthlyMemo = memos.find(record => !record.kind || record.kind === 'monthly');
-  const trendMemo = memos.find(record => record.kind === 'long_term');
+  const trendMemos = memos.filter(record => record.kind === 'long_term');
+  const trendMemo = trendMemos[0];
   const memoBody = monthlyMemo
     ? renderMemo(monthlyMemo)
     : '<article><p>No monthly memo has been generated yet.</p></article>';
   const trendBody = trendMemo
-    ? renderTrendMemo(trendMemo)
+    ? renderTrendMemo(trendMemo, {
+      earlierBaselines: trendMemos.length - 1,
+      categorySort,
+    })
     : '<article><p>No long-term category baseline has been generated yet.</p></article>';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Actual category insights</title><link rel="stylesheet" href="/insights/assets/pico.min.css"><link rel="stylesheet" href="/insights/assets/app.css"></head>

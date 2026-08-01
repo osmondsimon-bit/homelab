@@ -106,6 +106,7 @@ actual_insights_model: gpt-5.6-terra                     # balanced reasoning/co
 actual_insights_currency: AUD                             # explicit because Actual 26.7.0 does not export preferences
 actual_insights_timezone: "{{ patching_timezone | default('Etc/UTC') }}" # completed-month boundary and UI default
 actual_insights_history_months: 24                       # local comparison window; never raw transactions
+actual_insights_exceptional_categories: []               # exact category names excluded from underlying run rate
 # renovate: datasource=docker depName=node
 actual_insights_node_image: node:24.18.0-bookworm-slim   # PINNED LTS build base for the companion image
 actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"

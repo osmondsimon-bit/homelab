@@ -112,11 +112,17 @@ export function createInsightsServer({
 
     if (request.method === 'GET' && path === '/') {
       const csrf = issueCsrfToken();
+      const requestedSort = new URL(request.url, 'http://localhost').searchParams.get('sort');
+      const categorySort = ['category', 'latest12', 'average', 'change', 'deviation']
+        .includes(requestedSort)
+        ? requestedSort
+        : 'latest12';
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(renderPage({
         csrf,
         memos: await listMemos(),
         defaultMonth: previousCompletedMonth(timeZone),
+        categorySort,
       }));
       return;
     }

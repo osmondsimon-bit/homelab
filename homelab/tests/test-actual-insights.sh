@@ -30,6 +30,10 @@ grep -Fq 'actual_insights_enabled: false' "$example_vars" \
   || fail 'the overlay must be opt-in until its secrets are staged'
 grep -Fq 'actual_insights_history_months: 24' "$example_vars" \
   || fail 'monthly comparisons must retain the confirmed twenty-four-month history window'
+grep -Fq 'actual_insights_exceptional_categories: []' "$example_vars" \
+  || fail 'exceptional spend category configuration must be documented'
+grep -Fq 'ACTUAL_INSIGHTS_EXCEPTIONAL_CATEGORIES_JSON=' "$playbook" \
+  || fail 'exceptional spend categories must be passed to the companion'
 grep -Fq '127.0.0.1:5007:5007' "$playbook" \
   || fail 'the overlay must bind only to VM loopback'
 grep -Fq 'tailscale serve reset' "$playbook" \

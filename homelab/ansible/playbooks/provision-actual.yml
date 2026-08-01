@@ -277,6 +277,7 @@
                 - ACTUAL_INSIGHTS_CURRENCY={{ actual_insights_currency | default('AUD') }}
                 - ACTUAL_INSIGHTS_TIME_ZONE={{ actual_insights_timezone | default(patching_timezone | default('Etc/UTC')) }}
                 - ACTUAL_INSIGHTS_HISTORY_MONTHS={{ actual_insights_history_months | default(24) }}
+                - ACTUAL_INSIGHTS_EXCEPTIONAL_CATEGORIES_JSON={{ actual_insights_exceptional_categories | default([]) | to_json }}
                 - ACTUAL_INSIGHTS_PORT=5007
                 - ACTUAL_INSIGHTS_DATABASE=/data/insights.sqlite
               volumes:

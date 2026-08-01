@@ -21,6 +21,26 @@ function integer(name, fallback, minimum, maximum) {
   return value;
 }
 
+export function parseExceptionalCategories(value = '[]') {
+  let categories;
+  try {
+    categories = JSON.parse(value);
+  } catch {
+    throw new Error('ACTUAL_INSIGHTS_EXCEPTIONAL_CATEGORIES_JSON must be a JSON array');
+  }
+  if (
+    !Array.isArray(categories) ||
+    categories.length > 50 ||
+    categories.some(category =>
+      typeof category !== 'string' || category.length < 1 || category.length > 200)
+  ) {
+    throw new Error(
+      'ACTUAL_INSIGHTS_EXCEPTIONAL_CATEGORIES_JSON must contain up to fifty category names',
+    );
+  }
+  return [...new Set(categories)];
+}
+
 export function loadConfig() {
   const operatorLogin = required('ACTUAL_INSIGHTS_OPERATOR_LOGIN');
   if (!operatorLogin.includes('@')) {
@@ -51,6 +71,9 @@ export function loadConfig() {
     currency,
     timeZone,
     historyMonths: integer('ACTUAL_INSIGHTS_HISTORY_MONTHS', 24, 12, 24),
+    exceptionalCategories: parseExceptionalCategories(
+      process.env.ACTUAL_INSIGHTS_EXCEPTIONAL_CATEGORIES_JSON || '[]',
+    ),
     port: integer('ACTUAL_INSIGHTS_PORT', 5007, 1024, 65535),
     databasePath: process.env.ACTUAL_INSIGHTS_DATABASE || '/data/insights.sqlite',
   };

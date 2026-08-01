@@ -61,3 +61,52 @@ body {
 footer {
   color: #36443e;
 }
+
+.metric-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin-bottom: 2rem;
+}
+
+.metric-grid article {
+  margin: 0;
+}
+
+.metric-grid small,
+.metric-grid strong,
+th small,
+.category-flag {
+  display: block;
+}
+
+.metric-grid strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.35rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+th small,
+.category-flag {
+  color: #52605a;
+  font-weight: 400;
+  white-space: normal;
+}
+
+.category-flag {
+  color: #8a4b00;
+  max-width: 14rem;
+}
+
+.baseline-note {
+  color: #52605a;
+}

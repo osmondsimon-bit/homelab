@@ -90,7 +90,11 @@ test('persists a manually requested long-term category trend memo', async () => 
       {
         name: 'Living costs',
         is_income: false,
-        categories: [{ id: 'local-only', name: 'Groceries', spent: -(10000 + index * 100) }],
+        categories: [
+          { id: 'local-only', name: 'Groceries', spent: -(10000 + index * 100) },
+          { id: 'house-local-only', name: 'House Build', spent: index === 18 ? -100000 : 0 },
+          { id: 'rent-local-only', name: 'Rent', spent: -50000 },
+        ],
       },
     ],
   }));
@@ -116,6 +120,7 @@ test('persists a manually requested long-term category trend memo', async () => 
       },
     },
     model: 'gpt-5.6-terra',
+    exceptionalCategories: ['House Build', 'Rent'],
   });
 
   const result = await generate();
@@ -123,6 +128,12 @@ test('persists a manually requested long-term category trend memo', async () => 
   assert.equal(saves[0].kind, 'long_term');
   assert.equal(saves[0].month, '2025-12');
   assert.equal(saves[0].payload.months_in_period, 24);
+  assert.equal(saves[0].payload.schema_version, 2);
+  assert.deepEqual(
+    saves[0].payload.categories.filter(category => category.is_exceptional)
+      .map(category => category.category),
+    ['House Build', 'Rent'],
+  );
   assert.equal(JSON.stringify(saves[0].payload).includes('local-only'), false);
 });
 

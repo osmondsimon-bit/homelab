@@ -46,7 +46,13 @@ export function createMemoGenerator({
   };
 }
 
-export function createTrendGenerator({ extract, request, store, model }) {
+export function createTrendGenerator({
+  extract,
+  request,
+  store,
+  model,
+  exceptionalCategories = [],
+}) {
   let running = false;
   return async function generateTrendMemo() {
     if (running) {
@@ -58,7 +64,7 @@ export function createTrendGenerator({ extract, request, store, model }) {
       if (budgetMonths.length < 12) {
         throw new Error('long-term analysis requires at least twelve completed months');
       }
-      const payload = buildTrendPayload({ currency, budgetMonths });
+      const payload = buildTrendPayload({ currency, budgetMonths, exceptionalCategories });
       const snapshotHash = createHash('sha256')
         .update(JSON.stringify(payload))
         .digest('hex');
