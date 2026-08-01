@@ -110,8 +110,10 @@ The memo is informational and must not provide tax, investment, credit, or autom
 - Keep Actual on HTTPS 443 and the companion on 8443 because browser service workers are isolated
   by origin, which includes the port.
 - Require an exact allowlisted `Tailscale-User-Login` identity for every UI and asset request.
-- Protect manual POSTs with an origin check and a constant-time CSRF token comparison.
-- Use a strict CSP, same-site secure cookie, HTML escaping, and no client-side JavaScript.
+- Protect manual POSTs with a random, short-lived, one-time synchronizer token held only in server
+  memory and compared in constant time. Do not infer browser trust from post-proxy Host or Origin
+  headers, and do not use a CSRF cookie.
+- Use a strict CSP, HTML escaping, POST-only mutation routes, and no client-side JavaScript.
 - Store validated category snapshots, memo JSON, model/response identifiers, token usage, timestamp,
   and snapshot hash in `/opt/actual/insights-data/insights.sqlite` with mode `0600`.
 - Store Actual/server/E2EE credentials, Sync ID, and a project-scoped OpenAI key in separate
@@ -174,5 +176,6 @@ required by Actual's local engine. A production dependency audit must remain cle
 - [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model.md)
 - [Tailscale Serve identity headers](https://tailscale.com/docs/features/tailscale-serve#identity-headers)
+- [OWASP synchronizer-token guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#synchronizer-token-pattern)
 - [CVE-2026-39244 advisory](https://github.com/advisories/GHSA-xcpc-8h2w-3j85)
 - [gpt-oss hardware guidance](https://openai.com/index/introducing-gpt-oss/)

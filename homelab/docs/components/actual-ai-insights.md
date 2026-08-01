@@ -73,8 +73,8 @@ actual_insights_history_months: 24
 The playbook builds the local companion image, stages mode-`0400` read-only secret mounts, retains
 Actual at the root URL, resets stale routes on this dedicated Tailscale node, exposes `/insights` on
 HTTPS 8443 as a separate browser origin, and verifies both loopback ports. Deploying does not call
-the model; only either UI button does. The playbook also injects that exact public HTTPS origin for
-strict form-origin validation instead of trusting rewritten backend proxy headers.
+the model; only either UI button does. State-changing requests require a short-lived, one-time
+server-side synchronizer token and never depend on reverse-proxy Host or Origin rewriting.
 
 ## First live acceptance
 

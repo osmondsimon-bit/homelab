@@ -40,16 +40,6 @@ export function loadConfig() {
   } catch {
     throw new Error('ACTUAL_INSIGHTS_TIME_ZONE must be a valid IANA time zone');
   }
-  const publicOrigin = required('ACTUAL_INSIGHTS_PUBLIC_ORIGIN');
-  let parsedOrigin;
-  try {
-    parsedOrigin = new URL(publicOrigin);
-  } catch {
-    throw new Error('ACTUAL_INSIGHTS_PUBLIC_ORIGIN must be a valid HTTPS origin');
-  }
-  if (parsedOrigin.protocol !== 'https:' || parsedOrigin.origin !== publicOrigin) {
-    throw new Error('ACTUAL_INSIGHTS_PUBLIC_ORIGIN must be an HTTPS origin without a path');
-  }
   return {
     operatorLogin,
     serverUrl: process.env.ACTUAL_SERVER_URL || 'http://actual:5006',
@@ -60,7 +50,6 @@ export function loadConfig() {
     model,
     currency,
     timeZone,
-    publicOrigin,
     historyMonths: integer('ACTUAL_INSIGHTS_HISTORY_MONTHS', 24, 12, 24),
     port: integer('ACTUAL_INSIGHTS_PORT', 5007, 1024, 65535),
     databasePath: process.env.ACTUAL_INSIGHTS_DATABASE || '/data/insights.sqlite',

@@ -52,20 +52,18 @@ test('generation exists only as an authenticated manual POST', async t => {
     headers,
   });
   assert.equal(pageResponse.status, 200);
-  const cookie = pageResponse.headers.get('set-cookie');
   const page = await pageResponse.text();
   const csrf = page.match(/name="csrf" value="([^"]+)"/)?.[1];
-  assert.ok(cookie);
+  assert.equal(pageResponse.headers.get('set-cookie'), null);
   assert.ok(csrf);
 
   const postResponse = await fetch(`http://127.0.0.1:${port}/insights/generate`, {
     method: 'POST',
     headers: {
       ...headers,
-      cookie: cookie.split(';')[0],
       'content-type': 'application/x-www-form-urlencoded',
       host: `127.0.0.1:${port}`,
-      origin: `http://127.0.0.1:${port}`,
+      origin: 'https://proxy-origin-is-not-a-backend-trust-input.example',
     },
     body: new URLSearchParams({ month: '2026-06', csrf }),
     redirect: 'manual',
@@ -73,16 +71,22 @@ test('generation exists only as an authenticated manual POST', async t => {
   assert.equal(postResponse.status, 303);
   assert.equal(calls, 1);
 
+  const trendPageResponse = await fetch(`http://127.0.0.1:${port}/insights/`, {
+    headers,
+  });
+  const trendCsrf = (await trendPageResponse.text()).match(
+    /name="csrf" value="([^"]+)"/,
+  )?.[1];
+
   const trendResponse = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
     method: 'POST',
     headers: {
       ...headers,
-      cookie: cookie.split(';')[0],
       'content-type': 'application/x-www-form-urlencoded',
       host: `127.0.0.1:${port}`,
-      origin: `http://127.0.0.1:${port}`,
+      origin: 'https://another-proxy-origin.example',
     },
-    body: new URLSearchParams({ csrf }),
+    body: new URLSearchParams({ csrf: trendCsrf }),
     redirect: 'manual',
   });
   assert.equal(trendResponse.status, 303);
@@ -99,11 +103,9 @@ test('health is available locally without exposing financial state', async t => 
   assert.deepEqual(await response.json(), { status: 'ok' });
 });
 
-test('accepts the configured public origin when the proxy rewrites the backend host', async t => {
+test('uses a one-time server-side token independent of rewritten proxy headers', async t => {
   let calls = 0;
-  const publicOrigin = 'https://actual.example.ts.net:8443';
   const server = await startServer({
-    publicOrigin,
     generateTrendMemo: async () => {
       calls += 1;
       return { id: 2 };
@@ -115,17 +117,16 @@ test('accepts the configured public origin when the proxy rewrites the backend h
   const pageResponse = await fetch(`http://127.0.0.1:${port}/insights/`, {
     headers: identity,
   });
-  const cookie = pageResponse.headers.get('set-cookie').split(';')[0];
   const csrf = (await pageResponse.text()).match(/name="csrf" value="([^"]+)"/)?.[1];
+  assert.equal(pageResponse.headers.get('set-cookie'), null);
 
   const response = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
     method: 'POST',
     headers: {
       ...identity,
-      cookie,
       'content-type': 'application/x-www-form-urlencoded',
-      host: `127.0.0.1:${port}`,
-      origin: publicOrigin,
+      host: 'rewritten-backend.internal:5007',
+      origin: 'https://actual.example.ts.net:8443',
     },
     body: new URLSearchParams({ csrf }),
     redirect: 'manual',
@@ -133,17 +134,16 @@ test('accepts the configured public origin when the proxy rewrites the backend h
   assert.equal(response.status, 303);
   assert.equal(calls, 1);
 
-  const rejected = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
+  const replayed = await fetch(`http://127.0.0.1:${port}/insights/generate-trends`, {
     method: 'POST',
     headers: {
       ...identity,
-      cookie,
       'content-type': 'application/x-www-form-urlencoded',
-      origin: 'https://wrong.example',
+      origin: 'https://actual.example.ts.net:8443',
     },
     body: new URLSearchParams({ csrf }),
   });
-  assert.equal(rejected.status, 400);
-  assert.equal(await rejected.text(), 'Invalid request origin\n');
+  assert.equal(replayed.status, 400);
+  assert.equal(await replayed.text(), 'Invalid or expired CSRF token\n');
   assert.equal(calls, 1);
 });

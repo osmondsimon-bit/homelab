@@ -88,7 +88,6 @@ const server = createInsightsServer({
   generateMemo: month => exclusiveGeneration(() => monthlyGenerator(month)),
   generateTrendMemo: () => exclusiveGeneration(() => trendGenerator()),
   listMemos: () => store.list(),
-  publicOrigin: config.publicOrigin,
   timeZone: config.timeZone,
 });
 

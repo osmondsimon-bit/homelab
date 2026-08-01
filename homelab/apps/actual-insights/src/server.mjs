@@ -1,4 +1,4 @@
-// Serves the manual monthly memo UI behind a loopback-only Tailscale Serve proxy.
+// Serves manual category insights behind a loopback-only, identity-aware Tailscale Serve proxy.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -10,8 +10,7 @@ import { previousCompletedMonth } from './months.mjs';
 
 const identityHeader = 'Tailscale-User-Login';
 const safeClientErrors = new Map([
-  ['invalid request origin', 'Invalid request origin\n'],
-  ['invalid CSRF token', 'Invalid CSRF token\n'],
+  ['invalid or expired CSRF token', 'Invalid or expired CSRF token\n'],
   ['month must use YYYY-MM', 'Invalid completed month\n'],
   ['request body is too large', 'Request body is too large\n'],
 ]);
@@ -21,15 +20,6 @@ function normalizedPath(url) {
   if (path === '/insights') return '/';
   if (path.startsWith('/insights/')) return path.slice('/insights'.length);
   return path;
-}
-
-function cookies(request) {
-  return Object.fromEntries(
-    String(request.headers.cookie || '')
-      .split(';')
-      .map(part => part.trim().split('='))
-      .filter(parts => parts.length === 2),
-  );
 }
 
 function equalTokens(left, right) {
@@ -63,10 +53,35 @@ export function createInsightsServer({
   generateMemo,
   generateTrendMemo,
   listMemos,
-  publicOrigin,
   timeZone = 'Etc/UTC',
   logger = console,
 }) {
+  const csrfTokens = new Map();
+  const csrfLifetimeMs = 30 * 60 * 1000;
+  function pruneCsrfTokens(now = Date.now()) {
+    for (const [token, expiresAt] of csrfTokens) {
+      if (expiresAt <= now) csrfTokens.delete(token);
+    }
+    while (csrfTokens.size > 32) {
+      csrfTokens.delete(csrfTokens.keys().next().value);
+    }
+  }
+  function issueCsrfToken() {
+    const token = randomBytes(24).toString('base64url');
+    csrfTokens.set(token, Date.now() + csrfLifetimeMs);
+    pruneCsrfTokens();
+    return token;
+  }
+  function consumeCsrfToken(candidate) {
+    pruneCsrfTokens();
+    for (const token of csrfTokens.keys()) {
+      if (equalTokens(token, candidate)) {
+        csrfTokens.delete(token);
+        return true;
+      }
+    }
+    return false;
+  }
   const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
   const assets = {
     '/assets/pico.min.css': join(appRoot, 'node_modules/@picocss/pico/css/pico.min.css'),
@@ -96,8 +111,7 @@ export function createInsightsServer({
     }
 
     if (request.method === 'GET' && path === '/') {
-      const csrf = randomBytes(24).toString('base64url');
-      response.setHeader('Set-Cookie', `actual_insights_csrf=${csrf}; Path=/insights; Secure; HttpOnly; SameSite=Strict`);
+      const csrf = issueCsrfToken();
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(renderPage({
         csrf,
@@ -117,14 +131,9 @@ export function createInsightsServer({
 
     if (request.method === 'POST' && generationPath) {
       try {
-        const protocol = request.headers['x-forwarded-proto'] || 'http';
-        const expectedOrigin = publicOrigin || `${protocol}://${request.headers.host}`;
-        if (request.headers.origin !== expectedOrigin) {
-          throw new Error('invalid request origin');
-        }
         const form = await readForm(request);
-        if (!equalTokens(cookies(request).actual_insights_csrf, form.get('csrf'))) {
-          throw new Error('invalid CSRF token');
+        if (!consumeCsrfToken(form.get('csrf'))) {
+          throw new Error('invalid or expired CSRF token');
         }
         if (path === '/generate') {
           const month = form.get('month');
