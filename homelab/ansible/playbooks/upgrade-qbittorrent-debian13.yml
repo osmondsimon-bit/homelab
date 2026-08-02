@@ -245,10 +245,11 @@
           Upgrade incomplete: Debian={{ qbittorrent_upgraded_debian_version.stdout }},
           qBittorrent={{ qbittorrent_upgraded_version_raw.stdout }}.
 
-    - name: Verify qBittorrent, WireGuard, nftables, and NAT-PMP timer are active
+    - name: Verify qBittorrent, WireGuard, nftables, and VPN timers are active
       ansible.builtin.command: >-
         pct exec {{ qbittorrent_ctid }} -- systemctl is-active
         qbittorrent wg-quick@wg0 nftables natpmp-renew.timer
+        qbittorrent-vpn-health.timer
       register: qbittorrent_upgrade_services
       changed_when: false
 
@@ -261,6 +262,12 @@
 
     - name: Exercise the killswitch with WireGuard stopped
       block:
+        - name: Pause automatic VPN recovery for the deliberate tunnel outage
+          ansible.builtin.shell: >-
+            pct exec {{ qbittorrent_ctid }} -- bash -c
+            'systemctl stop qbittorrent-vpn-health.timer qbittorrent-vpn-health.service || true'
+          changed_when: true
+
         - name: Stop NAT-PMP scheduling before dropping WireGuard
           ansible.builtin.command: >-
             pct exec {{ qbittorrent_ctid }} --
@@ -336,6 +343,13 @@
         - name: Restore NAT-PMP scheduling after WireGuard recovery
           ansible.builtin.command: >-
             pct exec {{ qbittorrent_ctid }} -- systemctl start natpmp-renew.timer
+          changed_when: true
+
+        - name: Restore automatic VPN recovery when installed
+          ansible.builtin.shell: >-
+            pct exec {{ qbittorrent_ctid }} -- bash -c
+            'if systemctl cat qbittorrent-vpn-health.timer >/dev/null 2>&1; then
+            systemctl start qbittorrent-vpn-health.timer; fi'
           changed_when: true
 
     - name: Restart qBittorrent only after the killswitch test passes

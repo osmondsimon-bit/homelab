@@ -195,6 +195,12 @@
 
     # --- qBittorrent: bind torrents to wg0, Web-UI to the LAN IP (runs as root in the
     #     unprivileged CT so it can write the shared /media/downloads owned by host 100000) ---
+    - name: Stop qBittorrent before updating its network preferences
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- systemctl stop qbittorrent
+      failed_when: false
+      changed_when: true
+
     - name: Pre-seed qBittorrent.conf (interface bind + Web-UI address)
       ansible.builtin.shell: |
         pct exec {{ qbittorrent_ctid }} -- bash -c '
@@ -208,13 +214,97 @@
         Session\DefaultSavePath=/media/downloads
 
         [Preferences]
+        Connection\UPnP=false
         WebUI\Address={{ ct_lan_ip }}
         WebUI\Port={{ qbittorrent_webui_port }}
         QBEOF
           fi
+          if grep -q "^Session.Interface=" "$CONF"; then
+            sed -i "s|^Session.Interface=.*|Session\\\\Interface=wg0|" "$CONF"
+          else
+            sed -i "/^\[BitTorrent\]/a Session\\\\Interface=wg0" "$CONF"
+          fi
+          if grep -q "^Session.InterfaceName=" "$CONF"; then
+            sed -i "s|^Session.InterfaceName=.*|Session\\\\InterfaceName=wg0|" "$CONF"
+          else
+            sed -i "/^\[BitTorrent\]/a Session\\\\InterfaceName=wg0" "$CONF"
+          fi
+          if grep -q "^Connection.UPnP=" "$CONF"; then
+            sed -i "s|^Connection.UPnP=.*|Connection\\\\UPnP=false|" "$CONF"
+          else
+            sed -i "/^\[Preferences\]/a Connection\\\\UPnP=false" "$CONF"
+          fi
         '
       register: qb_conf
       changed_when: "'no_change' not in qb_conf.stdout"
+
+    - name: Install WireGuard readiness and recovery checks
+      ansible.builtin.shell: >-
+        echo '{{ item.content | b64encode }}' | base64 -d |
+        pct exec {{ qbittorrent_ctid }} -- bash -c
+        'cat > {{ item.path }} && chmod {{ item.mode }} {{ item.path }}'
+      loop:
+        - path: /usr/local/bin/qbittorrent-vpn-ready.sh
+          mode: "0755"
+          content: |
+            #!/usr/bin/env bash
+            # Succeed only when wg0 has a recent real handshake and working tunnel DNS.
+            set -u
+            attempts="${1:-12}"
+            for ((attempt = 1; attempt <= attempts; attempt++)); do
+              latest=$(wg show wg0 latest-handshakes 2>/dev/null | awk 'NR == 1 {print $2}')
+              now=$(date +%s)
+              if [[ "$latest" =~ ^[0-9]+$ ]] &&
+                 ((latest > 0 && now - latest < 180)) &&
+                 getent ahostsv4 router.bittorrent.com >/dev/null 2>&1; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "No recent WireGuard handshake or tunnel DNS response" >&2
+            exit 1
+        - path: /usr/local/bin/qbittorrent-vpn-health.sh
+          mode: "0755"
+          content: |
+            #!/usr/bin/env bash
+            # Fail closed and attempt one controlled recovery when the Proton tunnel dies.
+            set -u
+            if /usr/local/bin/qbittorrent-vpn-ready.sh 1; then
+              exit 0
+            fi
+            echo "WireGuard unhealthy; stopping qBittorrent and attempting recovery" >&2
+            systemctl stop qbittorrent
+            systemctl stop natpmp-renew.timer natpmp-renew.service || true
+            systemctl restart wg-quick@wg0
+            if /usr/local/bin/qbittorrent-vpn-ready.sh 12; then
+              systemctl start natpmp-renew.timer
+              systemctl start qbittorrent
+              echo "WireGuard recovery succeeded"
+              exit 0
+            fi
+            echo "WireGuard recovery failed; qBittorrent remains stopped" >&2
+            exit 1
+        - path: /etc/systemd/system/qbittorrent-vpn-health.service
+          mode: "0644"
+          content: |
+            [Unit]
+            Description=Verify and recover qBittorrent WireGuard connectivity
+            After=wg-quick@wg0.service nftables.service
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/local/bin/qbittorrent-vpn-health.sh
+        - path: /etc/systemd/system/qbittorrent-vpn-health.timer
+          mode: "0644"
+          content: |
+            [Unit]
+            Description=Check qBittorrent WireGuard connectivity every minute
+            [Timer]
+            OnBootSec=90
+            OnUnitInactiveSec=60
+            AccuracySec=10
+            [Install]
+            WantedBy=timers.target
+      changed_when: true
 
     - name: Install the qBittorrent systemd unit
       ansible.builtin.shell: >
@@ -227,10 +317,13 @@
           After=network-online.target wg-quick@wg0.service nftables.service
           Wants=network-online.target
           Requires=wg-quick@wg0.service
+          StartLimitIntervalSec=0
           [Service]
           Environment=HOME=/root
+          ExecStartPre=/usr/local/bin/qbittorrent-vpn-ready.sh
           ExecStart=/usr/bin/qbittorrent-nox --webui-port={{ qbittorrent_webui_port }}
           Restart=on-failure
+          RestartSec=60
           [Install]
           WantedBy=multi-user.target
       changed_when: true
@@ -253,19 +346,40 @@
         '
       changed_when: true
 
-    # --- NAT-PMP: keep a forwarded port alive (Proton gateway 10.0.0.1), renew < 60s lease ---  # scan-allow
+    # --- NAT-PMP: keep a forwarded port alive (Proton gateway 10.2.0.1), renew < 60s lease ---  # scan-allow
     - name: Install the NAT-PMP renewal script + timer
       ansible.builtin.shell: |
         pct exec {{ qbittorrent_ctid }} -- bash -c '
           cat > /usr/local/bin/natpmp-renew.sh <<"PMEOF"
         #!/usr/bin/env bash
-        # Renew the ProtonVPN NAT-PMP TCP+UDP port mappings; log the forwarded public port.
+        # Renew ProtonVPN NAT-PMP and keep qBittorrent on the assigned public port.
         set -u
-        GW=10.0.0.1  # ProtonVPN NAT-PMP gateway (universal constant)  # scan-allow
-        natpmpc -a 1 0 udp 60 -g "$GW" >/dev/null 2>&1 || true
-        out=$(natpmpc -a 1 0 tcp 60 -g "$GW" 2>/dev/null) || exit 0
+        GW=10.2.0.1  # ProtonVPN WireGuard NAT-PMP gateway  # scan-allow
+        timeout 10 natpmpc -a 1 0 udp 60 -g "$GW" >/dev/null 2>&1 || true
+        out=$(timeout 10 natpmpc -a 1 0 tcp 60 -g "$GW" 2>/dev/null) || exit 0
         port=$(printf "%s" "$out" | sed -n "s/.*Mapped public port \([0-9]*\).*/\1/p" | tail -1)
-        [ -n "$port" ] && echo "natpmp forwarded port: $port" || true
+        if [ -n "$port" ]; then
+          echo "natpmp forwarded port: $port"
+          conf=/root/.config/qBittorrent/qBittorrent.conf
+          if ! grep -Fqx "Session\\Port=$port" "$conf" ||
+             ! grep -Fqx "Connection\\UPnP=false" "$conf"; then
+            was_active=false
+            systemctl is-active --quiet qbittorrent && was_active=true
+            $was_active && systemctl stop qbittorrent
+            if grep -Fq "Session\\Port=" "$conf"; then
+              sed -i "s|^Session\\\\Port=.*|Session\\\\Port=$port|" "$conf"
+            else
+              sed -i "/^\[BitTorrent\]/a Session\\\\Port=$port" "$conf"
+            fi
+            if grep -Fq "Connection\\UPnP=" "$conf"; then
+              sed -i "s|^Connection\\\\UPnP=.*|Connection\\\\UPnP=false|" "$conf"
+            else
+              sed -i "/^\[Preferences\]/a Connection\\\\UPnP=false" "$conf"
+            fi
+            $was_active && systemctl start qbittorrent
+            echo "qBittorrent listening port synchronized to $port"
+          fi
+        fi
         PMEOF
           chmod +x /usr/local/bin/natpmp-renew.sh
           cat > /etc/systemd/system/natpmp-renew.service <<"SVCEOF"
@@ -275,6 +389,7 @@
         Requires=wg-quick@wg0.service
         [Service]
         Type=oneshot
+        TimeoutStartSec=35
         ExecStart=/usr/local/bin/natpmp-renew.sh
         SVCEOF
           cat > /etc/systemd/system/natpmp-renew.timer <<"TMREOF"
@@ -289,16 +404,18 @@
         TMREOF
           systemctl daemon-reload
           systemctl enable --now natpmp-renew.timer >/dev/null 2>&1
+          systemctl enable --now qbittorrent-vpn-health.timer >/dev/null 2>&1
         '
       changed_when: true
 
-    # --- Verification (safe without traffic; full leak-test is operator-run, see runbook) ---
-    - name: Check WireGuard handshake + killswitch + qBittorrent socket
+    # --- Verification: a local interface is insufficient; require a recent remote handshake ---
+    - name: Require a live WireGuard handshake, tunnel DNS, killswitch, and qBittorrent socket
       ansible.builtin.shell: |
         pct exec {{ qbittorrent_ctid }} -- bash -c '
-          echo "--- wg ---"; wg show wg0 2>&1 | grep -E "interface|endpoint|latest handshake|transfer" || echo "wg0 not up"
+          /usr/local/bin/qbittorrent-vpn-ready.sh 1
+          echo "--- wg ---"; wg show wg0 2>&1 | grep -E "interface|endpoint|latest handshake|transfer"
           echo "--- nft (output policy must be drop) ---"; nft list chain inet killswitch output 2>&1 | grep -E "policy|wg0|udp dport"
-          echo "--- qbittorrent socket ---"; ss -tlnp 2>/dev/null | grep ":{{ qbittorrent_webui_port }}" || echo "webui not listening yet"
+          echo "--- qbittorrent socket ---"; ss -tlnp 2>/dev/null | grep ":{{ qbittorrent_webui_port }}"
         '
       register: verify
       changed_when: false
@@ -309,7 +426,7 @@
           - "qBittorrent CT {{ qbittorrent_ctid }} provisioned; Web-UI on {{ ct_lan_ip }}:{{ qbittorrent_webui_port }} (LAN/Tailscale only)."
           - "{{ verify.stdout_lines }}"
           - "MUST DO before trusting: (1) run the killswitch LEAK-TEST (runbooks: qBittorrent) —"
-          - "  tunnel-up egress IP = Proton; `ip link set wg0 down` -> curl/dig time out; dnsleak = Proton."
+          - "  tunnel-up egress IP = Proton; controlled WireGuard stop -> HTTP/DNS blocked; dnsleak = Proton."
           - "(2) set the Web-UI password — first-run temp password: pct exec {{ qbittorrent_ctid }} -- journalctl -u qbittorrent | grep -i password"
-          - "(3) set qBittorrent's listen port to the NAT-PMP forwarded port (journalctl -u natpmp-renew)."
+          - "(3) confirm natpmp-renew reports that qBittorrent's listening port is synchronized automatically."
           - "Onboarding TODO (ADR-017): glance_services tile + GuestDown id-map for lxc/{{ qbittorrent_ctid }}; not backed up by design."
