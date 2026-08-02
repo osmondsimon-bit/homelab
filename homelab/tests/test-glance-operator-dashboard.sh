@@ -32,6 +32,13 @@ if grep -Fq -- 'No concerns' "$template"; then
   fail 'summary must not claim that native service checks and version currency are healthy'
 fi
 require_text "$template" 'title: Service Directory' 'service launcher must be retained on Overview'
+require_text "$template" 'title: Finance Dashboard' \
+  'Admin Links must include the private finance dashboard'
+require_text "$template" "actual_domain | regex_replace('/+$', '')" \
+  'finance dashboard must derive its URL from the protected Actual domain'
+if grep -Eq -- 'https?://[^"[:space:]]+\.ts\.net:8444' "$template"; then
+  fail 'public Glance template must not hardcode the private tailnet hostname'
+fi
 require_text "$vars" 'title: "Vaultwarden", node: carter, workload: "VM 118"' \
   'Vaultwarden must appear under Carter in the service directory'
 require_text "$vars" 'title: "Actual Budget", node: carter, workload: "VM 127"' \

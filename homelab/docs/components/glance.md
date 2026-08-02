@@ -72,10 +72,13 @@ the Sonarr/Radarr queues already expose the managed-download state needed here.
 > Container version proposals still arrive through Renovate and are deployed manually.
 > The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
 > service checks remain visible in the Service Directory and are not implied by that headline.
-> Vaultwarden and Actual remain tailnet-only: their Carter directory links use the private
-> Tailscale Serve URLs, while their green/red indicators check only the existing LAN node-exporter
-> endpoint. For those two rows, status means the VM is reachable, not that the application completed
-> an authenticated end-to-end request; no application port is exposed to the LAN.
+> Vaultwarden, Actual, and the Finance Dashboard remain tailnet-only. Their launch links derive from
+> protected Tailscale Serve configuration rather than committing private tailnet hostnames. The
+> Finance Dashboard bookmark uses Actual's separate private port and is launch-only: Glance neither
+> probes it nor receives finance data or authentication context. Vaultwarden and Actual green/red
+> indicators check only the existing LAN node-exporter endpoint. For those two rows, status means the
+> VM is reachable, not that the application completed an authenticated end-to-end request; no
+> application port is exposed to the LAN.
 > **Host Pulse** attributes current CPU, RAM, local-ZFS pressure and used/total GB, and host
 > maintenance state before the service columns. The same compact panel keeps the deduplicated PBS
 > datastore and apophis Media USB mount/cached-capacity state visible without a second capacity section. Historical peaks remain

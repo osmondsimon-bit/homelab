@@ -489,6 +489,7 @@ pages:
                   - { title: Vaultwarden, url: "<< vaultwarden_domain >>", description: "Password vault", icon: "di:vaultwarden" }
                   <% if actual_enabled | default(false) %>
                   - { title: Actual Budget, url: "<< actual_domain >>", description: "Personal finance", icon: "di:actual-budget" }
+                  - { title: Finance Dashboard, url: "<< actual_domain | regex_replace('/+$', '') >>:8444", description: "Household spending insights", icon: "di:actual-budget" }
                   <% endif %>
 
   # Media operations and bounded storage intelligence. This is deliberately read-only: cleanup
