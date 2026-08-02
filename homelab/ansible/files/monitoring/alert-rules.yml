@@ -312,6 +312,20 @@ groups:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} has pve_up=0 — stopped/crashed for 5m (deduplicated across cluster exporters)."
 
+      # CT 121 can remain up while qBittorrent intentionally stays stopped after its local
+      # WireGuard health monitor cannot recover a dead Proton endpoint. The Web UI probe turns
+      # that fail-closed but otherwise silent state into one operator warning. Five minutes
+      # allows the one-minute local check and its controlled recovery attempt to finish first.
+      # If blackbox exporter itself fails, generic TargetDown covers the scrape job instead.
+      - alert: QbittorrentUnavailable
+        expr: probe_success{job="blackbox-qbittorrent"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "qBittorrent unavailable after VPN recovery window"
+          description: "qBittorrent's Web UI has been unreachable for 5m while monitored externally. CT 121 may still be running with qBittorrent held fail-closed after WireGuard recovery failed. Check qbittorrent-vpn-health.service, wg-quick@wg0, and the Proton profile."
+
       # pvesr replication health — the manual-failover safety net (ADR-009). VM 118 replicates
       # carter->apophis and VM 200 replicates apophis->carter every 15 min; if either silently
       # stops, failover would use a STALE or absent snapshot. pve-exporter exports these only from

@@ -47,6 +47,9 @@ security control, not the in-container user. The `lxc.*` tun-passthrough lines u
 - **Automated recovery:** `pct exec 121 -- systemctl status qbittorrent-vpn-health.timer` and
   `pct exec 121 -- journalctl -u qbittorrent-vpn-health.service`. A locally active `wg0` is not
   considered healthy without a recent peer handshake and working tunnel DNS.
+- **External alarm:** Prometheus probes the Web UI independently. If it remains unavailable for
+  five minutes, `QbittorrentUnavailable` routes through Alertmanager to ntfy. `GuestDown` separately
+  covers the whole CT stopping; successful probes and brief recovery cycles do not notify.
 
 Proton's manual WireGuard NAT-PMP gateway is:
 

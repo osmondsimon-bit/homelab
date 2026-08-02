@@ -9,7 +9,7 @@ Prometheus, native packages, no Docker.
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 114 (unprivileged LXC, Debian 12, `features nesting=1`) |
 | IP / ports | `YOUR_MONITORING_IP` — Grafana `:3000`, Prometheus `:9090`, Alertmanager `:9093` (LAN/Tailscale only, no public exposure) |
 | TSDB | Prometheus data on a quota'd ZFS bind-mount (`rpool/data/monitoring-tsdb`), ~30-day retention. **Not backed up** — history is non-critical, rebuilds from code |
-| Exporters | node (`:9100` on apophis+carter+oneill), including five-minute host ZFS/SMART/NVMe/kernel textfile metrics; pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP-connect probe of the SLZB-06 Zigbee coordinator (`zigbee_coordinator_target`) |
+| Exporters | node (`:9100` on apophis+carter+oneill), including five-minute host ZFS/SMART/NVMe/kernel textfile metrics; pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP probe of the SLZB-06 coordinator and HTTP probe of qBittorrent |
 | Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; persistent host-health checks are failure-only (no PASS notifications); apophis dead-man's-switch covers "oneill down" |
 
 ## How it's managed
@@ -45,6 +45,12 @@ not by an always-up alert.
 The media guests returned to the default-on service tier with Apophis's 32 GB restoration on
 2026-07-28. `GuestDown` therefore covers CTs 120/121/123/124 and VM 125 again, and VM 125's direct
 node-exporter target participates in the generic `TargetDown` alert.
+
+`QbittorrentUnavailable` complements `GuestDown`: a blackbox HTTP probe checks the Web UI, and a
+warning reaches ntfy after five continuous minutes of failure. This detects CT 121 remaining alive
+while qBittorrent is intentionally held fail-closed after its local WireGuard recovery fails. The
+delay absorbs normal one-minute health checks and a single controlled recovery attempt; healthy
+probes and short interruptions send no notifications.
 
 ## Operations
 
