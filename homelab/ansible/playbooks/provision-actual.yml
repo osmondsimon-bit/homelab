@@ -324,6 +324,12 @@
       changed_when: true
       when: actual_insights_enabled | default(false) | bool
 
+    - name: Restore the independent private finance dashboard route
+      ansible.builtin.command: >-
+        tailscale serve --bg --https=8444 http://127.0.0.1:5008
+      changed_when: true
+      when: finance_dashboard_enabled | default(false) | bool
+
     - name: Verify loopback-only binding and application response
       ansible.builtin.shell: |
         ss -tlnp | grep -q '127.0.0.1:5006' || { echo "Actual is not loopback-only"; exit 1; }
@@ -331,6 +337,10 @@
         {% if actual_insights_enabled | default(false) | bool %}
         ss -tlnp | grep -q '127.0.0.1:5007' || { echo "Actual insights is not loopback-only"; exit 1; }
         curl -fsS --max-time 8 http://127.0.0.1:5007/healthz >/dev/null
+        {% endif %}
+        {% if finance_dashboard_enabled | default(false) | bool %}
+        ss -tlnp | grep -q '127.0.0.1:5008' || { echo "Finance dashboard is not loopback-only"; exit 1; }
+        curl -fsS --max-time 8 http://127.0.0.1:5008/healthz >/dev/null
         {% endif %}
       register: actual_health
       changed_when: false

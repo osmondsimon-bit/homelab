@@ -39,6 +39,10 @@ grep -Fq 'cap_drop:' "$playbook" \
   || fail 'the Actual container must drop Linux capabilities'
 grep -Fq 'tailscale serve --bg --https=443 http://127.0.0.1:5006' "$playbook" \
   || fail 'Tailscale Serve must provide the only HTTPS ingress'
+grep -Fq 'tailscale serve --bg --https=8444 http://127.0.0.1:5008' "$playbook" \
+  || fail 'Actual reprovisioning must restore the enabled private finance dashboard route'
+grep -Fq 'finance_dashboard_enabled | default(false) | bool' "$playbook" \
+  || fail 'the independent finance dashboard route must remain explicitly opt-in'
 grep -Fq "lookup('file', actual_ts_authkey_file, errors='ignore')" "$playbook" \
   || fail 'a used Tailscale key file must be optional on idempotent reruns'
 grep -Fq "when: (actual_ts_state.stdout | from_json).BackendState != 'Running'" "$playbook" \

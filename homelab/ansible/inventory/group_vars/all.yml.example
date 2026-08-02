@@ -109,6 +109,7 @@ actual_insights_history_months: 24                       # local comparison wind
 actual_insights_exceptional_categories: []               # exact category names excluded from underlying run rate
 # renovate: datasource=docker depName=node
 actual_insights_node_image: node:24.18.0-bookworm-slim   # PINNED LTS build base for the companion image
+finance_dashboard_enabled: false                        # preserve independent tailnet route :8444 on Actual reprovision
 actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"
 actual_insights_sync_id_file: "{{ lookup('env', 'HOME') }}/.actual-insights-sync-id"
 actual_insights_e2ee_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-e2ee-password"

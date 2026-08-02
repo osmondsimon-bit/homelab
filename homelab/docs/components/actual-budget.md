@@ -72,3 +72,9 @@ Related: ADR-023, ADR-012, ADR-015, ADR-017, ADR-018.
 
 Optional companion: [Actual Budget category AI insights](actual-ai-insights.md) (ADR-024). It offers
 a manually generated 24-month baseline plus monthly memos from locally derived category metrics only.
+
+The independent household Finance Dashboard may also use VM 127 for a manually invoked,
+category-aggregate-only worker and a separate networkless report server on private HTTPS port
+`8444`. When `finance_dashboard_enabled` is true, this playbook restores that route after its
+deliberate Tailscale Serve reset; the dashboard project remains responsible for the relay and
+validated report deployment.
