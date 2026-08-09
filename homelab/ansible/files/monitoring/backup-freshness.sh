@@ -56,15 +56,17 @@ if [[ -d "$PBS_DATASTORE" ]]; then
 fi
 
 # --- HA native partial backups: newest Automatic_backup_*.tar mtime ---
+# Home Assistant 2026.8 changed its automatic-backup prefix to lowercase. Match the
+# prefix without case sensitivity so upgrades cannot make valid backups invisible.
 if [[ -d "$HA_SHARE" ]]; then
   newest=""; count=0
-  shopt -s nullglob
+  shopt -s nullglob nocaseglob
   for f in "$HA_SHARE"/Automatic_backup_*.tar; do
     count=$((count + 1))
     ep="$(stat -c %Y "$f")"
     [[ -z "$newest" || "$ep" -gt "$newest" ]] && newest="$ep"
   done
-  shopt -u nullglob
+  shopt -u nullglob nocaseglob
   [[ -n "$newest" ]] && emit_group "ha" "home-assistant" "$newest" "$count"
 fi
 
