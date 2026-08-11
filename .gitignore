@@ -1,5 +1,6 @@
 # Ignore everything at the repo root by default; publish only the entries listed.
 /*
+/agent-workflows/
 
 # Published (the only things that leave this machine):
 !/.gitignore

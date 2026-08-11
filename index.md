@@ -21,6 +21,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
     decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 020-infra-portal)
       template.md
     docs/                    ALL narrative docs:
+      agents/shared-workflow.md shared agent-workflow routing and boundaries
       components/<svc>.md     one per deployed service (what it is, how configured)
       operations/runbooks.md  operational procedures (health, restart, recovery)
       phases/<N>-<name>.md     phase completion records
@@ -75,6 +76,9 @@ markdown links are relative to the file that contains them.
 
 ### "Which agent for this task?"
 → `CLAUDE.md` Agents section (infra-designer, infra-manager, doc-auditor, continuity-reviewer + `/security-review`)
+
+### "How is shared agent work routed?"
+→ `homelab/docs/agents/shared-workflow.md`
 
 ### "Are docs consistent / anything stale?"
 → Use the `doc-auditor` agent

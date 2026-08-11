@@ -87,6 +87,8 @@ Reviewers assist with this homelab (four agents + the `/phase-gate` and `/securi
 
 **Security review gates:** run `/security-review` at the end of each phase before marking it done in PLAN.md. Also run it before committing any Ansible playbook, firewall rule, or service configuration.
 
+For shared agent-workflow routing, see [homelab/docs/agents/shared-workflow.md](homelab/docs/agents/shared-workflow.md).
+
 ## Context, subagents & effort
 
 Two goals: **stretch session runway** (minimize token/compute cost without adding real risk) and **keep the main agent's context clean** (unneeded tool/work output stays out of it).
