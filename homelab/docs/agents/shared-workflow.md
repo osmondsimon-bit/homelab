@@ -1,12 +1,27 @@
 # Shared agent workflow
 
-This workflow routes homelab work between coordinating, specialist, and executor agents while preserving the project's existing review gates.
+This workflow applies when homelab work uses central skills, executors, or independent reviewers.
+`AGENTS.md` defines repository rules; `PLAN.md`, ADRs, and runbooks own project facts and decisions;
+`CLAUDE.md` is a tool-specific entry point; central policies and approved work packets are subordinate.
+If project sources conflict, stop and ask rather than guessing which is stricter.
 
-Project `AGENTS.md`, `CLAUDE.md`, `PLAN.md`, ADRs, and existing specialist gates govern all shared-skill use; if guidance conflicts, the stricter rule wins. Central shared-skill policies are available at [`/home/simon/agent-workflows/policies/`](/home/simon/agent-workflows/policies/), but the project remains authoritative.
+Default to one coordinating agent. It may design, implement, run deterministic checks, integrate,
+commit, and push routine work without delegation. Do not delegate small documentation or configuration
+edits, ordinary bug fixes, repository navigation, or routine test runs.
 
-1. Use `design-work` for ambiguous or material changes. Base proposals and implementation language on the existing `PLAN.md`, ADRs, and established domain vocabulary.
-2. Approved work packets may go to Terra executor agents using `execute-work-packet`.
-3. The root/coordinating agent owns integration, commit, and push.
-4. Keep the existing specialist and gate responsibilities: invoke `infra-designer`, `doc-auditor`, and `continuity-reviewer` at their existing gates; use `/phase-gate` and `/security-review` at their existing gates.
+Use one bounded subagent when a task has a large separable component that can return a short result,
+or when independent judgment materially reduces risk. Ask before using more than two subagents for
+one task unless the user explicitly requested broader multi-agent review. Follow the central
+[agent and model routing policy](/home/simon/agent-workflows/policies/model-routing.md).
 
-Lower-cost executors must never access `homelab-private` or gitignored credential-bearing inventory, and must never deploy. They must escalate any design, security, or destructive ambiguity to the coordinating agent.
+Use `design-work` for material ambiguity, not as ceremony for an already clear small change. An
+approved packet may go to one Terra executor using `execute-work-packet`; the coordinating agent
+owns integration, commit, and push. One reviewer may cover multiple review lanes unless a project
+gate requires genuine separation.
+
+Keep the existing specialist triggers: `infra-designer` for new guests or significant network
+changes; `doc-auditor`, `continuity-reviewer`, `/security-review`, and `/phase-gate` at their documented
+phase, backup, security, or continuity gates. Do not invoke the full set for ordinary tasks.
+
+Executors never access `homelab-private` or gitignored credential-bearing inventory and never deploy.
+They escalate design, security, privacy, destructive, or authority ambiguity to the coordinator.

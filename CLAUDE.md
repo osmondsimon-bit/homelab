@@ -1,18 +1,9 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. General AI agent behaviour rules (all tools) are in [AGENTS.md](AGENTS.md). Use [index.md](index.md) to navigate the repo — load only what's relevant to your task.
-
-## What this repo is
-
-Documentation, scripts, and configuration for Simon's homelab. The primary host is **apophis** (Proxmox VE, `YOUR_PROXMOX_IP`). All work is done from the **mgmt-vm** (`YOUR_MGMT_VM_IP`).
-
-## Key infrastructure
-
-| Host | Role | IP |
-|------|------|----|
-| apophis | Proxmox VE hypervisor | YOUR_PROXMOX_IP |
-| mgmt-vm | This machine — git, scripts, Claude Code, Ansible control node | YOUR_MGMT_VM_IP |
-| home-assistant | HAOS VM (VMID 200), Zigbee2MQTT, SLZB-06 at YOUR_ZIGBEE_COORD_IP | YOUR_HA_IP |
+This is the Claude-specific entry point. Read [AGENTS.md](AGENTS.md) first; it defines the binding
+repository rules and instruction hierarchy. Use [index.md](index.md) to navigate the repo and load
+only the context relevant to the task. For central skills or delegated work, read
+[the shared workflow](homelab/docs/agents/shared-workflow.md).
 
 ## Repo layout
 
@@ -46,7 +37,8 @@ bash homelab/scripts/<target>-<action>.sh
 
 ## Provisioning: Terraform creates, Ansible configures
 
-**Terraform** (`bpg/proxmox`, ADR-008) owns VM/LXC *existence and shape* — see `homelab/terraform/` (scaffold; import existing VMs is the next step). **Ansible** (ADR-005) owns *configuration*. Boundary: Terraform = the box exists with the right shape; Ansible = the box is set up.
+**Terraform** (`bpg/proxmox`, ADR-008) owns VM/LXC *existence and shape*. **Ansible** (ADR-005)
+owns *configuration*. Boundary: Terraform creates the box; Ansible configures it.
 
 Run playbooks from the mgmt-vm:
 
@@ -54,7 +46,7 @@ Run playbooks from the mgmt-vm:
 cd homelab/ansible && ansible-playbook playbooks/<name>.yml
 ```
 
-First time? See `homelab/ansible/README.md` for the one-time bootstrap (install Ansible, authorise the mgmt-vm on apophis). Test against a Proxmox snapshot before any production host. Secrets are prompted at runtime, never committed (ADR-018 — the earlier `ansible-vault` approach was dropped as it was never wired in; the tiered secrets model lives in Vaultwarden + gitignored config).
+For bootstrap and production safeguards, read `homelab/ansible/README.md` and ADR-018.
 
 ## Conventions
 
@@ -64,17 +56,11 @@ First time? See `homelab/ansible/README.md` for the one-time bootstrap (install 
 
 **New infrastructure (observability & continuity by default — ADR-017):** every new guest/node/storage gets monitoring, alerting, a recorded backup *decision* (+ backup-freshness registration), and a restore drill **as part of provisioning** — follow the "Onboarding a new guest / node / storage" checklist in `homelab/docs/operations/runbooks.md`. Adding a service to the dashboards is a one-line edit to `glance_services` / `glance_release_repos` in group_vars.
 
-**Network:** No ports forwarded directly from the internet. Remote access via Cloudflare Tunnel (HTTP/S) or Tailscale (full network; WireGuard is superseded — see ADR-003). All services run inside VMs or LXCs — nothing installed directly on the Proxmox host.
-
-**Working tree + local config backup:** `/home/simon` is the authoritative working and deployment tree. `/home/simon/homelab-private` is a separate private backup repository; its nested `homelab/` is a tracked restore snapshot, never a place to edit or deploy from. The backup script mirrors real config plus local Claude/Codex agent config there after changes and at session close (ADR-006/007). Because gitignored `group_vars/all.yml` now contains machine credentials, the private repository is credential-bearing recovery material in practice; do not print its secret values or describe it as non-secret. The target secret-handling model is unresolved and tracked in PLAN.md. PBS covers the mgmt-vm; HA native backup and off-site backup remain tracked there too.
-
-**Single source of truth (two-tier):** Logical facts — which hosts/VMs/LXCs exist, VMIDs, RAM budget, phase/service status, canonical hostnames — are owned by `homelab/PLAN.md`; other docs link to it. **Real network addresses (IPs, subnets, MACs) are never published** — they live only in the gitignored Ansible config (`ansible/inventory/`, `group_vars/`) and the operator's private notes. Committed files use `YOUR_*` placeholders only (ADR-006).
-
 **Doc hygiene (keep docs fresh as you work):** When a service's config changes (VLAN, port, RAM, purpose), update its `docs/components/<svc>.md` in the same commit. When a capability moves from planned → live, move it in `docs/tech-radar.md`. Do not leave "still to be confirmed" or "Phase X" triggers in the radar past the phase they were due. The `doc-auditor` enforces this at phase gates — but fixing drift mid-phase is cheaper than a batch cleanup later.
 
 ## Agents
 
-Reviewers assist with this homelab (four agents + the `/phase-gate` and `/security-review` skills). Invoke them at the right moment — don't skip the gates.
+These specialists are risk gates, not the default workflow for ordinary tasks.
 
 | Reviewer | When to invoke | How |
 |-------|---------------|-----|
@@ -87,33 +73,10 @@ Reviewers assist with this homelab (four agents + the `/phase-gate` and `/securi
 
 **Security review gates:** run `/security-review` at the end of each phase before marking it done in PLAN.md. Also run it before committing any Ansible playbook, firewall rule, or service configuration.
 
-For shared agent-workflow routing, see [homelab/docs/agents/shared-workflow.md](homelab/docs/agents/shared-workflow.md).
+## Agent and model use
 
-## Context, subagents & effort
-
-Two goals: **stretch session runway** (minimize token/compute cost without adding real risk) and **keep the main agent's context clean** (unneeded tool/work output stays out of it).
-
-- **Offload to a subagent when the work is large but the answer needed back is small** — broad searches, multi-file reads, noisy tool runs, research. Ask it for **conclusions, uncertainty, and `file:line` refs — not transcripts or dumps**. **Verify a subagent's claims** (read the cited lines) before relying on them.
-- **Tight guidance + constraints; pass minimal context.** Don't feed history/prior context into a subagent unless essential — it biases results and burns tokens.
-- **Parallelize disjoint work** (multiple subagents at once when their targets don't overlap). **Sequence** anything that might touch the same files — "parallel-safe" means disjoint write targets.
-- **Pick the cheapest model/effort that does the job reliably:** comprehension *difficulty → model tier*; labor *volume → effort*. When Claude Code is doing the work, prefer Claude models. When Codex/OpenAI is doing the work, prefer the Codex/OpenAI model with the matching tier.
-
-| Model Family | Model | Efforts | Wrapping Skill (if present) | Model Ref | Capability Tier | Cost |
-|--------------|-------|---------|-----------------------------|-----------|-----------------|------|
-| Claude | Haiku 4.5 | n/a | n/a | `claude-haiku-4-5-20251001` | Low | Low |
-| Claude | Sonnet 4.6 | low, medium, high, max | n/a | `claude-sonnet-4-6` | Medium | Medium |
-| Claude | Opus 4.8 | low, medium, high, xhigh, max | n/a | `claude-opus-4-8` | High | High |
-| Claude | Fable 5 | low, medium, high, xhigh, max | n/a | `claude-fable-5` | Epic | Epic |
-| Codex | GPT 5.3 | low, medium, high, xhigh | `codex-gpt53-plan`, `codex-gpt53-do` | `gpt-5.3-codex-spark` | Low | ~Zero |
-| Codex | GPT 5.5 | low, medium, high, xhigh, max | `codex-gpt55-plan`, `codex-gpt55-do` | `gpt-5.5` | High | High |
-| Qwen | Qwen 3.6 27B Coder | n/a | `qwen-qwen36-plan`, `qwen-qwen36-do` | `llama.cpp/Qwen-Qwen3.6-27B-IQ4_XS.gguf` | Medium | Zero |
-
-  - Low tier/cost: simple, mechanical, well-specified tasks.
-  - Medium tier: most coding, research, and doc work.
-  - High tier: hard reasoning, architecture/security reviews, and risky cross-cutting changes. The reviewer agents above are this class.
-  - Epic tier: reserve for work that is both high-risk and unusually ambiguous or complex.
-  - Set the Agent tool's `model` or wrapping skill to the right tier. Where a model/skill exposes **effort**, scale it to labor volume (more steps/output → higher effort), not to difficulty.
-
-## Roadmap
-
-See `homelab/PLAN.md` for the phased build-out plan (authoritative for current phase/status). Current position: **Phases 6 + 7 CLOSED 2026-06-28** (Jellyfin CT 120 + qBittorrent CT 121 with native WireGuard killswitch → ProtonVPN Plus, leak-test PASS; Sonarr CT 123 + Radarr CT 124 native Servarr with hardlinks; Jellyseerr + Prowlarr + ByParr on VM 125 behind Gluetun / 2nd ProtonVPN exit for AU ISP bypass + CF solving). The **HA-expansion sub-track was split out to a standalone project** (HACS done; Node-RED/ESPHome/HA→Grafana/wall-tablet deferred). **No committed Phase 8 yet** — next priorities are the open backlog (credential rotation ~mid-July, UniFi cleanup, firewall tighten, off-site backup). Terraform import deferred to cluster scale (ADR-008). Order: 1 VLANs ✓ → 2 Tailscale + Technitium ✓ → 3 Foundation + observability ✓ → 4 Multi-node cluster + HA ✓ (apophis + carter; oneill stays **standalone**; ZFS replication; **no HA manager/fencing** — manual failover) → 5 Secrets ✓ (Vaultwarden; HA-expansion split out) → 6 Jellyfin + media ✓ → 7 Media automation ✓. Cross-cutting: backups + patching.
+Use one agent by default. Delegate only at the risk and workload thresholds in the shared workflow;
+one independent reviewer may cover multiple applicable review lanes. Return conclusions and file
+references rather than transcripts, and verify delegated claims before relying on them. The central
+[agent and model routing policy](/home/simon/agent-workflows/policies/model-routing.md) is the single
+source for model defaults.
