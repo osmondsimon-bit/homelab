@@ -25,3 +25,17 @@ phase, backup, security, or continuity gates. Do not invoke the full set for ord
 
 Executors never access `homelab-private` or gitignored credential-bearing inventory and never deploy.
 They escalate design, security, privacy, destructive, or authority ambiguity to the coordinator.
+
+## Matt Pocock skill compatibility
+
+When a Matt Pocock engineering skill is used for this homelab, treat `homelab/` as the project root
+and preserve the project's existing sources of truth. Domain terms belong in the relevant scoped
+design or component document; current state belongs in `PLAN.md`; architectural decisions use the
+existing `decisions/NNN-short-title.md` template. Do not create `CONTEXT.md`, `CONTEXT-MAP.md`, or a
+parallel `docs/adr/` tree.
+
+Run `setup-matt-pocock-skills` before the first tracker-backed flow, but adapt its proposed files to
+these paths and obtain approval before it writes. Before publishing tracker items, verify that the
+configured tracker has the canonical triage labels plus `wayfinder:map` and the four
+`wayfinder:<type>` labels; creating labels or issues is an external write and requires the user's
+authorization. The subagent limits above apply when a skill requests parallel research or review.
