@@ -27,7 +27,7 @@ homelab/physical_infra/
     rooms.json              ← canonical room/level model (architectural interpreter output)
     schedules/
       data_schema.json      ← port schedule schema
-      data_schedule.json    ← ethernet port schedule (eth01–eth21 + future)
+      data_schedule.json    ← ethernet port schedule (currently eth01–eth23 + future)
       lighting.json         ← lighting design by room
     reviews/
       network_design_review.md

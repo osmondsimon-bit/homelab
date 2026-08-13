@@ -789,26 +789,24 @@ def switch_section_html(data: dict) -> str:
     <h3>Band 1 — 1G PoE+ (ports 1–24)</h3>
     <ul>
       <li>PP-A cols 1–5 (SW 1,3,5,7,9): cameras — solid red EtherLighting top stripe. PP-B01–05 unpatched (keeps bottom dark in camera zone).</li>
-      <li>Col 12 both rows: IoT (green) — kitchen hub SW-23, SigEnergy SW-24.</li>
-      <li>Cols 6–11 spare, plus PP-B01–05 camera zone unpatched. <strong>{len(spare_1g_poe_plus)} unallocated 1G PoE+ ports.</strong> Next IoT: PP-A11 → SW-21 or PP-B11 → SW-22.</li>
+      <li>SW-11 is the UNVR. SW-21 is the Thread RCP, SW-22 is the Zigbee coordinator, SW-23 is the kitchen tablet, and SW-24 is SigEnergy.</li>
+      <li>Other positions remain spare, including PP-B01–05 in the camera zone. <strong>{len(spare_1g_poe_plus)} unallocated 1G PoE+ ports.</strong></li>
     </ul>
     <h3>Band 2 — 1G PoE++ (ports 25–32)</h3>
     <ul>
-      <li>Cols 13–16 both rows (SW-25 to SW-32): all 8 Home wall devices — 4 PCs (Bed1/Bed3/Bed2/Study) and 4 TVs (Lounge A, Lounge B, Dining A, Dining B). <strong>{len(spare_1g_poe_pp)} spare.</strong></li>
-      <li>Band 2 is fully utilised. Any new Home wall device needs a band 1 slot or a minor restack.</li>
+      <li>SW-25–30 are spare. SW-31 is the Bed 1 PC/spare run and SW-32 is Lounge TV/media. <strong>{len(spare_1g_poe_pp)} spare.</strong></li>
     </ul>
     <h3>Band 3 — 2.5G PoE+ (ports 33–40)</h3>
     <ul>
-      <li>SW-33 spare (PP-A17). SW-34 Master TV (PP-B17). SW-35 Study PC (PP-A18). SW-36 spare (PP-B18). SW-37 CGF LAN (PP-A19). SW-38 apophis (PP-B19). SW-39 oneill (PP-A20). SW-40 carter (PP-B20). <strong>{len(spare_25g_poe_plus)} spare.</strong></li>
-      <li>PP-A17 is spare — eth21 (5G WAN) runs directly to the CGF WAN2 rear port, no patch panel involved.</li>
+      <li>All eight are wall runs: Lounge/Master media, Study/Bed 1/Bed 3/Bed 2 PCs, and two Dining/Living media runs. <strong>{len(spare_25g_poe_plus)} spare.</strong></li>
+      <li>eth21 (5G WAN) runs directly to the CGF WAN2 rear port and does not consume a patch-panel or switch position.</li>
     </ul>
     <h3>Band 4 — 2.5G PoE++ (ports 41–48)</h3>
     <ul>
-      <li>SW-41 Foyer AP (PP-A21). SW-42 Hall AP (PP-B21). SW-43 Dining AP (PP-A22). SW-44 Study AP (PP-B22). SW-45–48 spare. <strong>{len(spare_25g_poe_pp)} spare 2.5G PoE++ ports.</strong></li>
-      <li>Next AP: PP-A23 → SW-45 or PP-B23 → SW-46 (formula). Cols 23–24 both rows are free.</li>
+      <li>SW-41 oneill, SW-42 apophis, SW-43 Foyer AP, SW-44 carter, SW-45 Dining/Living AP, SW-46 Hall AP, SW-47 CGF LAN, and SW-48 Study AP. <strong>{len(spare_25g_poe_pp)} spare 2.5G PoE++ ports.</strong></li>
     </ul>
     <h3>Expansion notes</h3>
-    <p>Band 2 is full (8 Home wall devices). Band 3 has 2 spare slots. Band 4 has 4 spare 2.5G PoE++ slots for up to 2 more APs on formula patches. Band 1 has ample spare 1G capacity.</p>
+    <p>Future low-speed devices should use the free 1G bands unless their link requirements justify a restack. Final assignments are rendered from the source records above; update the schedules rather than this prose.</p>
   </div>
 </div>"""
 
@@ -975,8 +973,10 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
     n_aps       = sum(1 for p in ports if p.get("device_type") == "Access Point")
     n_cams      = sum(1 for p in ports if p.get("purpose") == "Security")
     n_poe       = sum(1 for p in ports if p.get("poe_required"))
-    poe_load    = sum(p.get("poe_draw_w", 0) or 0 for p in ports if p.get("poe_required"))
-    poe_budget  = 600
+    scheduled_poe_load = sum(p.get("poe_draw_w", 0) or 0 for p in ports if p.get("poe_required"))
+    poe_source  = data.get("switch_ports", {}).get("poe_budget", {})
+    poe_load    = poe_source.get("total_allocated_w", scheduled_poe_load)
+    poe_budget  = poe_source.get("total_w", data.get("switch_ports", {}).get("poe_budget_w", 720))
     poe_pct     = round(poe_load / poe_budget * 100)
     tbd_badge   = f' <span class="warn-badge">{len(tbds)}</span>' if tbds else ""
 
@@ -1010,7 +1010,7 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
     <div class="stat"><div class="v">{total_ports}</div><div class="l">Ethernet drops</div></div>
     <div class="stat"><div class="v">{n_aps}</div><div class="l">Access points</div></div>
     <div class="stat"><div class="v">{n_cams}</div><div class="l">Cameras</div></div>
-    <div class="stat"><div class="v">{n_poe}</div><div class="l">PoE ports</div></div>
+    <div class="stat"><div class="v">{n_poe}</div><div class="l">Scheduled PoE drops</div></div>
     <div class="stat"><div class="v">{len(tbds)}</div><div class="l">TBD items</div></div>
   </div>
   <div class="card">
