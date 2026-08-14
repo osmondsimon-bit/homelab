@@ -39,6 +39,7 @@ def load_data(data_dir: str) -> dict:
         ("rooms",    d / "house/rooms.json"),
         ("ports",    d / "house/schedules/data_schedule.json"),
         ("lighting", d / "house/schedules/lighting.json"),
+        ("construction", d / "home_automation/design/construction-gates.json"),
     ]:
         if path.exists():
             data[key] = json.loads(path.read_text())
@@ -63,6 +64,10 @@ def load_data(data_dir: str) -> dict:
 
 def get_ports(data: dict) -> list:
     return data.get("ports", {}).get("data_schedule", {}).get("ports", [])
+
+
+def get_construction_gates(data: dict) -> list:
+    return data.get("construction", {}).get("gates", [])
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +431,45 @@ def lighting_rows(data: dict) -> str:
         + "</tr>"
     )
     return "\n".join(rows)
+
+
+CONSTRUCTION_STATUS = {
+    "open": ("Open", "#dc2626"),
+    "waiting_external": ("Waiting external", "#d97706"),
+    "ready_to_verify": ("Ready to verify", "#2563eb"),
+    "closed": ("Closed", "#16a34a"),
+    "not_applicable": ("Not applicable", "#64748b"),
+}
+
+
+def construction_section_html(data: dict) -> str:
+    gates = get_construction_gates(data)
+    counts = {status: sum(1 for gate in gates if gate.get("status") == status) for status in CONSTRUCTION_STATUS}
+    stats = "".join(
+        f'<div class="stat"><div class="v">{counts[status]}</div><div class="l">{label}</div></div>'
+        for status, (label, _) in CONSTRUCTION_STATUS.items()
+        if counts[status]
+    )
+    cards = []
+    for gate in gates:
+        status = gate.get("status", "open")
+        label, colour = CONSTRUCTION_STATUS.get(status, (status, DEFAULT_COLOUR))
+        evidence = "".join(f"<li>{item}</li>" for item in gate.get("required_evidence", []))
+        cards.append(
+            '<div class="card">'
+            f'<h2>{gate.get("gate_id", "?")} &mdash; {gate.get("title", "")}</h2>'
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+            f'<span class="vb" style="background:{colour}">{label}</span>'
+            f'<span class="vb" style="background:#475569">{gate.get("system", "")}</span>'
+            f'<span class="vb" style="background:#64748b">{str(gate.get("milestone", "")).replace("_", " ")}</span>'
+            f'<span class="vb" style="background:#7c3aed">{gate.get("impact", "")}</span>'
+            '</div>'
+            f'<p style="margin-bottom:10px">{gate.get("requirement", "")}</p>'
+            f'<div style="font-size:12px;color:var(--muted);margin-bottom:8px"><strong>Owners:</strong> {", ".join(gate.get("owners", []))} &middot; <strong>Blocks:</strong> {", ".join(gate.get("blocks", []))}</div>'
+            f'<details><summary style="cursor:pointer;font-weight:600">Evidence and fallback</summary><ul style="margin:8px 0 8px 20px">{evidence}</ul><p><strong>Fallback:</strong> {gate.get("fallback", "")}</p></details>'
+            '</div>'
+        )
+    return f'<div class="stats">{stats}</div>' + "".join(cards)
 
 
 def tbd_rows(tbds: list) -> str:
@@ -970,6 +1014,8 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
     levels    = data.get("rooms", {}).get("house", {}).get("levels", [])
     total_rooms = sum(len(l.get("rooms", [])) for l in levels)
     total_ports = len(ports)
+    construction_gates = get_construction_gates(data)
+    unresolved_construction = sum(1 for gate in construction_gates if gate.get("status") not in ("closed", "not_applicable"))
     n_aps       = sum(1 for p in ports if p.get("device_type") == "Access Point")
     n_cams      = sum(1 for p in ports if p.get("purpose") == "Security")
     n_poe       = sum(1 for p in ports if p.get("poe_required"))
@@ -1000,6 +1046,7 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
   <a data-id="rack"      onclick="show('rack');return false"      href="#rack">Rack</a>
   <a data-id="lighting"  onclick="show('lighting');return false"  href="#lighting">Lighting</a>
   <a data-id="switch"    onclick="show('switch');return false"    href="#switch">Switch</a>
+  <a data-id="construction" onclick="show('construction');return false" href="#construction">Construction</a>
   <a data-id="tbd"       onclick="show('tbd');return false"       href="#tbd">TBD{tbd_badge}</a>
 </nav>
 <main>
@@ -1011,6 +1058,7 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
     <div class="stat"><div class="v">{n_aps}</div><div class="l">Access points</div></div>
     <div class="stat"><div class="v">{n_cams}</div><div class="l">Cameras</div></div>
     <div class="stat"><div class="v">{n_poe}</div><div class="l">Scheduled PoE drops</div></div>
+    <div class="stat"><div class="v">{unresolved_construction}</div><div class="l">Unresolved construction gates</div></div>
     <div class="stat"><div class="v">{len(tbds)}</div><div class="l">TBD items</div></div>
   </div>
   <div class="card">
@@ -1074,6 +1122,10 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
 
 <section id="switch">
   {switch_section_html(data)}
+</section>
+
+<section id="construction">
+  {construction_section_html(data)}
 </section>
 
 <section id="tbd">

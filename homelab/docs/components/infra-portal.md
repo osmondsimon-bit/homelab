@@ -1,7 +1,7 @@
 # Infra Portal (CT 116)
 
 Static-site visualisation of `physical_infra/` design data — port schedule, network
-topology, rack layout, lighting schedule, TBD tracker. Generated on the mgmt-vm,
+topology, rack layout, lighting schedule, HA-05 construction gates, and TBD tracker. Generated on the mgmt-vm,
 served from a lightweight nginx LXC on oneill.
 
 **ADR:** [020-infra-portal.md](../../decisions/020-infra-portal.md)  
