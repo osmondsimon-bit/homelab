@@ -14,6 +14,7 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 | [homelab/decisions/](homelab/decisions/) | Architecture Decision Records |
 | [homelab/docs/tech-radar.md](homelab/docs/tech-radar.md) | Capabilities evaluated, deferred, or planned |
 | [homelab/docs/operations/runbooks.md](homelab/docs/operations/runbooks.md) | Common operational procedures |
+| [homelab/decisions/025-repository-boundaries.md](homelab/decisions/025-repository-boundaries.md) | Public, private, nested, and shared-repository boundaries |
 | [AGENTS.md](AGENTS.md) | AI agent behaviour rules |
 | [CLAUDE.md](CLAUDE.md) | Claude Code specific guidance |
 | [index.md](index.md) | AI agent navigation map |

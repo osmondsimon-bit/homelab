@@ -6,6 +6,10 @@ This public repository documents and provisions Simon's Proxmox homelab. Project
 `homelab/`; `/home/simon` is the authoritative working and deployment tree. Use `index.md` for
 navigation, `homelab/PLAN.md` for current state, and ADRs for accepted architecture decisions.
 
+For work involving Git remotes, nested repositories, `physical_infra/`, home automation, shared
+skills, or repository selection, read [ADR-025](homelab/decisions/025-repository-boundaries.md)
+before editing or committing. A parent status, commit, or push never includes a nested repository.
+
 The stack is primarily Bash, YAML, Ansible, Terraform, and Markdown. Services run in VMs or LXCs.
 Remote administration uses Tailscale; only Home Assistant uses a Cloudflare Tunnel. Real network
 addresses remain in gitignored inventory and committed documentation uses `YOUR_*` placeholders.

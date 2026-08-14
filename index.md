@@ -18,7 +18,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
   README.md  CLAUDE.md  AGENTS.md  index.md  .gitignore
   homelab/                   ← THE project root
     PLAN.md                  single source of truth (phases, VMIDs, status, RAM)
-    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 020-infra-portal)
+    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 025-repository-boundaries)
       template.md
     docs/                    ALL narrative docs:
       agents/shared-workflow.md shared agent-workflow routing and boundaries
@@ -31,7 +31,8 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
     apps/                    small repo-owned application companions deployed by Ansible
     terraform/               creates VMs/LXCs (bpg/proxmox, ADR-008)
     scripts/                 bash fallbacks/utilities (backup-local-config.sh, …)
-    physical_infra/          gitignored design surface — house/network/rack YAML (ADR-019)
+    physical_infra/          ignored by public parent — private/local design surface (ADR-019/025)
+      home_automation/       nested private Git repo with independent origin/main
 ```
 
 ### Where does X go? (decision rules)
@@ -72,7 +73,8 @@ markdown links are relative to the file that contains them.
 → `homelab/terraform/` creates the VM/LXC (ADR-008); `homelab/ansible/` configures it (ADR-005)
 
 ### "Repo conventions?"
-→ `AGENTS.md` (all agents) + `CLAUDE.md` (Claude-specific)
+→ `AGENTS.md` (all agents) + `CLAUDE.md` (Claude-specific); for repository selection, nested Git,
+private data, remotes, commits, or pushes, use `homelab/decisions/025-repository-boundaries.md`
 
 ### "Which agent for this task?"
 → `CLAUDE.md` Agents section (infra-designer, infra-manager, doc-auditor, continuity-reviewer + `/security-review`)

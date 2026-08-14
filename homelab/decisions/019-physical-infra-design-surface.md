@@ -1,7 +1,7 @@
 # ADR-019: Physical infrastructure design surface (physical_infra/)
 
 **Date:** 2026-06-19  
-**Status:** Accepted
+**Status:** Accepted; repository boundary amended by ADR-025
 
 ## Context
 
@@ -50,8 +50,10 @@ designer, networking design advisor) are preserved in `agents/` with their syste
 The networking advisor prompt has been updated to include homelab context (existing VLANs,
 monitoring stack, compute hosts) so future reviews are aware of the full picture.
 
-**Gitignore:** `homelab/physical_infra/` is added to the root `.gitignore` re-ignored
-section. It is never published. Local-only, backed up by PBS (mgmt-vm image, ADR-012).
+**Gitignore:** `homelab/physical_infra/` is ignored by the public parent repository. Most of this
+surface remains local-only and is backed up by PBS (mgmt-vm image, ADR-012). ADR-025 adds one
+intentional exception: `physical_infra/home_automation/` is a nested standalone private repository
+with its own remote and publication lifecycle; it is still never included in the public parent.
 
 ## Consequences
 
