@@ -1,0 +1,42 @@
+# Generic gateway runtime configuration. Household bindings/intents come from the private manifest.
+listen:
+  address: {{ ha_mcp_gateway_listen_address | quote }}
+  port: {{ ha_mcp_gateway_port }}
+  tls:
+    certificate_file: /etc/ha-mcp-gateway/server-cert.pem
+    private_key_systemd_credential: tls-key
+    client_ca_file: /etc/ha-mcp-gateway/client-ca.pem
+    client_certificate_mode: optional_for_health_required_everywhere_else
+    unauthenticated_paths: [/healthz]
+    client_identity_source: verified_client_certificate_san
+    accept_client_supplied_identity: false
+home_assistant:
+  base_url: {{ ha_mcp_gateway_ha_url | quote }}
+  token_systemd_credential: ha-token
+  ca_file: /etc/ha-mcp-gateway/ha-ca.pem
+  tls_server_name: {{ ha_mcp_gateway_ha_tls_server_name | quote }}
+authorization:
+  control_enabled: {{ (gateway_mode == 'production' and (ha_mcp_gateway_control_enabled | bool)) | lower }}
+  semantic_manifest: /etc/ha-mcp-gateway/semantic-manifest.json
+  raw_entity_passthrough: false
+  raw_service_passthrough: false
+  rest_passthrough: false
+  template_passthrough: false
+  configuration_passthrough: false
+audit:
+  path: /var/log/ha-mcp-gateway/audit.jsonl
+  retention_days: 90
+  required_fields:
+    - request_id
+    - client_identity
+    - semantic_intent
+    - redacted_arguments
+    - decision_and_reason
+    - correlation_id
+    - observed_outcome
+health:
+  path: /healthz
+  exposes_state_or_identity: false
+identity_probe:
+  path: /whoami
+  source: verified_client_certificate_san

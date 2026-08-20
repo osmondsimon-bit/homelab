@@ -72,6 +72,48 @@
         '
       changed_when: true
 
+    - name: Install the pinned HA MCP gateway server CA for the production health tile
+      when: ha_mcp_gateway_mode | default('disabled') == 'production'
+      block:
+        - name: Stage the public gateway CA on oneill
+          ansible.builtin.copy:
+            src: "{{ ha_mcp_gateway_server_ca_file }}"
+            dest: /tmp/ha-mcp-gateway-server-ca.crt
+            mode: "0600"
+
+        - name: Verify the staged gateway CA digest
+          ansible.builtin.stat:
+            path: /tmp/ha-mcp-gateway-server-ca.crt
+            checksum_algorithm: sha256
+          register: glance_gateway_ca
+
+        - name: Refuse an unreviewed gateway CA
+          ansible.builtin.assert:
+            that:
+              - glance_gateway_ca.stat.checksum == ha_mcp_gateway_server_ca_sha256
+            fail_msg: "The gateway CA differs from its reviewed SHA-256 pin."
+            quiet: true
+
+        - name: Install and trust the gateway CA inside the Glance guest
+          ansible.builtin.shell: |
+            set -e
+            pct push {{ glance_ctid }} /tmp/ha-mcp-gateway-server-ca.crt /usr/local/share/ca-certificates/ha-mcp-gateway.crt --perms 0644
+            pct exec {{ glance_ctid }} -- update-ca-certificates
+          changed_when: true
+      always:
+        - name: Remove the staged gateway CA from oneill
+          ansible.builtin.file:
+            path: /tmp/ha-mcp-gateway-server-ca.crt
+            state: absent
+
+    - name: Remove stale HA MCP gateway CA trust while the gateway is disabled
+      ansible.builtin.shell: |
+        set -e
+        pct exec {{ glance_ctid }} -- rm -f /usr/local/share/ca-certificates/ha-mcp-gateway.crt
+        pct exec {{ glance_ctid }} -- update-ca-certificates
+      changed_when: true
+      when: ha_mcp_gateway_mode | default('disabled') != 'production'
+
     # --- Glance binary (pinned release, extracted from the tarball) ---
     - name: Read the installed Glance version marker (if any)
       ansible.builtin.command: "pct exec {{ glance_ctid }} -- cat /opt/glance/.version"

@@ -1,0 +1,20 @@
+table inet ha_mcp_gateway {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        iifname "lo" accept
+        ct state established,related accept
+        ip protocol icmp accept
+        ip6 nexthdr icmpv6 accept
+{% for client_cidr in ha_mcp_gateway_client_cidrs %}
+        ip saddr {{ client_cidr }} tcp dport {{ ha_mcp_gateway_port }} ct state new accept
+{% endfor %}
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+        oifname "lo" accept
+        ct state established,related accept
+        meta skuid "ha-mcp-gateway" ip daddr {{ ha_mcp_gateway_ha_address }} tcp dport {{ ha_mcp_gateway_ha_port }} ct state new accept
+        meta skuid "ha-mcp-gateway" reject
+    }
+}

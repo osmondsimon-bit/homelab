@@ -112,6 +112,84 @@ Home→IoT allow is **subnet-wide, not scoped to the HA IP** — a *hardening ba
 it to `HA-IP → coordinator-IP` only. (This breadth is also why the restore-drill test HA must sit on a
 fully-isolated VLAN, not the Home VLAN — see Restore drills.)
 
+### Future Home Assistant MCP gateway (ADR-027; not deployed)
+
+The public gateway playbook is deliberately disabled. Do not assign a guest, run staged mode or
+enable MCP merely from this runbook. Private HA-15 commissioning plus infrastructure and security
+review must first approve placement, creation mechanism, network flows, semantic manifest and the
+read-only test plan.
+
+From `~/homelab/ansible`, the safe default only validates and reports:
+
+```bash
+ansible-playbook playbooks/provision-ha-mcp-gateway.yml
+```
+
+The Ansible controller requires Python `jsonschema` support for staged/production preflight; this is
+an operator-side validation dependency only and is not installed into the gateway automatically.
+
+After the reviewed unprivileged CT exists and every staged variable points at a real local file,
+staged mode validates the private manifest against the public schema, verifies all SHA-256 pins and
+certificate/key pairs, then installs the pinned artifact, Tier 3 credential, semantic manifest, mTLS
+trust material, hardened unit/firewall, 90-day audit rotation and the normal security-only patch
+policy but leaves the service stopped and disabled:
+
+```bash
+ansible-playbook playbooks/provision-ha-mcp-gateway.yml -e ha_mcp_gateway_mode=staged
+```
+
+Before production, register the guest in the encrypted PBS job and backup-freshness view; confirm
+`GuestDown`, the conditional Glance tile and blackbox health warning; perform a network-isolated
+restore; revoke and replace the restored HA token; prove the old token is rejected; prove the
+restored service cannot control HA; and test the kill switch. Record those facts in PLAN and the
+restore-drill table. Production still requires a separate attended command and explicit operator
+approval:
+
+- Create the short-lived `ha_mcp_gateway_runtime_approval_file` outside Git only after reviewing the
+  displayed deployment inputs. It must validate against
+  `ansible/files/ha-mcp-gateway/runtime-approval.schema.json`, expire within 30 minutes, and repeat
+  the exact guest/address, mode/control setting, artifact, semantic-manifest and trust-material
+  digests. It must also contain the displayed canonical deployment-authority digest, which binds
+  host placement, client CIDRs, both TLS endpoints/identities and every rendered service/firewall
+  template. The selected Proxmox host recomputes that authority and rejects host-var drift. A value
+  in inventory is deliberately insufficient.
+- The controller running the production command must be in a registered client CIDR and hold the
+  protected attended test-client certificate/key. Production proves anonymous `/whoami` denial and
+  certificate-derived identity before it succeeds.
+- HA must already serve the exact local HTTPS endpoint and certificate identity pinned in the
+  variables. Plain HTTP is rejected.
+- Before issuing certificates, record offline custody, encrypted backup, rotation and revocation
+  for the dedicated server/client CA signing keys and every production client key. Never install CA
+  signing keys in the gateway. Disabling the gateway removes its dedicated CA from Glance's global
+  trust store and the monitoring probe; rotation must deploy the new pins and remove the old roots.
+
+```bash
+ansible-playbook playbooks/provision-ha-mcp-gateway.yml -e ha_mcp_gateway_mode=production
+```
+
+The playbook stops an existing gateway before replacing files, preserves a root-only rollback
+archive in the guest, explicitly reloads nftables, and restores the prior deployment on mutation
+failure. Rollback deletes the failed managed tree before extraction and verifies the exact earlier
+gateway/firewall enablement before restarting only what was active. Never copy those archives out
+unencrypted: they contain the prior machine credential and TLS key and are protected by the
+encrypted PBS guest image.
+
+HA-15 must exercise staged failure injection at each post-stop boundary and prove exact file,
+firewall, enablement and prior-active-service restoration on the reviewed LXC. Static and syntax
+tests in HA-14 are not a substitute for that drill.
+
+**Kill switch:** on the gateway, run `sudo ha-mcp-gateway-disable`; then revoke the gateway token in
+Home Assistant and verify the old token and every MCP tool fail. If guest access is unavailable,
+stop the CT or block its HA path first, then revoke the credential. Do not delete the audit during
+an incident. Gateway loss is an MCP outage only; if HA automations or native controls are affected,
+the isolation contract has failed.
+
+**Restore:** restore the encrypted PBS image with networking isolated, keep the service disabled,
+revoke/reissue its HA token, validate audit integrity and 90-day rotation, then run semantic-read,
+no-control and old-credential-negative tests before allowing production. The HA admin password
+(Tier 1) and backup key (Tier 2) are never installed in this guest. See
+`docs/components/ha-mcp-gateway.md` for the full component boundary.
+
 ---
 
 ## mgmt-vm

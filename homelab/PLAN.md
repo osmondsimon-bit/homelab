@@ -110,6 +110,7 @@ Offloading the simple services to oneill preserves its independent recovery role
 | ~~Radarr~~ | LXC (CT 124) | apophis | ✅ Live (Phase 7) — movie automation; native Servarr install; same media share + hardlinks (ADR-022). |
 | ~~Seerr + Prowlarr + ByParr~~ | VM (VM 125) | apophis | ✅ Live (Phase 7) — request UI (Seerr, migrated from Jellyseerr 2026-07-20) + indexer stack (Prowlarr + ByParr) **behind a 2nd ProtonVPN Gluetun container** to bypass AU ISP blocks + satisfy CF egress-IP consistency (ADR-022, ADR-014 exception #2). |
 | ~~Actual Budget~~ | VM (VM 127) | **carter** | ✅ Live 2026-07-15 — Ubuntu 24.04 + pinned official Docker image; tailnet-only HTTPS through Tailscale Serve; server password + budget E2EE configured; portable ZIP taken; daily encrypted PBS image and isolated restore drill proven (ADR-023). |
+| Home Assistant MCP mediation gateway | unprivileged LXC (identifier/size TBD) | TBD; must not share the PBS datastore host | **Design accepted, deployment deferred** (ADR-027). Native MCP remains off/read-only; the future stateful gateway requires private HA-15, infrastructure/security review, Tier 3 token, monitoring, encrypted PBS freshness, restore/no-control drill and kill-switch proof before production. |
 | Minecraft server | VM/LXC | TBD | Game server for future use — low priority, size/placement TBD |
 
 Per-service RAM/disk sizing is set when each is built. Apophis returned to 32 GB on 2026-07-28, so the complete media stack is default-on again. The ≥3 GiB host-memory guardrail remains; Jellyfin stays on Apophis for the iGPU.
@@ -137,14 +138,19 @@ Standard practices: network segmentation, least-privilege access, and no direct 
 
 ## Home Assistant expansion
 
-**Status: DEFERRED to a standalone project** (split out of Phase 5 at the gate, 2026-06-26). HACS ✅ installed; the items below are carried into that separate track, not the current phase plan.
+**Status: active in the standalone private `home-automation` project; live implementation remains
+deferred.** HACS is installed in the current HA instance, but the accepted new-house baseline uses
+native HA packages/scripts/helpers/templates and a native Sections dashboard first. HACS/custom
+cards and Node-RED are not implementation dependencies; add one only after a proven need and review.
 
-- Install HACS
-- Add Node-RED for automation logic
-- ESPHome ready for future DIY sensors
+- Keep ESPHome available for future DIY sensors without making it a dependency of essential paths.
 - Wire curated HA household-energy semantics into a separate InfluxDB service for long-term Grafana
   analysis — design accepted in ADR-026; deployment deferred until new-house energy commissioning.
-- **Wall-mounted tablet dashboard** — HA Lovelace (Mushroom/bubble-card via HACS) in kiosk-mode, on a cheap Android tablet running Fully Kiosk Browser (+ its HA integration for screen-wake/presence). This is the *household control surface* — distinct from Glance (admin front-door, ADR-014) and Grafana (graphs). Homepage cannot do it (it can't control HA, only display read-only stats).
+- **Wall-mounted tablet dashboard** — the purchased Lenovo Tab M11 runs Fully Kiosk and a native HA
+  household dashboard. It is distinct from Glance (admin front door) and Grafana (analysis).
+- **Configuration/MCP** — private Git plus encrypted HA backups have complementary authority.
+  Native MCP is off during design and read-only after private HA-15. Any future control requires the
+  separately reviewed mediation gateway in ADR-027; its public playbook is disabled by default.
 
 ## Phase order
 

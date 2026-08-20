@@ -174,6 +174,64 @@ unifi_controller_url: https://YOUR_GATEWAY_IP              # the UDM/gateway
 unifi_user: prometheus_user                                # UniFi read-only local user
 ha_ip: YOUR_HA_IP                                          # Home Assistant VM (scrape /api/prometheus)
 
+# --- Future Home Assistant MCP mediation gateway (ADR-027; design-only) -----
+# Keep disabled until private HA-15 plus infrastructure/security review. The playbook configures
+# only an already-approved unprivileged CT; it never invents placement, VMID or address.
+ha_mcp_gateway_mode: disabled                              # disabled | staged | production
+ha_mcp_gateway_host: YOUR_HA_MCP_GATEWAY_HOST              # must differ from PBS datastore host
+ha_mcp_gateway_pbs_host: oneill
+ha_mcp_gateway_ctid: 0                                    # assigned only after infrastructure review
+ha_mcp_gateway_address: YOUR_HA_MCP_GATEWAY_IP/24
+ha_mcp_gateway_listen_address: YOUR_HA_MCP_GATEWAY_IP
+ha_mcp_gateway_port: 8765
+ha_mcp_gateway_ha_address: YOUR_HA_IP
+ha_mcp_gateway_ha_port: 8123
+ha_mcp_gateway_ha_url: https://YOUR_HA_IP:8123
+ha_mcp_gateway_ha_tls_server_name: YOUR_HA_INTERNAL_TLS_NAME
+ha_mcp_gateway_public_url: https://YOUR_HA_MCP_GATEWAY_IP:8765
+ha_mcp_gateway_client_cidrs: [YOUR_APPROVED_MCP_CLIENT_CIDR]
+ha_mcp_gateway_unprivileged: true
+ha_mcp_gateway_artifact_version: ""
+ha_mcp_gateway_artifact_file: YOUR_PINNED_GATEWAY_ARTIFACT
+ha_mcp_gateway_artifact_sha256: ""
+ha_mcp_gateway_semantic_manifest_file: YOUR_PRIVATE_SEMANTIC_MANIFEST
+ha_mcp_gateway_semantic_manifest_sha256: ""
+ha_mcp_gateway_secret_file: YOUR_PROTECTED_RAW_HA_TOKEN_FILE
+ha_mcp_gateway_tls_certificate_file: YOUR_GATEWAY_TLS_CERTIFICATE
+ha_mcp_gateway_tls_certificate_sha256: ""
+ha_mcp_gateway_tls_private_key_file: YOUR_GATEWAY_TLS_PRIVATE_KEY
+ha_mcp_gateway_server_ca_file: YOUR_GATEWAY_SERVER_CA_CERTIFICATE
+ha_mcp_gateway_server_ca_sha256: ""
+ha_mcp_gateway_client_ca_file: YOUR_GATEWAY_CLIENT_CA_CERTIFICATE
+ha_mcp_gateway_client_ca_sha256: ""
+ha_mcp_gateway_test_client_certificate_file: YOUR_MCP_TEST_CLIENT_CERTIFICATE
+ha_mcp_gateway_test_client_certificate_sha256: ""
+ha_mcp_gateway_test_client_private_key_file: YOUR_MCP_TEST_CLIENT_PRIVATE_KEY
+ha_mcp_gateway_test_client_identity: YOUR_MCP_TEST_CLIENT_CERTIFICATE_SAN
+ha_mcp_gateway_ha_ca_file: YOUR_HA_SERVER_CA_CERTIFICATE
+ha_mcp_gateway_ha_ca_sha256: ""
+ha_mcp_gateway_negative_test_address: YOUR_DISALLOWED_TEST_IP
+ha_mcp_gateway_negative_test_port: 443
+ha_mcp_gateway_audit_retention_days: 90
+ha_mcp_gateway_backup_mode: encrypted_pbs_image
+ha_mcp_gateway_native_mcp_control_enabled: false
+ha_mcp_gateway_raw_passthrough_enabled: false
+ha_mcp_gateway_control_enabled: false
+ha_mcp_gateway_infrastructure_reviewed: false
+ha_mcp_gateway_security_reviewed: false
+ha_mcp_gateway_network_policy_registered: false
+ha_mcp_gateway_patching_registered: false
+ha_mcp_gateway_monitoring_registered: false
+ha_mcp_gateway_backup_registered: false
+ha_mcp_gateway_backup_freshness_registered: false
+ha_mcp_gateway_prohibited_attempt_monitoring_implemented: false
+ha_mcp_gateway_restore_drill_recorded: false
+ha_mcp_gateway_no_control_recovery_tested: false
+ha_mcp_gateway_kill_switch_tested: false
+ha_mcp_gateway_old_credential_rejection_tested: false
+ha_mcp_gateway_runtime_approval_file: YOUR_FRESH_HA_MCP_GATEWAY_RUNTIME_APPROVAL
+ha_mcp_gateway_mediated_control_approved: false
+
 # --- Alerting: ntfy (ADR-013) — topic is PRIVATE, treat as a secret ----------
 ntfy_base_url: https://ntfy.sh
 ntfy_topic: YOUR_NTFY_TOPIC                                 # pick a random topic; subscribe the ntfy app to it
@@ -234,6 +292,7 @@ glance_services:
   - { title: "Tailscale", node: apophis, workload: "CT 110", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
   - { title: "Tailscale2", node: oneill, workload: "CT 126", url: "https://login.tailscale.com/admin/machines", check_url: "http://{{ tailscale2_ip | regex_replace('/.*$','') }}:9099/", icon: "di:tailscale" }
   - { title: "Infra Portal", node: oneill, workload: "CT 116", url: "http://{{ portal_ip }}", icon: "si:blueprint" }
+  - { title: "HA MCP Gateway", node: "{{ ha_mcp_gateway_host }}", workload: "CT {{ ha_mcp_gateway_ctid }}", url: "{{ ha_mcp_gateway_public_url }}/healthz", check_url: "{{ ha_mcp_gateway_public_url }}/healthz", icon: "di:home-assistant", enabled: "{{ ha_mcp_gateway_mode == 'production' }}" }
 
 # Declared pins that can be compared directly with an upstream GitHub release tag.
 glance_version_currency:

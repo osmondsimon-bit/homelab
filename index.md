@@ -18,7 +18,7 @@ Before using this index, read [AGENTS.md](AGENTS.md) for behaviour rules and [CL
   README.md  CLAUDE.md  AGENTS.md  index.md  .gitignore
   homelab/                   ← THE project root
     PLAN.md                  single source of truth (phases, VMIDs, status, RAM)
-    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 026-household-energy-analytics)
+    decisions/               ALL ADRs — NNN-title.md (000-mgmt-vm … 027-home-assistant-configuration-and-mcp-boundary)
       template.md
     docs/                    ALL narrative docs:
       agents/shared-workflow.md shared agent-workflow routing and boundaries

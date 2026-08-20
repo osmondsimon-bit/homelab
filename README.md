@@ -16,6 +16,7 @@ Infrastructure documentation, provisioning scripts, and configuration for a Prox
 | [homelab/docs/operations/runbooks.md](homelab/docs/operations/runbooks.md) | Common operational procedures |
 | [homelab/decisions/025-repository-boundaries.md](homelab/decisions/025-repository-boundaries.md) | Public, private, nested, and shared-repository boundaries |
 | [homelab/decisions/026-household-energy-analytics.md](homelab/decisions/026-household-energy-analytics.md) | Long-term household-energy storage and Grafana boundary |
+| [homelab/decisions/027-home-assistant-configuration-and-mcp-boundary.md](homelab/decisions/027-home-assistant-configuration-and-mcp-boundary.md) | HA configuration authority and future mediated MCP boundary |
 | [AGENTS.md](AGENTS.md) | AI agent behaviour rules |
 | [CLAUDE.md](CLAUDE.md) | Claude Code specific guidance |
 | [index.md](index.md) | AI agent navigation map |

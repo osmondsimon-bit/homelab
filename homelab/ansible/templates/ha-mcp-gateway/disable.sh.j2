@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Local half of the kill switch. Credential revocation in HA and a negative test remain mandatory.
+set -euo pipefail
+systemctl disable --now ha-mcp-gateway.service
+if systemctl is-active --quiet ha-mcp-gateway.service; then
+  echo 'gateway service is still active' >&2
+  exit 1
+fi
+echo 'Gateway stopped and disabled. Revoke its HA token, then prove the old token and tools fail.'

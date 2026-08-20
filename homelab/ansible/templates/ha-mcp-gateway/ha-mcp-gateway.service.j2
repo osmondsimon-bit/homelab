@@ -1,0 +1,49 @@
+[Unit]
+Description=Home Assistant MCP mediation gateway
+After=network-online.target
+Wants=network-online.target
+Requires=ha-mcp-gateway-firewall.service
+After=ha-mcp-gateway-firewall.service
+
+[Service]
+Type=simple
+User=ha-mcp-gateway
+Group=ha-mcp-gateway
+LoadCredential=ha-token:/etc/ha-mcp-gateway/ha-token
+LoadCredential=tls-key:/etc/ha-mcp-gateway/server-key.pem
+ExecStart=/usr/local/bin/ha-mcp-gateway --config /etc/ha-mcp-gateway/config.yaml
+Restart=on-failure
+RestartSec=5s
+StateDirectory=ha-mcp-gateway
+LogsDirectory=ha-mcp-gateway
+RuntimeDirectory=ha-mcp-gateway
+UMask=0077
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow={{ ha_mcp_gateway_ha_address }}
+{% for client_cidr in ha_mcp_gateway_client_cidrs %}
+IPAddressAllow={{ client_cidr }}
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target

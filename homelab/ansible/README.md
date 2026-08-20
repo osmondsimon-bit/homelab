@@ -72,6 +72,7 @@ ansible-playbook playbooks/<name>.yml
 | `provision-apophis-recovery-monitor.yml` | Historical temporary post-recovery monitor for the fixed 2026-07-24/25/26 observation window. Superseded and disabled by `install-node-exporter.yml`; do not redeploy it because it reports PASS as well as FAIL |
 | `update-pve-host.yml` | Update a Proxmox VE host — `apt update` + `dist-upgrade` + autoremove, reports reboot-required (running vs newest kernel) — **no reboot** unless `-e do_reboot=true` (ADR-015 host track). **One node at a time**, `--limit <host>` (refuses multiple). Reboot drops oneill services — plan a window |
 | `provision-infra-portal.yml` | Infra Portal LXC (CT 116, oneill) + mgmt-vm generator pipeline — nginx file server, portal-deploy SSH user, D2 + Python generator, systemd timer. Reserve the portal IP in UniFi first; run `/security-review` on the rsync path after (ADR-020) |
+| `provision-ha-mcp-gateway.yml` | **Design-only and disabled by default.** Configures an already-reviewed unprivileged HA MCP mediation CT from pinned local artifact/private manifest inputs. Staged mode leaves it disabled; production fails closed on ADR-017 backup, monitoring, restore, kill-switch and approval gates (ADR-027). |
 
 Dry-run first against production with `--check` where the modules support it, or
 test on a Proxmox snapshot.

@@ -1,0 +1,13 @@
+[Unit]
+Description=Port-scoped firewall for Home Assistant MCP mediation gateway
+Before=ha-mcp-gateway.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/sbin/nft delete table inet ha_mcp_gateway
+ExecStart=/usr/sbin/nft -f /etc/ha-mcp-gateway/firewall.nft
+ExecStop=/usr/sbin/nft delete table inet ha_mcp_gateway
+
+[Install]
+WantedBy=multi-user.target

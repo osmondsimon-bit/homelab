@@ -40,6 +40,7 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 |--------|---------------------|
 | PBS encryption key | Needed to restore backups when the lab is down. |
 | HA backup encryption key | Same — decrypt HAOS backups independently. |
+| HA MCP server/client CA signing private keys (future) | Dedicated offline operator custody; never installed in the gateway. Record encrypted backup, rotation and revocation before HA-15 production. |
 | 2FA / TOTP recovery codes (per account) | A lost/desynced phone must not lock root out of Proxmox (Phase 4 401 saga). |
 | Vaultwarden master password | The vault can't protect its own unlock secret. |
 
@@ -50,6 +51,10 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | UniFi read-only monitoring password | unpoller / Prometheus |
 | PVE API scrape token | Prometheus pve exporter (cluster-wide; carter reuses apophis's) |
 | HA long-lived access token | Prometheus HA exporter |
+| HA MCP gateway token (future) | Dedicated revocable token held only by the mediation gateway; never supplied to an MCP client. Reissue after any restore or loss. |
+| HA MCP gateway TLS private key (future) | Root-readable gateway source installed through a systemd credential; its certificate/CA are non-secret and digest-pinned. |
+| HA MCP attended test-client private key (future) | Protected mgmt-vm file used only to prove mutual-TLS identity at production enablement; never copied into the gateway. |
+| HA MCP production client private keys (future) | One protected key per approved client identity; inventory records metadata only. Revoke/rotate individually through the offline client CA. |
 
 ## Tier 4 — `vars_prompt` at provisioning (ephemeral — not stored anywhere)
 

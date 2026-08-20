@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/homelab/ha-mcp-gateway-semantic-manifest.schema.json",
+  "title": "Private Home Assistant MCP semantic manifest boundary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "control_enabled",
+    "raw_passthrough_enabled",
+    "semantic_mirrors",
+    "intents"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {"const": "approved"},
+    "control_enabled": {"type": "boolean"},
+    "raw_passthrough_enabled": {"const": false},
+    "semantic_mirrors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "adapter", "maximum_age_seconds", "enabled"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "adapter": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "maximum_age_seconds": {"type": "integer", "minimum": 1},
+          "enabled": {"type": "boolean"}
+        }
+      }
+    },
+    "intents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/pilotIntent"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"control_enabled": {"const": false}}},
+      "then": {"properties": {"intents": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"control_enabled": {"const": true}}},
+      "then": {
+        "properties": {
+          "intents": {
+            "minItems": 4,
+            "maxItems": 4,
+            "allOf": [
+              {"contains": {"$ref": "#/$defs/lightingIntent"}, "minContains": 1, "maxContains": 1},
+              {"contains": {"$ref": "#/$defs/sceneIntent"}, "minContains": 1, "maxContains": 1},
+              {"contains": {"$ref": "#/$defs/vacuumPauseIntent"}, "minContains": 1, "maxContains": 1},
+              {"contains": {"$ref": "#/$defs/vacuumDockIntent"}, "minContains": 1, "maxContains": 1}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "lightingIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "adapter", "risk_class", "enabled"],
+      "properties": {
+        "action": {"const": "lighting_intents"},
+        "adapter": {"const": "lighting"},
+        "risk_class": {"const": "comfort"},
+        "enabled": {"const": true}
+      }
+    },
+    "sceneIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "adapter", "risk_class", "enabled"],
+      "properties": {
+        "action": {"const": "ordinary_reversible_scenes"},
+        "adapter": {"const": "dashboard"},
+        "risk_class": {"const": "comfort"},
+        "enabled": {"const": true}
+      }
+    },
+    "vacuumPauseIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "adapter", "risk_class", "enabled"],
+      "properties": {
+        "action": {"const": "vacuum_pause"},
+        "adapter": {"const": "vacuum_secondary"},
+        "risk_class": {"const": "comfort"},
+        "enabled": {"const": true}
+      }
+    },
+    "vacuumDockIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "adapter", "risk_class", "enabled"],
+      "properties": {
+        "action": {"const": "vacuum_dock"},
+        "adapter": {"const": "vacuum_secondary"},
+        "risk_class": {"const": "comfort"},
+        "enabled": {"const": true}
+      }
+    },
+    "pilotIntent": {
+      "oneOf": [
+        {"$ref": "#/$defs/lightingIntent"},
+        {"$ref": "#/$defs/sceneIntent"},
+        {"$ref": "#/$defs/vacuumPauseIntent"},
+        {"$ref": "#/$defs/vacuumDockIntent"}
+      ]
+    }
+  }
+}

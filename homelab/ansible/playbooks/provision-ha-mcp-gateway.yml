@@ -1,0 +1,1376 @@
+---
+# Configure (but do not create) the future HA MCP mediation LXC under ADR-027.
+# Defaults are fail-closed: disabled mode performs validation/reporting only. Infrastructure review
+# must first create an approved unprivileged guest using the mechanism current under ADR-008.
+#
+# Staged install (service remains disabled):
+#   ansible-playbook playbooks/provision-ha-mcp-gateway.yml -e ha_mcp_gateway_mode=staged
+# Production enablement is separately attended and refuses incomplete ADR-017 evidence:
+#   ansible-playbook playbooks/provision-ha-mcp-gateway.yml -e ha_mcp_gateway_mode=production
+
+- name: Validate HA MCP gateway authority and operational gates
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    gateway_modes: [disabled, staged, production]
+    gateway_mode: "{{ ha_mcp_gateway_mode | default('disabled') }}"
+    gateway_runtime_control_enabled: >-
+      {{ gateway_mode == 'production' and (ha_mcp_gateway_control_enabled | default(false) | bool) }}
+  tasks:
+    - name: Validate non-secret declarations
+      ansible.builtin.assert:
+        that:
+          - gateway_mode in gateway_modes
+          - ha_mcp_gateway_audit_retention_days | default(90) | int == 90
+          - ha_mcp_gateway_native_mcp_control_enabled | default(false) is false
+          - ha_mcp_gateway_raw_passthrough_enabled | default(false) is false
+          - ha_mcp_gateway_host | default('unassigned') != ha_mcp_gateway_pbs_host | default('oneill')
+        fail_msg: >-
+          Keep native MCP control/raw passthrough off, retain audit for 90 days, and place the
+          gateway away from the PBS datastore host.
+        quiet: true
+
+    - name: Report the design-only default
+      ansible.builtin.debug:
+        msg: >-
+          HA MCP gateway is design-only and disabled. No guest, file, credential, service or
+          network state will be changed.
+      when: gateway_mode == 'disabled'
+
+    - name: Validate staged deployment inputs
+      when: gateway_mode in ['staged', 'production']
+      block:
+        - name: Require reviewed infrastructure and exact local inputs
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_infrastructure_reviewed | bool
+              - ha_mcp_gateway_security_reviewed | bool
+              - ha_mcp_gateway_host in groups['proxmox']
+              - "'YOUR_' not in ha_mcp_gateway_address"
+              - "'YOUR_' not in ha_mcp_gateway_ha_address"
+              - ha_mcp_gateway_address is match('^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$')
+              - ha_mcp_gateway_listen_address is match('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')
+              - ha_mcp_gateway_ha_address is match('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')
+              - ha_mcp_gateway_negative_test_address is match('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')
+              - ha_mcp_gateway_listen_address == (ha_mcp_gateway_address | regex_replace('/.*$', ''))
+              - ha_mcp_gateway_port | int > 0
+              - ha_mcp_gateway_port | int < 65536
+              - ha_mcp_gateway_ha_port | int > 0
+              - ha_mcp_gateway_ha_port | int < 65536
+              - ha_mcp_gateway_negative_test_port | int > 0
+              - ha_mcp_gateway_negative_test_port | int < 65536
+              - ha_mcp_gateway_negative_test_port | int != ha_mcp_gateway_ha_port | int
+              - ha_mcp_gateway_ha_url == ('https://' ~ ha_mcp_gateway_ha_address ~ ':' ~ (ha_mcp_gateway_ha_port | string))
+              - ha_mcp_gateway_public_url == ('https://' ~ ha_mcp_gateway_listen_address ~ ':' ~ (ha_mcp_gateway_port | string))
+              - ha_mcp_gateway_ha_tls_server_name is match('^[A-Za-z0-9.-]+$')
+              - ha_mcp_gateway_test_client_identity is match('^(DNS:[A-Za-z0-9.-]+|URI:[A-Za-z][A-Za-z0-9+.-]*://[A-Za-z0-9._~:/-]+)$')
+              - "'YOUR_' not in ha_mcp_gateway_test_client_identity"
+              - ha_mcp_gateway_ctid | int > 0
+              - ha_mcp_gateway_unprivileged | bool
+              - ha_mcp_gateway_network_policy_registered | bool
+              - ha_mcp_gateway_patching_registered | bool
+              - ha_mcp_gateway_monitoring_registered | bool
+              - ha_mcp_gateway_backup_mode == 'encrypted_pbs_image'
+              - ha_mcp_gateway_backup_registered | bool
+              - ha_mcp_gateway_backup_freshness_registered | bool
+              - ha_mcp_gateway_artifact_version | length > 0
+              - ha_mcp_gateway_artifact_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_semantic_manifest_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_tls_certificate_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_server_ca_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_client_ca_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_test_client_certificate_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_ha_ca_sha256 is match('^[0-9a-f]{64}$')
+              - ha_mcp_gateway_client_cidrs | length > 0
+              - ha_mcp_gateway_client_cidrs | reject('match', '^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$') | list | length == 0
+              - ha_mcp_gateway_secret_file is file
+              - ha_mcp_gateway_semantic_manifest_file is file
+              - ha_mcp_gateway_artifact_file is file
+              - ha_mcp_gateway_tls_certificate_file is file
+              - ha_mcp_gateway_tls_private_key_file is file
+              - ha_mcp_gateway_server_ca_file is file
+              - ha_mcp_gateway_client_ca_file is file
+              - ha_mcp_gateway_test_client_certificate_file is file
+              - ha_mcp_gateway_test_client_private_key_file is file
+              - ha_mcp_gateway_ha_ca_file is file
+            fail_msg: >-
+              Staged deployment requires reviewed placement/networking, unprivileged guest,
+              patching/monitoring, encrypted PBS registration/freshness, and exact local artifact,
+              semantic-manifest and root-readable credential inputs.
+            quiet: true
+
+        - name: Inspect pinned gateway inputs without logging content
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            checksum_algorithm: sha256
+          loop:
+            - "{{ ha_mcp_gateway_artifact_file }}"
+            - "{{ ha_mcp_gateway_semantic_manifest_file }}"
+            - "{{ ha_mcp_gateway_secret_file }}"
+            - "{{ ha_mcp_gateway_tls_certificate_file }}"
+            - "{{ ha_mcp_gateway_tls_private_key_file }}"
+            - "{{ ha_mcp_gateway_server_ca_file }}"
+            - "{{ ha_mcp_gateway_client_ca_file }}"
+            - "{{ ha_mcp_gateway_test_client_certificate_file }}"
+            - "{{ ha_mcp_gateway_test_client_private_key_file }}"
+            - "{{ ha_mcp_gateway_ha_ca_file }}"
+          register: ha_mcp_gateway_source_stats
+          no_log: true
+
+        - name: Read private gateway inputs for fail-closed shape validation
+          ansible.builtin.slurp:
+            src: "{{ item }}"
+          loop:
+            - "{{ ha_mcp_gateway_secret_file }}"
+            - "{{ ha_mcp_gateway_semantic_manifest_file }}"
+          register: ha_mcp_gateway_private_inputs
+          no_log: true
+
+        - name: Validate the private semantic manifest against the public boundary schema
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -m
+              - jsonschema
+              - -i
+              - "{{ ha_mcp_gateway_semantic_manifest_file }}"
+              - "{{ playbook_dir }}/../files/ha-mcp-gateway/semantic-manifest.schema.json"
+          changed_when: false
+          no_log: true
+
+        - name: Validate credential and semantic-manifest shape without exposing values
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_source_stats.results[2].stat.mode in ['0400', '0600']
+              - ha_mcp_gateway_source_stats.results[2].stat.pw_name in ['root', lookup('env', 'USER')]
+              - ha_mcp_gateway_source_stats.results[4].stat.mode in ['0400', '0600']
+              - ha_mcp_gateway_source_stats.results[4].stat.pw_name in ['root', lookup('env', 'USER')]
+              - ha_mcp_gateway_source_stats.results[8].stat.mode in ['0400', '0600']
+              - ha_mcp_gateway_source_stats.results[8].stat.pw_name in ['root', lookup('env', 'USER')]
+              - (ha_mcp_gateway_private_inputs.results[0].content | b64decode) is match('^[A-Za-z0-9._-]+\\n?$')
+              - (ha_mcp_gateway_private_inputs.results[1].content | b64decode | from_json).schema_version == '1.0.0'
+              - (ha_mcp_gateway_private_inputs.results[1].content | b64decode | from_json).status == 'approved'
+              - (ha_mcp_gateway_private_inputs.results[1].content | b64decode | from_json).raw_passthrough_enabled is false
+              - ((ha_mcp_gateway_private_inputs.results[1].content | b64decode | from_json).control_enabled | bool) == (gateway_runtime_control_enabled | bool)
+            fail_msg: >-
+              Credential input must be one protected raw HA token; the
+              private semantic manifest must be approved, schema 1.0.0, prohibit raw passthrough,
+              and agree with the independently gated control setting.
+            quiet: true
+          no_log: true
+
+        - name: Refuse changed artifact, semantic policy or trust material
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_source_stats.results[0].stat.checksum == ha_mcp_gateway_artifact_sha256
+              - ha_mcp_gateway_source_stats.results[1].stat.checksum == ha_mcp_gateway_semantic_manifest_sha256
+              - ha_mcp_gateway_source_stats.results[3].stat.checksum == ha_mcp_gateway_tls_certificate_sha256
+              - ha_mcp_gateway_source_stats.results[5].stat.checksum == ha_mcp_gateway_server_ca_sha256
+              - ha_mcp_gateway_source_stats.results[6].stat.checksum == ha_mcp_gateway_client_ca_sha256
+              - ha_mcp_gateway_source_stats.results[7].stat.checksum == ha_mcp_gateway_test_client_certificate_sha256
+              - ha_mcp_gateway_source_stats.results[9].stat.checksum == ha_mcp_gateway_ha_ca_sha256
+            fail_msg: "Gateway artifact, semantic manifest, certificate or CA differs from its reviewed pin."
+            quiet: true
+
+        - name: Validate the server certificate chain and IP identity
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - verify
+              - -CAfile
+              - "{{ ha_mcp_gateway_server_ca_file }}"
+              - -purpose
+              - sslserver
+              - -verify_ip
+              - "{{ ha_mcp_gateway_listen_address }}"
+              - "{{ ha_mcp_gateway_tls_certificate_file }}"
+          changed_when: false
+
+        - name: Derive the certificate public-key digest
+          ansible.builtin.shell: >-
+            openssl x509 -pubkey -noout -in {{ ha_mcp_gateway_tls_certificate_file | quote }}
+            | openssl pkey -pubin -outform DER
+            | sha256sum
+          register: ha_mcp_gateway_certificate_public_key
+          changed_when: false
+          no_log: true
+
+        - name: Derive the private-key public digest without exposing key material
+          ansible.builtin.shell: >-
+            openssl pkey -pubout -in {{ ha_mcp_gateway_tls_private_key_file | quote }} -outform DER
+            | sha256sum
+          register: ha_mcp_gateway_private_key_public_key
+          changed_when: false
+          no_log: true
+
+        - name: Prove the staged certificate and private key match
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_certificate_public_key.stdout == ha_mcp_gateway_private_key_public_key.stdout
+            fail_msg: "Gateway TLS certificate and private key do not match."
+            quiet: true
+          no_log: true
+
+        - name: Validate the attended test-client certificate chain
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - verify
+              - -CAfile
+              - "{{ ha_mcp_gateway_client_ca_file }}"
+              - -purpose
+              - sslclient
+              - "{{ ha_mcp_gateway_test_client_certificate_file }}"
+          changed_when: false
+
+        - name: Read and normalize the attended test-client certificate SANs
+          ansible.builtin.shell: >-
+            openssl x509 -in {{ ha_mcp_gateway_test_client_certificate_file | quote }}
+            -noout -ext subjectAltName
+            | tail -n +2
+            | tr ',' '\n'
+            | sed 's/^[[:space:]]*//; /^[[:space:]]*$/d'
+          register: ha_mcp_gateway_test_client_san
+          changed_when: false
+          no_log: true
+
+        - name: Require the reviewed identity in the test-client certificate SAN
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_test_client_san.stdout_lines == [ha_mcp_gateway_test_client_identity]
+            fail_msg: "The test-client certificate must contain exactly the single reviewed SAN identity."
+            quiet: true
+          no_log: true
+
+        - name: Derive the test-client certificate public-key digest
+          ansible.builtin.shell: >-
+            openssl x509 -pubkey -noout -in {{ ha_mcp_gateway_test_client_certificate_file | quote }}
+            | openssl pkey -pubin -outform DER
+            | sha256sum
+          register: ha_mcp_gateway_test_client_certificate_public_key
+          changed_when: false
+          no_log: true
+
+        - name: Derive the test-client private-key public digest
+          ansible.builtin.shell: >-
+            openssl pkey -pubout -in {{ ha_mcp_gateway_test_client_private_key_file | quote }} -outform DER
+            | sha256sum
+          register: ha_mcp_gateway_test_client_private_key_public_key
+          changed_when: false
+          no_log: true
+
+        - name: Prove the attended test-client certificate and key match
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_test_client_certificate_public_key.stdout == ha_mcp_gateway_test_client_private_key_public_key.stdout
+            fail_msg: "The test-client TLS certificate and private key do not match."
+            quiet: true
+          no_log: true
+
+        - name: Calculate rendered gateway authority digests on the controller
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_rendered_authority:
+              config: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/config.yaml.j2') | hash('sha256') }}"
+              service: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/ha-mcp-gateway.service.j2') | hash('sha256') }}"
+              firewall: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/firewall.nft.j2') | hash('sha256') }}"
+              firewall_service: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/ha-mcp-gateway-firewall.service.j2') | hash('sha256') }}"
+              logrotate: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/logrotate.j2') | hash('sha256') }}"
+              disable: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/disable.sh.j2') | hash('sha256') }}"
+              semantic_schema: "{{ lookup('file', playbook_dir ~ '/../files/ha-mcp-gateway/semantic-manifest.schema.json') | hash('sha256') }}"
+
+        - name: Build the canonical effective deployment authority
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_deployment_authority:
+              mode: "{{ gateway_mode }}"
+              control_enabled: "{{ gateway_runtime_control_enabled | bool }}"
+              host: "{{ ha_mcp_gateway_host }}"
+              ctid: "{{ ha_mcp_gateway_ctid | int }}"
+              address: "{{ ha_mcp_gateway_address }}"
+              listen_address: "{{ ha_mcp_gateway_listen_address }}"
+              gateway_port: "{{ ha_mcp_gateway_port | int }}"
+              public_url: "{{ ha_mcp_gateway_public_url }}"
+              ha_address: "{{ ha_mcp_gateway_ha_address }}"
+              ha_port: "{{ ha_mcp_gateway_ha_port | int }}"
+              ha_url: "{{ ha_mcp_gateway_ha_url }}"
+              ha_tls_server_name: "{{ ha_mcp_gateway_ha_tls_server_name }}"
+              client_cidrs: "{{ ha_mcp_gateway_client_cidrs | sort }}"
+              test_client_identity: "{{ ha_mcp_gateway_test_client_identity }}"
+              negative_test_address: "{{ ha_mcp_gateway_negative_test_address }}"
+              negative_test_port: "{{ ha_mcp_gateway_negative_test_port | int }}"
+              pbs_host: "{{ ha_mcp_gateway_pbs_host }}"
+              backup_mode: "{{ ha_mcp_gateway_backup_mode }}"
+              artifact_version: "{{ ha_mcp_gateway_artifact_version }}"
+              artifact_sha256: "{{ ha_mcp_gateway_artifact_sha256 }}"
+              semantic_manifest_sha256: "{{ ha_mcp_gateway_semantic_manifest_sha256 }}"
+              tls_certificate_sha256: "{{ ha_mcp_gateway_tls_certificate_sha256 }}"
+              server_ca_sha256: "{{ ha_mcp_gateway_server_ca_sha256 }}"
+              client_ca_sha256: "{{ ha_mcp_gateway_client_ca_sha256 }}"
+              test_client_certificate_sha256: "{{ ha_mcp_gateway_test_client_certificate_sha256 }}"
+              ha_ca_sha256: "{{ ha_mcp_gateway_ha_ca_sha256 }}"
+              rendered: "{{ ha_mcp_gateway_rendered_authority }}"
+
+        - name: Digest the canonical effective deployment authority
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_deployment_authority_sha256: >-
+              {{ ha_mcp_gateway_deployment_authority | to_json(sort_keys=true, separators=(',', ':')) | hash('sha256') }}
+
+        - name: Display the non-secret digest for the attended approval artifact
+          ansible.builtin.debug:
+            msg: "Deployment authority SHA-256: {{ ha_mcp_gateway_deployment_authority_sha256 }}"
+          when: gateway_mode == 'production'
+
+        - name: Refuse control-capable staged configuration
+          ansible.builtin.assert:
+            that:
+              - not (ha_mcp_gateway_control_enabled | bool)
+              - not (gateway_runtime_control_enabled | bool)
+            fail_msg: "Staged mode is read-only and cannot install a control-capable manifest."
+            quiet: true
+          when: gateway_mode == 'staged'
+
+        - name: Validate production continuity and operator approval
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_restore_drill_recorded | bool
+              - ha_mcp_gateway_prohibited_attempt_monitoring_implemented | bool
+              - ha_mcp_gateway_no_control_recovery_tested | bool
+              - ha_mcp_gateway_kill_switch_tested | bool
+              - ha_mcp_gateway_old_credential_rejection_tested | bool
+              - not (ha_mcp_gateway_control_enabled | bool) or (ha_mcp_gateway_mediated_control_approved | bool)
+            fail_msg: >-
+              Production requires the restore/no-control/kill-switch/old-credential tests and
+              explicit operator approval. Control additionally requires its separate approval.
+            quiet: true
+          when: gateway_mode == 'production'
+
+        - name: Read current time for the attended production approval
+          ansible.builtin.command: date +%s
+          register: ha_mcp_gateway_current_epoch
+          changed_when: false
+          when: gateway_mode == 'production'
+
+        - name: Inspect the attended production approval without logging it
+          ansible.builtin.stat:
+            path: "{{ ha_mcp_gateway_runtime_approval_file }}"
+          register: ha_mcp_gateway_runtime_approval_stat
+          no_log: true
+          when: gateway_mode == 'production'
+
+        - name: Require a protected attended production approval
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_runtime_approval_stat.stat.isreg | default(false)
+              - ha_mcp_gateway_runtime_approval_stat.stat.mode in ['0400', '0600']
+              - ha_mcp_gateway_runtime_approval_stat.stat.pw_name in ['root', lookup('env', 'USER')]
+            fail_msg: "Production requires a fresh protected runtime approval artifact."
+            quiet: true
+          no_log: true
+          when: gateway_mode == 'production'
+
+        - name: Validate the attended approval against its public schema
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -m
+              - jsonschema
+              - -i
+              - "{{ ha_mcp_gateway_runtime_approval_file }}"
+              - "{{ playbook_dir }}/../files/ha-mcp-gateway/runtime-approval.schema.json"
+          changed_when: false
+          no_log: true
+          when: gateway_mode == 'production'
+
+        - name: Read the attended production approval
+          ansible.builtin.slurp:
+            src: "{{ ha_mcp_gateway_runtime_approval_file }}"
+          register: ha_mcp_gateway_runtime_approval_raw
+          no_log: true
+          when: gateway_mode == 'production'
+
+        - name: Bind the fresh approval to this exact deployment
+          ansible.builtin.assert:
+            that:
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).schema_version == '1.0.0'
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).approver == 'simon'
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).confirmed is true
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).mode == 'production'
+              - ((ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).control_enabled | bool) == (gateway_runtime_control_enabled | bool)
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).ctid | int == ha_mcp_gateway_ctid | int
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).address == ha_mcp_gateway_address
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).artifact_sha256 == ha_mcp_gateway_artifact_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).semantic_manifest_sha256 == ha_mcp_gateway_semantic_manifest_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).tls_certificate_sha256 == ha_mcp_gateway_tls_certificate_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).server_ca_sha256 == ha_mcp_gateway_server_ca_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).client_ca_sha256 == ha_mcp_gateway_client_ca_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).test_client_certificate_sha256 == ha_mcp_gateway_test_client_certificate_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).ha_ca_sha256 == ha_mcp_gateway_ha_ca_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).deployment_authority_sha256 == ha_mcp_gateway_deployment_authority_sha256
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).approved_epoch | int <= ha_mcp_gateway_current_epoch.stdout | int
+              - (ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).expires_epoch | int > ha_mcp_gateway_current_epoch.stdout | int
+              - ((ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).expires_epoch | int) - ((ha_mcp_gateway_runtime_approval_raw.content | b64decode | from_json).approved_epoch | int) <= 1800
+            fail_msg: >-
+              Production approval must be confirmed, unexpired (maximum 30 minutes), and bound to
+              this exact mode, control state, guest, address, artifact, manifest and trust material.
+            quiet: true
+          no_log: true
+          when: gateway_mode == 'production'
+
+- name: Configure the approved HA MCP gateway LXC
+  hosts: proxmox
+  gather_facts: false
+  serial: 1
+  vars:
+    gateway_mode: "{{ ha_mcp_gateway_mode | default('disabled') }}"
+    gateway_runtime_control_enabled: >-
+      {{ gateway_mode == 'production' and (ha_mcp_gateway_control_enabled | default(false) | bool) }}
+    gateway_rollback_archive: >-
+      /var/lib/ha-mcp-gateway/deployment-rollback/{{ ha_mcp_gateway_artifact_sha256 }}-{{ ha_mcp_gateway_semantic_manifest_sha256 }}.tar.gz
+  tasks:
+    - name: Recalculate rendered authority in the selected target-host context
+      ansible.builtin.set_fact:
+        ha_mcp_gateway_target_rendered_authority:
+          config: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/config.yaml.j2') | hash('sha256') }}"
+          service: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/ha-mcp-gateway.service.j2') | hash('sha256') }}"
+          firewall: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/firewall.nft.j2') | hash('sha256') }}"
+          firewall_service: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/ha-mcp-gateway-firewall.service.j2') | hash('sha256') }}"
+          logrotate: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/logrotate.j2') | hash('sha256') }}"
+          disable: "{{ lookup('template', playbook_dir ~ '/../templates/ha-mcp-gateway/disable.sh.j2') | hash('sha256') }}"
+          semantic_schema: "{{ lookup('file', playbook_dir ~ '/../files/ha-mcp-gateway/semantic-manifest.schema.json') | hash('sha256') }}"
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Rebuild deployment authority using selected target-host variables
+      ansible.builtin.set_fact:
+        ha_mcp_gateway_target_deployment_authority:
+          mode: "{{ gateway_mode }}"
+          control_enabled: "{{ gateway_runtime_control_enabled | bool }}"
+          host: "{{ ha_mcp_gateway_host }}"
+          ctid: "{{ ha_mcp_gateway_ctid | int }}"
+          address: "{{ ha_mcp_gateway_address }}"
+          listen_address: "{{ ha_mcp_gateway_listen_address }}"
+          gateway_port: "{{ ha_mcp_gateway_port | int }}"
+          public_url: "{{ ha_mcp_gateway_public_url }}"
+          ha_address: "{{ ha_mcp_gateway_ha_address }}"
+          ha_port: "{{ ha_mcp_gateway_ha_port | int }}"
+          ha_url: "{{ ha_mcp_gateway_ha_url }}"
+          ha_tls_server_name: "{{ ha_mcp_gateway_ha_tls_server_name }}"
+          client_cidrs: "{{ ha_mcp_gateway_client_cidrs | sort }}"
+          test_client_identity: "{{ ha_mcp_gateway_test_client_identity }}"
+          negative_test_address: "{{ ha_mcp_gateway_negative_test_address }}"
+          negative_test_port: "{{ ha_mcp_gateway_negative_test_port | int }}"
+          pbs_host: "{{ ha_mcp_gateway_pbs_host }}"
+          backup_mode: "{{ ha_mcp_gateway_backup_mode }}"
+          artifact_version: "{{ ha_mcp_gateway_artifact_version }}"
+          artifact_sha256: "{{ ha_mcp_gateway_artifact_sha256 }}"
+          semantic_manifest_sha256: "{{ ha_mcp_gateway_semantic_manifest_sha256 }}"
+          tls_certificate_sha256: "{{ ha_mcp_gateway_tls_certificate_sha256 }}"
+          server_ca_sha256: "{{ ha_mcp_gateway_server_ca_sha256 }}"
+          client_ca_sha256: "{{ ha_mcp_gateway_client_ca_sha256 }}"
+          test_client_certificate_sha256: "{{ ha_mcp_gateway_test_client_certificate_sha256 }}"
+          ha_ca_sha256: "{{ ha_mcp_gateway_ha_ca_sha256 }}"
+          rendered: "{{ ha_mcp_gateway_target_rendered_authority }}"
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Refuse target-host variable or rendered-template drift from preflight
+      ansible.builtin.assert:
+        that:
+          - ha_mcp_gateway_target_deployment_authority == hostvars['localhost'].ha_mcp_gateway_deployment_authority
+          - (ha_mcp_gateway_target_deployment_authority | to_json(sort_keys=true, separators=(',', ':')) | hash('sha256')) == hostvars['localhost'].ha_mcp_gateway_deployment_authority_sha256
+        fail_msg: "Target-host authority differs from the exact controller-approved deployment."
+        quiet: true
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Check that the reviewed guest already exists
+      ansible.builtin.command: "pct config {{ ha_mcp_gateway_ctid }}"
+      register: ha_mcp_gateway_ct_config
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Prove the guest is unprivileged
+      ansible.builtin.assert:
+        that:
+          - "'unprivileged: 1' in ha_mcp_gateway_ct_config.stdout_lines"
+        fail_msg: "The reviewed gateway CT must already exist and be unprivileged."
+        quiet: true
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Read the reviewed guest state
+      ansible.builtin.command: "pct status {{ ha_mcp_gateway_ctid }}"
+      register: ha_mcp_gateway_state
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Start the reviewed guest for convergence
+      ansible.builtin.command: "pct start {{ ha_mcp_gateway_ctid }}"
+      changed_when: true
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+        - "'status: stopped' in ha_mcp_gateway_state.stdout"
+
+    - name: Wait for the guest command channel
+      ansible.builtin.command: "pct exec {{ ha_mcp_gateway_ctid }} -- true"
+      register: ha_mcp_gateway_ready
+      changed_when: false
+      retries: 20
+      delay: 3
+      until: ha_mcp_gateway_ready.rc == 0
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Refresh guest package metadata
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, apt-get, update, -qq]
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Install runtime, health and patching prerequisites
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, apt-get, install, -y, ca-certificates, curl, logrotate, nftables, unattended-upgrades]
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      changed_when: true
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Create the static unprivileged gateway service account
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ ha_mcp_gateway_ctid }}"
+          - --
+          - useradd
+          - --system
+          - --user-group
+          - --no-create-home
+          - --home-dir
+          - /nonexistent
+          - --shell
+          - /usr/sbin/nologin
+          - ha-mcp-gateway
+      register: ha_mcp_gateway_useradd
+      changed_when: ha_mcp_gateway_useradd.rc == 0
+      failed_when: ha_mcp_gateway_useradd.rc not in [0, 9]
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Read the converged gateway service account
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, getent, passwd, ha-mcp-gateway]
+      register: ha_mcp_gateway_passwd
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Read gateway service account group membership
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, id, -G, ha-mcp-gateway]
+      register: ha_mcp_gateway_groups
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Read the gateway service account primary group
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, id, -gn, ha-mcp-gateway]
+      register: ha_mcp_gateway_primary_group
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Read the dedicated gateway group record
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, getent, group, ha-mcp-gateway]
+      register: ha_mcp_gateway_group_record
+      changed_when: false
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Prove the existing or created account is a nologin system identity
+      ansible.builtin.assert:
+        that:
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[0] == 'ha-mcp-gateway'
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[2] | int > 0
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[2] | int < 1000
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[3] | int > 0
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[3] == (ha_mcp_gateway_group_record.stdout.split(':'))[2]
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[5] == '/nonexistent'
+          - (ha_mcp_gateway_passwd.stdout.split(':'))[6] == '/usr/sbin/nologin'
+          - ha_mcp_gateway_primary_group.stdout == 'ha-mcp-gateway'
+          - (ha_mcp_gateway_group_record.stdout.split(':'))[0] == 'ha-mcp-gateway'
+          - ha_mcp_gateway_groups.stdout.split() | length == 1
+        fail_msg: "The gateway account must be a nologin system user with no supplementary groups."
+        quiet: true
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Create a root-only ephemeral staging directory on the selected Proxmox host
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: ha-mcp-gateway-
+      register: ha_mcp_gateway_stage
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+
+    - name: Transact exact gateway inputs through full acceptance or rollback
+      when:
+        - gateway_mode in ['staged', 'production']
+        - inventory_hostname == ha_mcp_gateway_host
+      block:
+        - name: Render public service and firewall templates into the root-only stage
+          ansible.builtin.template:
+            src: "{{ item.src }}"
+            dest: "{{ ha_mcp_gateway_stage.path }}/{{ item.dest }}"
+            mode: "0600"
+          loop:
+            - { src: ../templates/ha-mcp-gateway/config.yaml.j2, dest: config.yaml }
+            - { src: ../templates/ha-mcp-gateway/ha-mcp-gateway.service.j2, dest: ha-mcp-gateway.service }
+            - { src: ../templates/ha-mcp-gateway/firewall.nft.j2, dest: firewall.nft }
+            - { src: ../templates/ha-mcp-gateway/ha-mcp-gateway-firewall.service.j2, dest: ha-mcp-gateway-firewall.service }
+            - { src: ../templates/ha-mcp-gateway/logrotate.j2, dest: logrotate }
+            - { src: ../templates/ha-mcp-gateway/disable.sh.j2, dest: disable }
+
+        - name: Stage private runtime inputs and pinned artifact without logging content
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ ha_mcp_gateway_stage.path }}/{{ item.dest }}"
+            mode: "0600"
+          loop:
+            - { src: "{{ ha_mcp_gateway_artifact_file }}", dest: binary }
+            - { src: "{{ ha_mcp_gateway_semantic_manifest_file }}", dest: semantic-manifest.json }
+            - { src: "{{ ha_mcp_gateway_secret_file }}", dest: ha-token }
+            - { src: "{{ ha_mcp_gateway_tls_certificate_file }}", dest: server-cert.pem }
+            - { src: "{{ ha_mcp_gateway_tls_private_key_file }}", dest: server-key.pem }
+            - { src: "{{ ha_mcp_gateway_server_ca_file }}", dest: server-ca.pem }
+            - { src: "{{ ha_mcp_gateway_client_ca_file }}", dest: client-ca.pem }
+            - { src: "{{ ha_mcp_gateway_ha_ca_file }}", dest: ha-ca.pem }
+          no_log: true
+
+        - name: Record whether an earlier gateway process is active
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, is-active, ha-mcp-gateway.service]
+          register: ha_mcp_gateway_was_active
+          changed_when: false
+          failed_when: false
+
+        - name: Record prior gateway and firewall enablement and firewall activity
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, "{{ item.command }}", "{{ item.unit }}"]
+          loop:
+            - { command: is-enabled, unit: ha-mcp-gateway.service, key: gateway_enabled }
+            - { command: is-enabled, unit: ha-mcp-gateway-firewall.service, key: firewall_enabled }
+            - { command: is-active, unit: ha-mcp-gateway-firewall.service, key: firewall_active }
+          register: ha_mcp_gateway_prior_systemd_states
+          changed_when: false
+          failed_when: false
+
+        - name: Require unambiguous prior systemd states
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_prior_systemd_states.results[0].stdout in ['enabled', 'disabled', 'not-found']
+              - ha_mcp_gateway_prior_systemd_states.results[1].stdout in ['enabled', 'disabled', 'not-found']
+              - ha_mcp_gateway_prior_systemd_states.results[2].stdout in ['active', 'inactive', 'failed', 'unknown']
+            fail_msg: "Prior gateway/firewall systemd state is transitional or ambiguous."
+            quiet: true
+
+        - name: Refuse a gateway in a transitional service state
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_was_active.stdout in ['active', 'inactive', 'failed', 'unknown']
+            fail_msg: "Gateway service state is transitional or ambiguous; no file will be changed."
+            quiet: true
+
+        - name: Stop the gateway before changing any live path
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, stop, ha-mcp-gateway.service]
+          changed_when: true
+          when: ha_mcp_gateway_was_active.stdout == 'active'
+
+        - name: Prove the gateway is inactive before any live path changes
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, is-active, ha-mcp-gateway.service]
+          register: ha_mcp_gateway_stopped_state
+          changed_when: false
+          failed_when: false
+
+        - name: Refuse mutation unless the gateway is independently proven inactive
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_stopped_state.stdout in ['inactive', 'failed', 'unknown']
+            fail_msg: "Gateway did not stop cleanly; no live path will be changed."
+            quiet: true
+
+        - name: Detect whether a prior gateway deployment exists
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - bash
+              - -c
+              - >-
+                test -e /usr/local/bin/ha-mcp-gateway -o
+                -e /etc/ha-mcp-gateway -o
+                -e /etc/systemd/system/ha-mcp-gateway.service
+          register: ha_mcp_gateway_prior_deployment_probe
+          changed_when: false
+          failed_when: false
+
+        - name: Refuse ambiguous prior-deployment detection
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_prior_deployment_probe.rc in [0, 1]
+            fail_msg: "Could not safely distinguish an existing gateway from a first install."
+            quiet: true
+
+        - name: Initialize explicit transaction state
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_prior_deployment_present: "{{ ha_mcp_gateway_prior_deployment_probe.rc == 0 }}"
+            ha_mcp_gateway_rollback_capture_succeeded: false
+            ha_mcp_gateway_mutation_started: false
+
+        - name: Preserve the prior deployment in a root-only rollback archive
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - bash
+              - -c
+              - |
+                set -e
+                install -d -m 0700 /var/lib/ha-mcp-gateway/deployment-rollback
+                existing=""
+                for path in \
+                  /usr/local/bin/ha-mcp-gateway \
+                  /usr/local/sbin/ha-mcp-gateway-disable \
+                  /etc/ha-mcp-gateway \
+                  /etc/systemd/system/ha-mcp-gateway.service \
+                  /etc/systemd/system/ha-mcp-gateway-firewall.service \
+                  /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway.service \
+                  /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway-firewall.service \
+                  /etc/logrotate.d/ha-mcp-gateway; do
+                  if test -e "$path" || test -L "$path"; then existing="$existing $path"; fi
+                done
+                if test -n "$existing"; then
+                  tar -czf "{{ gateway_rollback_archive }}" $existing
+                  chmod 0600 "{{ gateway_rollback_archive }}"
+                fi
+          changed_when: true
+          no_log: true
+          when: ha_mcp_gateway_prior_deployment_present | bool
+
+        - name: Validate the rollback archive before any mutation
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, tar, -tzf, "{{ gateway_rollback_archive }}"]
+          changed_when: false
+          no_log: true
+          when: ha_mcp_gateway_prior_deployment_present | bool
+
+        - name: Record successful rollback capture only after integrity validation
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_rollback_capture_succeeded: true
+          when: ha_mcp_gateway_prior_deployment_present | bool
+
+        - name: Mark the transaction immediately before its first guest mutation
+          ansible.builtin.set_fact:
+            ha_mcp_gateway_mutation_started: true
+
+        - name: Create the gateway configuration directory after rollback capture
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - install
+              - -d
+              - -m
+              - "0755"
+              - /etc/ha-mcp-gateway
+          changed_when: false
+
+        - name: Stage the shared security-only patch policy
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/patching/setup-unattended.sh"
+            dest: "{{ ha_mcp_gateway_stage.path }}/setup-unattended.sh"
+            mode: "0700"
+
+        - name: Push exact gateway files into the guest
+          ansible.builtin.command:
+            argv: [pct, push, "{{ ha_mcp_gateway_ctid }}", "{{ ha_mcp_gateway_stage.path }}/{{ item.src }}", "{{ item.dest }}", --perms, "{{ item.mode }}"]
+          loop:
+            - { src: binary, dest: /usr/local/bin/ha-mcp-gateway, mode: "0755" }
+            - { src: config.yaml, dest: /etc/ha-mcp-gateway/config.yaml, mode: "0640" }
+            - { src: semantic-manifest.json, dest: /etc/ha-mcp-gateway/semantic-manifest.json, mode: "0640" }
+            - { src: ha-token, dest: /etc/ha-mcp-gateway/ha-token, mode: "0400" }
+            - { src: server-cert.pem, dest: /etc/ha-mcp-gateway/server-cert.pem, mode: "0640" }
+            - { src: server-key.pem, dest: /etc/ha-mcp-gateway/server-key.pem, mode: "0400" }
+            - { src: server-ca.pem, dest: /etc/ha-mcp-gateway/server-ca.pem, mode: "0640" }
+            - { src: client-ca.pem, dest: /etc/ha-mcp-gateway/client-ca.pem, mode: "0640" }
+            - { src: ha-ca.pem, dest: /etc/ha-mcp-gateway/ha-ca.pem, mode: "0640" }
+            - { src: ha-mcp-gateway.service, dest: /etc/systemd/system/ha-mcp-gateway.service, mode: "0644" }
+            - { src: firewall.nft, dest: /etc/ha-mcp-gateway/firewall.nft, mode: "0600" }
+            - { src: ha-mcp-gateway-firewall.service, dest: /etc/systemd/system/ha-mcp-gateway-firewall.service, mode: "0644" }
+            - { src: logrotate, dest: /etc/logrotate.d/ha-mcp-gateway, mode: "0644" }
+            - { src: disable, dest: /usr/local/sbin/ha-mcp-gateway-disable, mode: "0750" }
+          no_log: true
+          changed_when: true
+
+        - name: Apply the shared security-only no-reboot patch policy
+          ansible.builtin.shell: >-
+            pct exec {{ ha_mcp_gateway_ctid }} -- bash -s --
+            {{ (ntfy_base_url ~ '/' ~ ntfy_topic) | quote }}
+            {{ patching_timezone | default('') | quote }}
+            < {{ (ha_mcp_gateway_stage.path ~ '/setup-unattended.sh') | quote }}
+          no_log: true
+          changed_when: true
+        - name: Enforce runtime file permissions
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - chmod
+              - "{{ item.mode }}"
+              - "{{ item.path }}"
+          loop:
+            - { path: /usr/local/bin/ha-mcp-gateway, mode: "0755" }
+            - { path: /usr/local/sbin/ha-mcp-gateway-disable, mode: "0750" }
+            - { path: /etc/ha-mcp-gateway/config.yaml, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/semantic-manifest.json, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/ha-token, mode: "0400" }
+            - { path: /etc/ha-mcp-gateway/server-cert.pem, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/server-key.pem, mode: "0400" }
+            - { path: /etc/ha-mcp-gateway/server-ca.pem, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/client-ca.pem, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/ha-ca.pem, mode: "0640" }
+            - { path: /etc/ha-mcp-gateway/firewall.nft, mode: "0600" }
+            - { path: /etc/systemd/system/ha-mcp-gateway.service, mode: "0644" }
+            - { path: /etc/systemd/system/ha-mcp-gateway-firewall.service, mode: "0644" }
+            - { path: /etc/logrotate.d/ha-mcp-gateway, mode: "0644" }
+          no_log: true
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Grant the service account read-only access to non-secret configuration
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, chown, "root:ha-mcp-gateway", "{{ item }}"]
+          loop:
+            - /etc/ha-mcp-gateway
+            - /etc/ha-mcp-gateway/config.yaml
+            - /etc/ha-mcp-gateway/semantic-manifest.json
+            - /etc/ha-mcp-gateway/server-cert.pem
+            - /etc/ha-mcp-gateway/server-ca.pem
+            - /etc/ha-mcp-gateway/client-ca.pem
+            - /etc/ha-mcp-gateway/ha-ca.pem
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Restrict the configuration directory after ownership is set
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, chmod, "0750", /etc/ha-mcp-gateway]
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Validate the port-scoped nftables policy before activation
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, nft, -c, -f, /etc/ha-mcp-gateway/firewall.nft]
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Reload gateway service definitions
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, daemon-reload]
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Validate hardened systemd units
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - systemd-analyze
+              - verify
+              - /etc/systemd/system/ha-mcp-gateway-firewall.service
+              - /etc/systemd/system/ha-mcp-gateway.service
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Enable the port-scoped gateway firewall
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, enable, ha-mcp-gateway-firewall.service]
+          changed_when: true
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Restart the firewall so no obsolete rule remains active
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, restart, ha-mcp-gateway-firewall.service]
+          changed_when: true
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove the gateway service account can reach only the exact HA TLS port
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - runuser
+              - -u
+              - ha-mcp-gateway
+              - --
+              - curl
+              - -sS
+              - -o
+              - /dev/null
+              - --connect-timeout
+              - "5"
+              - --cacert
+              - /etc/ha-mcp-gateway/ha-ca.pem
+              - --resolve
+              - "{{ ha_mcp_gateway_ha_tls_server_name }}:{{ ha_mcp_gateway_ha_port }}:{{ ha_mcp_gateway_ha_address }}"
+              - "https://{{ ha_mcp_gateway_ha_tls_server_name }}:{{ ha_mcp_gateway_ha_port }}/"
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove the unrelated negative-test endpoint is otherwise reachable
+          ansible.builtin.shell: >-
+            pct exec {{ ha_mcp_gateway_ctid }} -- timeout 5 bash -c
+            {{ ('exec 3<>/dev/tcp/' ~ ha_mcp_gateway_negative_test_address ~ '/' ~ (ha_mcp_gateway_negative_test_port | string)) | quote }}
+          register: ha_mcp_gateway_root_egress_control
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove the service account cannot reach an unrelated address
+          ansible.builtin.shell: >-
+            pct exec {{ ha_mcp_gateway_ctid }} -- runuser -u ha-mcp-gateway -- timeout 5 bash -c
+            {{ ('exec 3<>/dev/tcp/' ~ ha_mcp_gateway_negative_test_address ~ '/' ~ (ha_mcp_gateway_negative_test_port | string)) | quote }}
+          register: ha_mcp_gateway_unrelated_egress_test
+          changed_when: false
+          failed_when: ha_mcp_gateway_unrelated_egress_test.rc == 0
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Read cluster PBS jobs before production enablement
+          ansible.builtin.command: pvesh get /cluster/backup --output-format json
+          register: ha_mcp_gateway_backup_jobs_raw
+          changed_when: false
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove the gateway is in exactly one encrypted PBS job
+          ansible.builtin.assert:
+            that:
+              - >-
+                ((ha_mcp_gateway_backup_jobs_raw.stdout | from_json)
+                 | selectattr('type', 'equalto', 'vzdump')
+                 | selectattr('storage', 'equalto', 'pbs-oneill')
+                 | selectattr('vmid', 'defined')
+                 | map(attribute='vmid')
+                 | map('string')
+                 | select('search', '(^|,)' ~ (ha_mcp_gateway_ctid | string) ~ '(,|$)')
+                 | list | length) == 1
+            fail_msg: "Production gateway is not unambiguously registered in the encrypted PBS job."
+            quiet: true
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove at least one gateway PBS image has landed
+          ansible.builtin.shell: >-
+            pvesm list pbs-oneill --content backup --vmid {{ ha_mcp_gateway_ctid }}
+            | grep -q 'backup/ct/{{ ha_mcp_gateway_ctid }}/'
+          changed_when: false
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Keep staged gateway disabled and stopped
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, disable, --now, ha-mcp-gateway.service]
+          changed_when: false
+          when:
+            - gateway_mode == 'staged'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Verify installed artifact and semantic-manifest digests
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, sha256sum, /usr/local/bin/ha-mcp-gateway, /etc/ha-mcp-gateway/semantic-manifest.json]
+          register: ha_mcp_gateway_installed_digests
+          changed_when: false
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Refuse an installed artifact or policy digest mismatch
+          ansible.builtin.assert:
+            that:
+              - (ha_mcp_gateway_artifact_sha256 ~ '  /usr/local/bin/ha-mcp-gateway') in ha_mcp_gateway_installed_digests.stdout_lines
+              - (ha_mcp_gateway_semantic_manifest_sha256 ~ '  /etc/ha-mcp-gateway/semantic-manifest.json') in ha_mcp_gateway_installed_digests.stdout_lines
+            fail_msg: "Installed gateway artifact or semantic manifest differs from the reviewed digest."
+            quiet: true
+          when:
+            - gateway_mode in ['staged', 'production']
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Enable the explicitly approved production gateway
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, enable, ha-mcp-gateway.service]
+          changed_when: true
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Restart production so the reviewed binary and configuration are live
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, restart, ha-mcp-gateway.service]
+          changed_when: true
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove production health without exposing content
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, curl, -fsS, --max-time, "5", --cacert, /etc/ha-mcp-gateway/server-ca.pem, "{{ ha_mcp_gateway_public_url }}/healthz"]
+          register: ha_mcp_gateway_health
+          changed_when: false
+          retries: 10
+          delay: 3
+          until: ha_mcp_gateway_health.rc == 0
+          no_log: true
+          when:
+            - gateway_mode == 'production'
+            - inventory_hostname == ha_mcp_gateway_host
+
+        - name: Prove the content-free health path is the only anonymous endpoint
+          ansible.builtin.command:
+            argv:
+              - curl
+              - -fsS
+              - --max-time
+              - "5"
+              - --cacert
+              - "{{ ha_mcp_gateway_server_ca_file }}"
+              - "{{ ha_mcp_gateway_public_url }}/healthz"
+          changed_when: false
+          delegate_to: localhost
+          when: gateway_mode == 'production'
+
+        - name: Prove an anonymous client cannot spoof or read an identity
+          ansible.builtin.command:
+            argv:
+              - curl
+              - -fsS
+              - --max-time
+              - "5"
+              - --cacert
+              - "{{ ha_mcp_gateway_server_ca_file }}"
+              - -H
+              - "X-Client-Identity: {{ ha_mcp_gateway_test_client_identity }}"
+              - "{{ ha_mcp_gateway_public_url }}/whoami"
+          register: ha_mcp_gateway_anonymous_identity_test
+          changed_when: false
+          failed_when: ha_mcp_gateway_anonymous_identity_test.rc == 0
+          no_log: true
+          delegate_to: localhost
+          when: gateway_mode == 'production'
+
+        - name: Prove identity is derived from the attended client certificate
+          ansible.builtin.command:
+            argv:
+              - curl
+              - -fsS
+              - --max-time
+              - "5"
+              - --cacert
+              - "{{ ha_mcp_gateway_server_ca_file }}"
+              - --cert
+              - "{{ ha_mcp_gateway_test_client_certificate_file }}"
+              - --key
+              - "{{ ha_mcp_gateway_test_client_private_key_file }}"
+              - "{{ ha_mcp_gateway_public_url }}/whoami"
+          register: ha_mcp_gateway_authenticated_identity_test
+          changed_when: false
+          failed_when: >-
+            ha_mcp_gateway_authenticated_identity_test.rc != 0 or
+            (ha_mcp_gateway_authenticated_identity_test.stdout | trim) != ha_mcp_gateway_test_client_identity
+          no_log: true
+          delegate_to: localhost
+          when: gateway_mode == 'production'
+
+        - name: Retain only the immediate prior root-only rollback archive after acceptance
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - find
+              - /var/lib/ha-mcp-gateway/deployment-rollback
+              - -type
+              - f
+              - -name
+              - "*.tar.gz"
+              - "!"
+              - -name
+              - "{{ gateway_rollback_archive | basename }}"
+              - -delete
+          changed_when: true
+          when: ha_mcp_gateway_prior_deployment_present | bool
+      rescue:
+        - name: Stop a newly started gateway before rollback
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, stop, ha-mcp-gateway.service]
+          register: ha_mcp_gateway_rollback_stop
+          changed_when: true
+          failed_when: false
+          when: ha_mcp_gateway_mutation_started | default(false) | bool
+
+        - name: Prove the failed deployment is inactive before rollback
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, is-active, ha-mcp-gateway.service]
+          register: ha_mcp_gateway_rollback_stopped_state
+          changed_when: false
+          failed_when: false
+          when: ha_mcp_gateway_mutation_started | default(false) | bool
+
+        - name: Refuse an unsafe live-file rollback
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_rollback_stopped_state.stdout in ['inactive', 'failed', 'unknown']
+            fail_msg: "Failed deployment is still active; rollback was refused to avoid live overwrite."
+            quiet: true
+          when: ha_mcp_gateway_mutation_started | default(false) | bool
+
+        - name: Stop the failed deployment firewall before managed-tree replacement
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, stop, ha-mcp-gateway-firewall.service]
+          changed_when: true
+          failed_when: false
+          when: ha_mcp_gateway_mutation_started | default(false) | bool
+
+        - name: Remove any failed-deployment firewall table before restoration
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, nft, delete, table, inet, ha_mcp_gateway]
+          changed_when: true
+          failed_when: false
+          when: ha_mcp_gateway_mutation_started | default(false) | bool
+
+        - name: Check whether a prior deployment archive exists
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, test, -s, "{{ gateway_rollback_archive }}"]
+          register: ha_mcp_gateway_rollback_exists
+          changed_when: false
+          no_log: true
+          when: ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+
+        - name: Revalidate rollback archive integrity immediately before extraction
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, tar, -tzf, "{{ gateway_rollback_archive }}"]
+          changed_when: false
+          no_log: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Remove partial first-install paths when no prior deployment existed
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - bash
+              - -c
+              - >-
+                rm -rf /etc/ha-mcp-gateway &&
+                rm -f /usr/local/bin/ha-mcp-gateway
+                /usr/local/sbin/ha-mcp-gateway-disable
+                /etc/systemd/system/ha-mcp-gateway.service
+                /etc/systemd/system/ha-mcp-gateway-firewall.service
+                /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway.service
+                /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway-firewall.service
+                /etc/logrotate.d/ha-mcp-gateway
+          changed_when: true
+          no_log: true
+          when:
+            - ha_mcp_gateway_mutation_started | default(false) | bool
+            - not (ha_mcp_gateway_prior_deployment_present | default(false) | bool)
+
+        - name: Reload systemd after removing a failed first install
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, daemon-reload]
+          changed_when: false
+          when:
+            - ha_mcp_gateway_mutation_started | default(false) | bool
+            - not (ha_mcp_gateway_prior_deployment_present | default(false) | bool)
+
+        - name: Remove the failed managed tree before extracting the prior deployment
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ ha_mcp_gateway_ctid }}"
+              - --
+              - bash
+              - -c
+              - >-
+                rm -rf /etc/ha-mcp-gateway &&
+                rm -f /usr/local/bin/ha-mcp-gateway
+                /usr/local/sbin/ha-mcp-gateway-disable
+                /etc/systemd/system/ha-mcp-gateway.service
+                /etc/systemd/system/ha-mcp-gateway-firewall.service
+                /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway.service
+                /etc/systemd/system/multi-user.target.wants/ha-mcp-gateway-firewall.service
+                /etc/logrotate.d/ha-mcp-gateway
+          changed_when: true
+          no_log: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Restore the complete prior deployment after any failed acceptance step
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, tar, -xzf, "{{ gateway_rollback_archive }}", -C, /]
+          changed_when: true
+          no_log: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Reload restored service definitions
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, daemon-reload]
+          changed_when: false
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Restore and validate a previously active firewall policy
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, restart, ha-mcp-gateway-firewall.service]
+          changed_when: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+            - ha_mcp_gateway_prior_systemd_states.results[2].stdout == 'active'
+
+        - name: Prove no gateway firewall table survives when it was previously inactive
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, nft, list, table, inet, ha_mcp_gateway]
+          register: ha_mcp_gateway_restored_firewall_absent
+          changed_when: false
+          failed_when: ha_mcp_gateway_restored_firewall_absent.rc == 0
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+            - ha_mcp_gateway_prior_systemd_states.results[2].stdout != 'active'
+
+        - name: Read restored gateway and firewall enablement
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, is-enabled, "{{ item }}"]
+          loop:
+            - ha-mcp-gateway.service
+            - ha-mcp-gateway-firewall.service
+          register: ha_mcp_gateway_restored_enablement
+          changed_when: false
+          failed_when: false
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Prove rollback restored exact prior enablement
+          ansible.builtin.assert:
+            that:
+              - ha_mcp_gateway_restored_enablement.results[0].stdout == ha_mcp_gateway_prior_systemd_states.results[0].stdout
+              - ha_mcp_gateway_restored_enablement.results[1].stdout == ha_mcp_gateway_prior_systemd_states.results[1].stdout
+            fail_msg: "Rollback did not restore the prior gateway/firewall enablement state."
+            quiet: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+
+        - name: Restore an earlier active gateway only after its files and firewall
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, restart, ha-mcp-gateway.service]
+          changed_when: true
+          when:
+            - ha_mcp_gateway_rollback_capture_succeeded | default(false) | bool
+            - ha_mcp_gateway_rollback_exists.rc == 0
+            - ha_mcp_gateway_was_active is defined
+            - ha_mcp_gateway_was_active.stdout == 'active'
+
+        - name: Restart an unmodified prior gateway if rollback capture itself failed
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ ha_mcp_gateway_ctid }}", --, systemctl, restart, ha-mcp-gateway.service]
+          changed_when: true
+          when:
+            - not (ha_mcp_gateway_mutation_started | default(false) | bool)
+            - ha_mcp_gateway_was_active is defined
+            - ha_mcp_gateway_was_active.stdout == 'active'
+
+        - name: Stop after the transactional rollback path completes
+          ansible.builtin.fail:
+            msg: >-
+              Gateway deployment failed. The prior deployment was restored when one existed; the
+              proposed deployment was not accepted. Review the failed task before retrying.
+      always:
+        - name: Remove the entire root-only stage from the Proxmox host
+          ansible.builtin.file:
+            path: "{{ ha_mcp_gateway_stage.path }}"
+            state: absent
+          no_log: true
