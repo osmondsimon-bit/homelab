@@ -83,3 +83,10 @@ default; matching both means the cap survives that setting being present or abse
   keep-list alone still enforces the measurement-only TSDB (HA just does redundant
   work exporting metrics that are then dropped at scrape).
 - Builds on ADR-013 (monitoring stack); does not change scrape auth or topology.
+
+## Revision — household energy analytics (2026-08-20)
+
+ADR-026 accepts the deferred new-house InfluxDB path for curated, long-retention household-energy
+semantics. It does not send full HA history to InfluxDB, change the Prometheus keep-list, or make
+analytics an automation dependency. Deployment remains gated on commissioned energy entities and a
+separately provisioned, restore-tested service.
