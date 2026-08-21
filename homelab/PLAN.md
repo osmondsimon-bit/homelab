@@ -151,6 +151,10 @@ cards and Node-RED are not implementation dependencies; add one only after a pro
 - **Configuration/MCP** — private Git plus encrypted HA backups have complementary authority.
   Native MCP is off during design and read-only after private HA-15. Any future control requires the
   separately reviewed mediation gateway in ADR-027; its public playbook is disabled by default.
+- **Commissioning/resilience** — HA-15 separates repository tests, a fresh test-only HAOS VM, an
+  externally isolated disposable backup-restore VM and the attended live pilot. The 2026-06-18 HA
+  restore remains proven for that backup/version; repeat it with default-deny egress before the
+  first command-producing Git deployment. Test/recovery VM placement is not yet approved.
 
 ## Phase order
 

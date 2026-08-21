@@ -958,43 +958,60 @@ qm stop 199 && qm destroy 199 --purge
 
 **HA native partial restore (operator-guided).** HAOS restore is UI-driven, and the restored
 Zigbee2MQTT **must not touch the live SLZB-06 coordinator** (two Z2M instances on one coordinator
-disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18):
+disrupts production), so the test HA is **isolated**. The 2026-06-18 drill proved its named backup
+but allowed general external egress. Future HA-15 drills use the stricter procedure below because a
+restored HA has no inert first boot: safe mode and post-boot disabling are not network or device
+containment.
 
-1. **Isolated test VLAN.** A dedicated VLAN (its own `/24`, its own UniFi zone): **Test→External =
-   Allow, Test→all internal = Block** — critically including the **Unsecure zone** (where the IoT/
-   coordinator lives; the zone matrix must show `Test → Unsecure = Block All`). Add a one-way
-   **Secure→Test, TCP 8123, Allow + "Auto Allow Return Traffic"** (ordered above the blocks) so your
-   browser reaches the test HA UI without opening Test→internal. (The return path matters: Test→Secure
-   is blocked, so without "Auto Allow Return" the SYN-ACK is dropped and `:8123` times out.)
-2. **Throwaway HAOS VM** on apophis, mirroring prod (OVMF/q35 + EFI disk, 2 cores/3 GB), NIC on the
-   test VLAN tag, from the latest HAOS `ova` image:
-   ```bash
-   curl -fsSL -o /var/lib/vz/haos.qcow2.xz <haos_ova-*.qcow2.xz>; unxz /var/lib/vz/haos.qcow2.xz
-   qm create 299 --name ha-restore-test --bios ovmf --machine q35 --cores 2 --memory 3072 \
-     --net0 virtio,bridge=vmbr0,tag=<TEST_VLAN> --scsihw virtio-scsi-pci --serial0 socket \
-     --ostype l26 --efidisk0 local-lvm:0,efitype=4m,pre-enrolled-keys=0 --agent 1 --onboot 0
-   qm importdisk 299 /var/lib/vz/haos.qcow2 local-lvm
-   qm set 299 --sata0 local-lvm:vm-299-disk-1 --boot order=sata0 && qm start 299
-   qm agent 299 network-get-interfaces   # read the test HA's DHCP IP on the test VLAN from this
-   ```
-   Check `ha core info` / `ha network info` on the Proxmox console: Core version should match prod,
-   `host_internet/supervisor_internet: true` (so it can pull Core + add-on images).
-3. **Get the backup to your browser** — the isolated test HA can't reach the share, so serve the
-   latest `.tar` over HTTP from a **Home-subnet** host and download it in your browser:
-   ```bash
-   # on oneill (backup-hub host); the file lives in CT 113
-   mkdir -p /tmp/harestore && pct pull 113 /srv/ha-backups/<latest>.tar /tmp/harestore/ha-backup.tar
-   systemd-run --unit=harestore-http --collect --working-directory=/tmp/harestore \
-     /usr/bin/python3 -m http.server 8000 --bind 0.0.0.0
-   # browser → http://<oneill-ip>:8000/ha-backup.tar  (encrypted; key entered at restore time)
-   # after download: systemctl stop harestore-http; rm -rf /tmp/harestore
-   ```
+1. **Isolation before restore.** With the VM still off, prove a dedicated test VLAN/zone defaults to
+   **Test→External = Block and Test→all internal = Block**. Explicitly test the production Home,
+   IoT/Unsecure and Camera zones, MQTT endpoint, TCP coordinator, DNS/service-discovery paths,
+   notification/vendor clouds and tunnel endpoints. Add only one-way **Secure→Test, TCP 8123,
+   Allow + Auto Allow Return Traffic** so the commissioning browser reaches the UI. Capture the
+   deny-rule results; no broad egress exception is permitted. Before creating the recovery VM, boot
+   a pristine canary guest with no household state on the same VLAN and actively test the allowed UI
+   return path plus every denied destination/protocol. Capture gateway/firewall logs, then destroy
+   the canary. A powered-off recovery VM alone cannot prove dynamic enforcement.
+2. **Throwaway HAOS VM** on the host/storage selected by the current capacity and failure-domain
+   review. The historical drill used apophis/local-lvm; that is evidence, not standing placement
+   approval. Mirror the supported HAOS shape (OVMF/q35 + EFI disk, 2 cores/3 GB), attach only a NIC
+   on the test VLAN, use the latest HAOS `ova` image, set `onboot=0`, and prove no USB, serial,
+   Bluetooth or PCI passthrough exists. Do not reuse the historical commands directly. The attended
+   execution packet must resolve and recheck an unused VMID, approved host/storage and exact test
+   VLAN; pin one HAOS release artifact and verify its published SHA-256 before import; assign a
+   unique `ha-recovery-ephemeral` tag/name; and record the resulting VM configuration before first
+   boot. Creation must stop if the identifier already exists or any resolved input differs from the
+   reviewed packet.
+   Check `ha core info` / `ha network info` on the Proxmox console and record the source/target
+   versions. Before uploading a backup, actively repeat the deny tests from this exact recovery VM
+   to the production Home, IoT/Unsecure and Camera zones, MQTT endpoint, TCP coordinator,
+   DNS/service-discovery paths, notification/vendor clouds and tunnel endpoints. Correlate every
+   attempt with the expected gateway/firewall decision, and separately prove the commissioning
+   workstation can reach only the allowed HA UI path. This per-VM proof is mandatory even when the
+   canary passed, because guest identity, DHCP assignment or a stale exception can differ. Internet
+   should remain unavailable. If the selected restore cannot install Core/apps without downloads,
+   do not open general egress: establish an explicit, logged destination allowlist or mark the
+   restore incomplete.
+3. **Get the backup to your browser** — download the exact encrypted archive to the commissioning
+   workstation through the authenticated HA backup UI, existing protected backup share, or SSH/SCP.
+   Do not expose it through an ad-hoc unauthenticated HTTP server. Keep any transient copy readable
+   only by the operator, verify the recorded archive hash before upload, and use an explicit cleanup
+   check on success or failure.
 4. **Restore** at `http://<test-ip>:8123` → onboarding **"Restore from backup"** → upload the `.tar`
-   → enter the **encryption key** (Google Password Manager) → full restore (~5–10 min, re-pulls add-ons).
+   → enter the **encryption key** from the Tier 2 operator keychain → restore the selected content.
+   Record only opaque backup/key identifiers, versions, archive hash, start/end time and result;
+   never copy the key, emergency kit or decrypted backup into Git or logs.
 5. **Verify**: log in with prod credentials; dashboards/entities present; **Zigbee devices listed**
    (Settings → Devices, count ≈ prod ⇒ the **Z2M pairing database restored**). Z2M logging
-   "can't connect to coordinator" is **expected** (isolated) — we prove the *database*, not live radio.
-6. **Teardown**: `qm stop 299 && qm destroy 299 --purge`; `rm` the HAOS image; stop the temp server.
+   "can't connect to coordinator" is **expected** (isolated) — we prove the *database*, not live
+   radio. Inspect Core/Supervisor/app logs and firewall denies; prove no real switch, Zigbee device,
+   MQTT topic, notification recipient, cloud account or tunnel changed. A restored registry is not
+   permission to connect the replica to production.
+6. **Teardown**: capture the evidence, stop the guest, and re-resolve the exact VM by its reviewed
+   VMID plus unique ephemeral tag/name/config before destructive removal. Stop if any identity field
+   differs; teardown needs attended confirmation. Remove only the pinned staging artifact and exact
+   transient backup copy recorded by this drill. Never retain this VM as the HA development
+   instance; a separate fresh HAOS VM with test-only helpers/templates fills that role.
 
 | Date | Backup tier | Result |
 |------|-------------|--------|
@@ -1008,6 +1025,10 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 | _pending_ | CT 123 (Sonarr) Ansible reprovision | untested — simplest Phase 7 drill (no VPN credential dep); re-add qBit + root folder, verify hardlink import |
 | _pending_ | CT 124 (Radarr) Ansible reprovision | untested — same drill path as Sonarr |
 | _pending_ | VM 125 (Seerr + Prowlarr + ByParr) Ansible reprovision | untested — needs `prowlarr_vpn_wg_config` in `all.yml`; verify Prowlarr egress = ProtonVPN after rebuild |
+
+The 2026-06-18 result remains valid for its recorded backup/version. HA-15 requires a fresh drill
+under the stricter deny-all procedure before the first command-producing Git deployment and after a
+material HA backup-format, Zigbee/MQTT topology or Matter/Thread runtime change.
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
 > local; PBS snapshot names are **UTC** (`…T16:30:03Z` = 02:30 AEST). Don't mistake the offset

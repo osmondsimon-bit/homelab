@@ -82,6 +82,15 @@ Mutation stops the gateway first and preserves a root-only prior-deployment arch
 rollback across the entire acceptance transaction; firewall rules are explicitly restarted.
 A validated local HTTPS endpoint on HA is an HA-15 commissioning prerequisite.
 
+HA-15 uses four distinct evidence environments: repository simulation; a fresh Synthetic HAOS VM
+containing test-only helpers/templates; a disposable encrypted-backup recovery replica; and an
+attended live hardware pilot. The synthetic VM never receives production backup state, credentials,
+MQTT, a coordinator or a device-network route. The recovery VM is externally isolated before
+restore, has no command authority and is destroyed after evidence; Home Assistant safe mode or
+post-start disabling is not first-boot containment. The existing 2026-06-18 restore proves its
+recorded backup/version, but a current deny-all restore must pass before command-producing private
+configuration is deployed.
+
 Credential placement follows ADR-018:
 
 - human HA administrator password: Tier 1 Vaultwarden;
@@ -97,3 +106,5 @@ Credential placement follows ADR-018:
   patching, backup, freshness, restore and documentation obligations.
 - No gateway, MCP exposure, live HA change, guest identifier, address or placement is approved by
   this ADR. Those remain private HA-15 and infrastructure-review gates.
+- No development or recovery HA guest is approved by this ADR. Host, storage, identifier, isolated
+  network rules, monitoring and lifecycle remain an attended infrastructure-placement decision.
