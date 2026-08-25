@@ -6,6 +6,9 @@ VM 201 is a fresh, isolated HAOS appliance for developing Home Assistant configu
 Git-owned mock entities while the new house is being built. It is persistent for convenience but
 contains no authoritative state and can be destroyed and recreated.
 
+**As built:** staged on Carter on 2026-08-25 and left powered off without a first boot. The exact
+machine, disk, NIC and exclusion contract passed an idempotent post-create validation.
+
 ## Placement and lifecycle
 
 - **Node:** Carter, subordinate to its production-recovery role.

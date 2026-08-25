@@ -1,7 +1,7 @@
 # ADR-026: Home Assistant test environments
 
 **Date:** 2026-08-21
-**Status:** Accepted — synthetic environment designed; live commissioning pending
+**Status:** Accepted — synthetic environment staged stopped; first boot pending
 
 ## Purpose
 
@@ -32,6 +32,10 @@ Test-to-Gateway traffic, while existing internal-zone blocks remain effective. A
 commissioning client has TCP 8123 access using any ephemeral source port and automatic return
 traffic. This satisfies the static stopped-staging gate; exact-guest active deny evidence remains a
 separate pre-onboarding gate.
+
+VM 201 was created on Carter and independently revalidated in its stopped state on 2026-08-25. It
+has never been booted. Its generated MAC now enables a local-only DHCP reservation and destination
+rule refinement; neither that reservation nor first-boot authority is implied by staging.
 
 Home Assistant OS 18.2 is pinned for initial parity with the current live appliance. The official
 [OVA qcow2 release asset](https://github.com/home-assistant/operating-system/releases/tag/18.2)
