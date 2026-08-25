@@ -7,7 +7,9 @@ Git-owned mock entities while the new house is being built. It is persistent for
 contains no authoritative state and can be destroyed and recreated.
 
 **As built:** staged on Carter on 2026-08-25 and left powered off without a first boot. The exact
-machine, disk, NIC and exclusion contract passed an idempotent post-create validation.
+machine, disk, NIC and exclusion contract passed an idempotent post-create validation. A read-only
+hash comparison proved its generated NIC matches the local-only DHCP reservation, and the
+commissioning rule is narrowed to that address on stateful TCP 8123.
 
 ## Placement and lifecycle
 

@@ -37,6 +37,10 @@ VM 201 was created on Carter and independently revalidated in its stopped state 
 has never been booted. Its generated MAC now enables a local-only DHCP reservation and destination
 rule refinement; neither that reservation nor first-boot authority is implied by staging.
 
+A subsequent read-only comparison confirmed the UniFi fixed-address record matches the generated
+VM NIC and the stateful TCP 8123 rule is narrowed to that reservation. This closes the reservation
+gate but does not grant first-boot authority or replace post-boot exact-guest deny probes.
+
 Home Assistant OS 18.2 is pinned for initial parity with the current live appliance. The official
 [OVA qcow2 release asset](https://github.com/home-assistant/operating-system/releases/tag/18.2)
 SHA-256 is verified before import. A later version change is a deliberate reviewed update, not an
