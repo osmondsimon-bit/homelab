@@ -27,9 +27,10 @@ tunnel, passthrough, or vendor-account authority. The first boot is an attended 
 The exact guest must prove allowed operator UI access and denied production paths before onboarding
 or receiving the test fixture.
 
-As of the 2026-08-25 read-only preflight, UniFi has an empty named Test zone rather than an attached
-Test network. Default Test-to-External and Test-to-Gateway permits must be overridden before VM
-allocation; this page does not claim that live isolation is already deployed.
+The 2026-08-25 read-only preflight initially found an empty named Test zone. A same-day recheck after
+operator creation confirmed a dedicated network is attached and mDNS is disabled. Network-level
+internet access, default Test-to-External and Test-to-Gateway permits, and the missing narrow UI
+ingress remain open gates; this page does not claim that live isolation is already deployed.
 
 ## Continuity
 
