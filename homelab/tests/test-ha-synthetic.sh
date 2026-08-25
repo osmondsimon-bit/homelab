@@ -48,8 +48,17 @@ grep -Fq 'pvesh get /cluster/resources --type vm --output-format json' "$playboo
   || fail 'VMID ownership must be checked cluster-wide before mutation'
 [[ "$(grep -Fc 'pvecm status' "$playbook")" -ge 2 ]] \
   || fail 'cluster quorum must be healthy before Carter allocation'
-grep -Fq 'pvesr status' "$playbook" \
-  || fail 'the production replication jobs must be healthy before Carter allocation'
+grep -Fq 'ha_synthetic_carter_pvesr_status' "$playbook" \
+  || fail 'Carter-source replication health must be checked on Carter'
+grep -Fq 'ha_synthetic_apophis_pvesr_status' "$playbook" \
+  || fail 'Apophis-source replication health must be checked independently'
+grep -Fq 'delegate_to: apophis' "$playbook" \
+  || fail 'VM 200 replication health must be queried on its source node'
+grep -Fq 'pvesh get /cluster/replication --output-format json' "$playbook" \
+  || fail 'replication ownership and synthetic-VM exclusion must be checked cluster-wide'
+if grep -Fq "ha_synthetic_pvesr_status.stdout is regex('(?m)^\\s*200-0" "$playbook"; then
+  fail 'Carter-local pvesr output must not be treated as evidence for Apophis-source job 200-0'
+fi
 [[ "$(grep -Fc 'zpool status -x' "$playbook")" -ge 2 ]] \
   || fail 'Carter ZFS health must be checked before image import'
 grep -Fq '/etc/pve/nodes' "$playbook" \

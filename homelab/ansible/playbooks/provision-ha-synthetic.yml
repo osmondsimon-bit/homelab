@@ -48,10 +48,30 @@
       register: ha_synthetic_cluster_status
       changed_when: false
 
-    - name: Read production replication health
+    - name: Read Carter-source replication health
       ansible.builtin.command: pvesr status
-      register: ha_synthetic_pvesr_status
+      register: ha_synthetic_carter_pvesr_status
       changed_when: false
+
+    - name: Read Apophis-source replication health
+      ansible.builtin.command: pvesr status
+      register: ha_synthetic_apophis_pvesr_status
+      changed_when: false
+      delegate_to: apophis
+
+    - name: Read cluster replication ownership
+      ansible.builtin.command: pvesh get /cluster/replication --output-format json
+      register: ha_synthetic_cluster_replication_raw
+      changed_when: false
+
+    - name: Resolve production replication ownership
+      ansible.builtin.set_fact:
+        ha_synthetic_replication_118_matches: >-
+          {{ (ha_synthetic_cluster_replication_raw.stdout | from_json)
+             | selectattr('id', 'equalto', '118-0') | list }}
+        ha_synthetic_replication_200_matches: >-
+          {{ (ha_synthetic_cluster_replication_raw.stdout | from_json)
+             | selectattr('id', 'equalto', '200-0') | list }}
 
     - name: Read Carter ZFS pool health
       ansible.builtin.command: zpool status -x
@@ -62,8 +82,14 @@
       ansible.builtin.assert:
         that:
           - ha_synthetic_cluster_status.stdout is regex('(?m)^Quorate:\\s+Yes$')
-          - ha_synthetic_pvesr_status.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
-          - ha_synthetic_pvesr_status.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
+          - ha_synthetic_replication_118_matches | length == 1
+          - ha_synthetic_replication_118_matches[0].source == 'carter'
+          - ha_synthetic_replication_118_matches[0].target == 'apophis'
+          - ha_synthetic_replication_200_matches | length == 1
+          - ha_synthetic_replication_200_matches[0].source == 'apophis'
+          - ha_synthetic_replication_200_matches[0].target == 'carter'
+          - ha_synthetic_carter_pvesr_status.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
+          - ha_synthetic_apophis_pvesr_status.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
           - "'all pools are healthy' in ha_synthetic_zpool_status.stdout"
         fail_msg: >-
           Carter allocation requires quorum, healthy replication jobs 118-0 and 200-0,
@@ -301,17 +327,17 @@
       loop_control:
         label: "{{ item.id | default('unnamed backup job') }}"
 
-    - name: Read cluster replication jobs before mutation
-      ansible.builtin.command: pvesr status
-      register: ha_synthetic_replication_jobs
+    - name: Re-read cluster replication jobs before mutation
+      ansible.builtin.command: pvesh get /cluster/replication --output-format json
+      register: ha_synthetic_pre_mutation_replication_raw
       changed_when: false
 
     - name: Reject replication for the rebuildable VM
       ansible.builtin.assert:
         that:
           - >-
-            ha_synthetic_replication_jobs.stdout is not
-            regex('(?m)^\\s*' ~ (ha_synthetic_vmid | string) ~ '-')
+            (ha_synthetic_pre_mutation_replication_raw.stdout | from_json)
+            | selectattr('guest', 'equalto', ha_synthetic_vmid | int) | list | length == 0
         fail_msg: >-
           VM {{ ha_synthetic_vmid }} already has a replication job; the synthetic guest
           must remain rebuildable from Git rather than consume recovery storage.
@@ -568,9 +594,20 @@
       loop_control:
         label: "{{ item.id | default('unnamed backup job') }}"
 
-    - name: Re-read replication jobs after provisioning
+    - name: Re-read Carter-source replication health after provisioning
       ansible.builtin.command: pvesr status
-      register: ha_synthetic_final_replication_jobs
+      register: ha_synthetic_final_carter_pvesr_status
+      changed_when: false
+
+    - name: Re-read Apophis-source replication health after provisioning
+      ansible.builtin.command: pvesr status
+      register: ha_synthetic_final_apophis_pvesr_status
+      changed_when: false
+      delegate_to: apophis
+
+    - name: Re-read cluster replication ownership after provisioning
+      ansible.builtin.command: pvesh get /cluster/replication --output-format json
+      register: ha_synthetic_final_cluster_replication_raw
       changed_when: false
 
     - name: Re-read cluster quorum after provisioning
@@ -597,11 +634,11 @@
           - >-
             (((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).used | float /
              ((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).total | float) < 0.70
-          - ha_synthetic_final_replication_jobs.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
-          - ha_synthetic_final_replication_jobs.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
+          - ha_synthetic_final_carter_pvesr_status.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
+          - ha_synthetic_final_apophis_pvesr_status.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
           - >-
-            ha_synthetic_final_replication_jobs.stdout is not
-            regex('(?m)^\\s*' ~ (ha_synthetic_vmid | string) ~ '-')
+            (ha_synthetic_final_cluster_replication_raw.stdout | from_json)
+            | selectattr('guest', 'equalto', ha_synthetic_vmid | int) | list | length == 0
 
     - name: Read the staged VM status
       ansible.builtin.command: "qm status {{ ha_synthetic_vmid }}"
