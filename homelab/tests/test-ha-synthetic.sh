@@ -77,8 +77,15 @@ grep -Fq 'ha_synthetic_min_host_headroom_mb' "$playbook" \
   || fail 'the Carter headroom threshold must be explicit'
 grep -Fq 'ha_synthetic_recovery_vmids' "$playbook" \
   || fail 'recovery guest conflicts must be checked before activation'
-[[ "$(grep -Fc 'pvesm status --storage' "$playbook")" -ge 2 ]] \
-  || fail 'the target storage must be checked before image import'
+[[ "$(grep -Fc 'pvesh get /nodes/{{ inventory_hostname }}/storage/{{ ha_synthetic_storage }}/status' "$playbook")" -ge 2 ]] \
+  || fail 'the target storage must use the supported node-storage status API before and after import'
+if grep -Fq 'pvesm status --storage' "$playbook"; then
+  fail 'the playbook must not use unsupported pvesm JSON output options'
+fi
+if grep -F 'ha_synthetic_storage_status_raw.stdout | from_json) | first' "$playbook" >/dev/null ||
+   grep -F 'ha_synthetic_final_storage_status_raw.stdout | from_json) | first' "$playbook" >/dev/null; then
+  fail 'the node-storage status API returns one object and must not be parsed as a list'
+fi
 grep -Fq 'pvesh get /storage/{{ ha_synthetic_storage }} --output-format json' "$playbook" \
   || fail 'the target storage must use the supported Proxmox storage API'
 grep -Fq '0.70' "$playbook" \

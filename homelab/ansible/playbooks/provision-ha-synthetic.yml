@@ -272,7 +272,8 @@
 
     - name: Read target storage status
       ansible.builtin.command: >-
-        pvesm status --storage {{ ha_synthetic_storage }} --output-format json
+        pvesh get /nodes/{{ inventory_hostname }}/storage/{{ ha_synthetic_storage }}/status
+        --output-format json
       register: ha_synthetic_storage_status_raw
       changed_when: false
 
@@ -284,7 +285,7 @@
 
     - name: Resolve target storage status
       ansible.builtin.set_fact:
-        ha_synthetic_storage_status: "{{ (ha_synthetic_storage_status_raw.stdout | from_json) | first }}"
+        ha_synthetic_storage_status: "{{ ha_synthetic_storage_status_raw.stdout | from_json }}"
         ha_synthetic_storage_config: "{{ ha_synthetic_storage_config_raw.stdout | from_json }}"
 
     - name: Validate thin VM storage capacity
@@ -622,7 +623,8 @@
 
     - name: Re-read target storage capacity after provisioning
       ansible.builtin.command: >-
-        pvesm status --storage {{ ha_synthetic_storage }} --output-format json
+        pvesh get /nodes/{{ inventory_hostname }}/storage/{{ ha_synthetic_storage }}/status
+        --output-format json
       register: ha_synthetic_final_storage_status_raw
       changed_when: false
 
@@ -632,8 +634,8 @@
           - ha_synthetic_final_cluster_status.stdout is regex('(?m)^Quorate:\\s+Yes$')
           - "'all pools are healthy' in ha_synthetic_final_zpool_status.stdout"
           - >-
-            (((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).used | float /
-             ((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).total | float) < 0.70
+            ((ha_synthetic_final_storage_status_raw.stdout | from_json).used | float /
+             (ha_synthetic_final_storage_status_raw.stdout | from_json).total | float) < 0.70
           - ha_synthetic_final_carter_pvesr_status.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
           - ha_synthetic_final_apophis_pvesr_status.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
           - >-
