@@ -78,6 +78,11 @@ grep -Fq 'ansible proxmox -m ansible.builtin.ping' "$playbook" \
   || fail 'the secondary must prove it can control every PVE host before shutdown'
 grep -Fq 'qm shutdown {{ secondary_mgmt_vmid }}' "$playbook" \
   || fail 'the build must finish by returning the VM to a cold state'
+grep -Fq 'pvesh get /cluster/resources --type vm --output-format json' "$playbook" \
+  || fail 'VM 128 activation must query synthetic-VM state cluster-wide'
+if grep -Fq 'qm status 201' "$playbook"; then
+  fail 'VM 128 activation must not assume a missing qm status command returns rc=2'
+fi
 
 grep -Fq 'secondary_mgmt_vmid: 128' "$example_vars" \
   || fail 'the example inventory must reserve VMID 128'
@@ -122,13 +127,13 @@ grep -Fq 'AI-ready refresh codified 2026-07-19' "$plan" \
 grep -Fq 'Claude Code + Codex' "$tech_radar" \
   || fail 'the technology radar must record both adopted coding agents'
 
-grep -Fq 'id!="qemu/128"' "$alert_rules" \
-  || fail 'the intentionally stopped cold VM must be excluded from GuestDown'
-grep -Fq 'Intentional cold recovery guest qemu/128 is excluded' "$alert_rules" \
-  || fail 'the GuestDown exclusion must explain why VM 128 is exceptional'
+grep -Fq 'id!="qemu/128",id!="qemu/201"' "$alert_rules" \
+  || fail 'the intentional cold/on-demand VMs must be excluded from GuestDown'
+grep -Fq 'Intentional cold/on-demand guests qemu/128 and qemu/201 are excluded' "$alert_rules" \
+  || fail 'the GuestDown exclusion must explain both powered-off exceptions'
 
-[[ "$(grep -Fc 'id!="qemu/128"' "$glance_template")" -ge 3 ]] \
-  || fail 'the intentionally stopped cold VM must be omitted from workload resource queries'
+[[ "$(grep -Fc 'id!="qemu/128",id!="qemu/201"' "$glance_template")" -ge 3 ]] \
+  || fail 'the intentionally stopped guests must be omitted from workload resource queries'
 
 if grep -Eq '192\.168\.[0-9]+\.[0-9]+' "$playbook"; then
   fail 'the tracked playbook must not contain real private addresses'

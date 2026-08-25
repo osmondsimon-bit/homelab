@@ -99,6 +99,29 @@
       when: secondary_mgmt_vm_status.rc != 0
       changed_when: true
 
+    - name: Read cluster VM state before recovery-node activation
+      ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
+      register: secondary_mgmt_cluster_resources_raw
+      changed_when: false
+
+    - name: Resolve the lower-priority synthetic HA guest cluster-wide
+      ansible.builtin.set_fact:
+        secondary_mgmt_ha_synthetic_matches: >-
+          {{ (secondary_mgmt_cluster_resources_raw.stdout | from_json)
+             | selectattr('vmid', 'equalto', 201) | list }}
+
+    - name: Require the synthetic HA guest stopped before VM 128 activation
+      ansible.builtin.assert:
+        that:
+          - secondary_mgmt_ha_synthetic_matches | length <= 1
+          - >-
+            secondary_mgmt_ha_synthetic_matches | length == 0 or
+            (secondary_mgmt_ha_synthetic_matches[0].node == inventory_hostname and
+             secondary_mgmt_ha_synthetic_matches[0].name == 'ha-synthetic' and
+             (secondary_mgmt_ha_synthetic_matches[0].status | default('stopped')) == 'stopped')
+        fail_msg: >-
+          VM 201 ha-synthetic must be stopped before Carter activates recovery VM 128.
+
     - name: Read the current secondary VM state
       ansible.builtin.command: "qm status {{ secondary_mgmt_vmid }}"
       register: secondary_mgmt_current_state

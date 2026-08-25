@@ -1,0 +1,46 @@
+---
+# Exercise the shared exact-authority validator without contacting Proxmox.
+- name: Validate one synthetic-HA Proxmox configuration
+  hosts: carter
+  connection: local
+  gather_facts: false
+  vars:
+    ha_synthetic_vmid: 201
+    ha_synthetic_hostname: ha-synthetic
+    ha_synthetic_expected_description: >-
+      Synthetic HAOS only; no production restore, backup, replication, radio, or device authority
+    ha_synthetic_expected_tags: "ha-synthetic;rebuildable;test-only"
+    ha_synthetic_cores: 2
+    ha_synthetic_ram_mb: 8192
+    ha_synthetic_disk_gb: 64
+    ha_synthetic_storage: local-zfs
+    ha_synthetic_bridge: vmbr0
+    ha_synthetic_vlan_tag: 123
+    ha_synthetic_extra_net: virtio=11:22:33:44:55:66,bridge=vmbr0  # scan-allow
+    ha_synthetic_base_config:
+      name: ha-synthetic
+      description: >-
+        Synthetic HAOS only; no production restore, backup, replication, radio, or device authority
+      tags: "ha-synthetic;rebuildable;test-only"
+      cores: 2
+      sockets: 1
+      memory: 8192
+      balloon: 0
+      cpu: x86-64-v2-AES
+      bios: ovmf
+      machine: q35
+      ostype: l26
+      onboot: 0
+      boot: order=sata0
+      efidisk0: local-zfs:vm-201-disk-0,efitype=4m,pre-enrolled-keys=0,size=4M
+      sata0: local-zfs:vm-201-disk-1,discard=on,size=64G,ssd=1
+      net0: virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0,firewall=1,tag=123  # scan-allow
+      serial0: socket
+    ha_synthetic_config_json: >-
+      {{ ha_synthetic_base_config
+         | combine({'net1': ha_synthetic_extra_net})
+         if inject_extra_nic | default(false) | bool
+         else ha_synthetic_base_config }}
+  tasks:
+    - name: Run the production configuration validator
+      ansible.builtin.include_tasks: ../../ansible/tasks/validate-ha-synthetic-config.yml

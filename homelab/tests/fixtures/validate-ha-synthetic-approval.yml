@@ -1,0 +1,19 @@
+---
+# Exercise the shared approval validator without contacting Proxmox.
+- name: Validate one generated synthetic-HA approval
+  hosts: carter
+  connection: local
+  gather_facts: false
+  vars:
+    ha_synthetic_approval_action: allocate
+    ha_synthetic_approval_file: "{{ approval_file }}"
+    ha_synthetic_vmid: 201
+    ha_synthetic_hostname: ha-synthetic
+    ha_synthetic_image_version: "18.2"
+    ha_synthetic_image_sha256: 254e53f354df0739e3afc09be5431a07df53f0df6b703885404f665c454f254e
+    ha_synthetic_storage: local-zfs
+    ha_synthetic_vlan_tag: 123
+    ha_synthetic_approval_contract: carter-vm201-haos18.2-q35-2vcpu-8192mb-64gb-local-zfs-test-v1
+  tasks:
+    - name: Run the production approval validator
+      ansible.builtin.include_tasks: ../../ansible/tasks/validate-ha-synthetic-approval.yml

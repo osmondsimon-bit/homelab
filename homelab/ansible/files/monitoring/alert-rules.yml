@@ -300,17 +300,31 @@ groups:
       #         · 115 glance · 116 infra-portal · 117 technitium2 · 120 jellyfin · 121 qbittorrent
       #         · 123 sonarr · 124 radarr · 126 tailscale2 (HA subnet router #2, on oneill)
       #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 seerr+prowlarr+gluetun
-      #         · 127 actual-budget · 128 mgmt-vm2 · 200 home-assistant.
-      # Intentional cold recovery guest qemu/128 is excluded. The media guests returned to
+      #         · 127 actual-budget · 128 mgmt-vm2 · 200 home-assistant
+      #         · 201 ha-synthetic (intentional on-demand test appliance).
+      # Intentional cold/on-demand guests qemu/128 and qemu/201 are excluded. Their healthy
+      # state is powered off; their provisioning contracts prove existence and shape. The media guests returned to
       # the default-on tier when Apophis returned to 32 GB on 2026-07-28.
       - alert: GuestDown
-        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128"}) == 0
+        expr: min by(id) (pve_up{id=~"lxc/.*|qemu/.*",id!="qemu/128",id!="qemu/201"}) == 0
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Proxmox guest down: {{ $labels.id }}"
           description: "Guest {{ $labels.id }} has pve_up=0 — stopped/crashed for 5m (deduplicated across cluster exporters)."
+
+      # VM 201 is intentionally excluded from GuestDown because stopped is healthy, but a
+      # forgotten long-running test consumes Carter's recovery headroom. Attended test windows
+      # may run for several hours; twelve hours catches abandonment without paging normal work.
+      - alert: SyntheticHAUnexpectedlyRunning
+        expr: min by(id) (pve_up{id="qemu/201"}) == 1
+        for: 12h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Synthetic Home Assistant has remained running"
+          description: "VM 201 has been up for 12h. Confirm an attended test is active or stop it to restore Carter recovery headroom."
 
       # CT 121 can remain up while qBittorrent intentionally stays stopped after its local
       # WireGuard health monitor cannot recover a dead Proton endpoint. The Web UI probe turns

@@ -1,0 +1,59 @@
+---
+# Validate the exact Proxmox authority surface for an existing or newly built synthetic guest.
+- name: Resolve synthetic guest device keys
+  ansible.builtin.set_fact:
+    ha_synthetic_config_device_keys: >-
+      {{ ha_synthetic_config_json.keys()
+         | select('match', '^(efidisk|ide|sata|scsi|tpmstate|unused|virtio)[0-9]+$')
+         | sort | list }}
+    ha_synthetic_config_network_keys: >-
+      {{ ha_synthetic_config_json.keys() | select('match', '^net[0-9]+$') | sort | list }}
+    ha_synthetic_config_serial_keys: >-
+      {{ ha_synthetic_config_json.keys()
+         | select('match', '^(parallel|serial|usb|hostpci)[0-9]+$') | sort | list }}
+    ha_synthetic_config_net0_parts: >-
+      {{ (ha_synthetic_config_json.net0 | string).split(',') | sort | list }}
+
+- name: Enforce the exact synthetic guest identity and authority surface
+  ansible.builtin.assert:
+    that:
+      - ha_synthetic_config_json.name == ha_synthetic_hostname
+      - ha_synthetic_config_json.description == ha_synthetic_expected_description
+      - >-
+        (ha_synthetic_config_json.tags | string).split(';') | sort ==
+        ha_synthetic_expected_tags.split(';') | sort
+      - ha_synthetic_config_json.cores | int == ha_synthetic_cores | int
+      - ha_synthetic_config_json.sockets | default(1) | int == 1
+      - ha_synthetic_config_json.memory | int == ha_synthetic_ram_mb | int
+      - ha_synthetic_config_json.balloon | default(0) | int == 0
+      - ha_synthetic_config_json.cpu == 'x86-64-v2-AES'
+      - ha_synthetic_config_json.bios == 'ovmf'
+      - ha_synthetic_config_json.machine == 'q35'
+      - ha_synthetic_config_json.ostype == 'l26'
+      - ha_synthetic_config_json.onboot | default(0) | int == 0
+      - ha_synthetic_config_json.boot == 'order=sata0'
+      - ha_synthetic_config_device_keys == ['efidisk0', 'sata0']
+      - ha_synthetic_config_network_keys == ['net0']
+      - ha_synthetic_config_serial_keys == ['serial0']
+      - ha_synthetic_config_json.serial0 == 'socket'
+      - ha_synthetic_config_net0_parts | length == 4
+      - >-
+        ha_synthetic_config_net0_parts
+        | select('match', '^virtio=([0-9A-F]{2}:){5}[0-9A-F]{2}$') | list | length == 1
+      - "'bridge=' ~ ha_synthetic_bridge in ha_synthetic_config_net0_parts"
+      - "'firewall=1' in ha_synthetic_config_net0_parts"
+      - "'tag=' ~ (ha_synthetic_vlan_tag | string) in ha_synthetic_config_net0_parts"
+      - "ha_synthetic_config_json.efidisk0 is search('^' ~ ha_synthetic_storage ~ ':')"
+      - "ha_synthetic_config_json.efidisk0 is search('efitype=4m')"
+      - "ha_synthetic_config_json.efidisk0 is search('pre-enrolled-keys=0')"
+      - "ha_synthetic_config_json.sata0 is search('^' ~ ha_synthetic_storage ~ ':')"
+      - "ha_synthetic_config_json.sata0 is search('discard=on')"
+      - "ha_synthetic_config_json.sata0 is search('ssd=1')"
+      - "ha_synthetic_config_json.sata0 is search('size=' ~ (ha_synthetic_disk_gb | string) ~ 'G')"
+      - ha_synthetic_config_json.args is not defined
+      - ha_synthetic_config_json.hookscript is not defined
+      - ha_synthetic_config_json.startup is not defined
+      - ha_synthetic_config_json.pool is not defined
+    fail_msg: >-
+      VM {{ ha_synthetic_vmid }} does not match the exact reviewed synthetic identity,
+      device set, network, or no-passthrough/no-hook/no-pool authority contract.

@@ -37,10 +37,12 @@ notifications, starts tests, clears ZFS state, scrubs, trims, or reboots a host.
 > **Invariant:** dashboards + alert rules are code. Grafana has `allowUiUpdates: true` for live
 > tweaks, but **export edits back to the repo** or they're lost on the next Ansible run.
 
-`GuestDown` deliberately excludes `qemu/128`: `mgmt-vm2` is a cold secondary whose healthy state is
-powered off. The Glance workload resource queries omit it for the same reason. VM 128's existence,
-`onboot=0`, protection flag and activation test are verified by its provisioning playbook/runbook,
-not by an always-up alert.
+`GuestDown` deliberately excludes `qemu/128` and `qemu/201`: `mgmt-vm2` is a cold secondary and
+`ha-synthetic` is an on-demand test appliance, so powered off is healthy for both. Glance workload
+resource queries omit them for the same reason. Their existence, exact shape, `onboot=0`, activation
+gates and stopped end state are verified by their provisioning playbooks/runbooks, not by an
+always-up alert. `SyntheticHAUnexpectedlyRunning` warns if VM 201 remains up for 12 hours, catching
+an abandoned test session without treating a normal attended session as an immediate failure.
 
 The media guests returned to the default-on service tier with Apophis's 32 GB restoration on
 2026-07-28. `GuestDown` therefore covers CTs 120/121/123/124 and VM 125 again, and VM 125's direct

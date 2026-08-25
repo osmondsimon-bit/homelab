@@ -41,11 +41,11 @@ if grep -Fq 'mv /etc/pve/nodes/carter/qemu-server/200.conf' "$runbook"; then
   fail 'Carter-loss recovery must not move VM 200 away from its standard Apophis owner'
 fi
 
-expected_matcher='id!="qemu/128"'
+expected_matcher='id!="qemu/128",id!="qemu/201"'
 grep -Fq "$expected_matcher" "$alerts" \
-  || fail 'GuestDown must exclude only cold recovery VM 128'
-grep -Fq 'Intentional cold recovery guest' "$alerts" \
-  || fail 'GuestDown exclusion must explain the VM 128 exception'
+  || fail 'GuestDown must exclude the intentional cold/on-demand VMs'
+grep -Fq 'Intentional cold/on-demand guests' "$alerts" \
+  || fail 'GuestDown exclusion must explain the VM 128 and VM 201 exceptions'
 grep -Fq 'VM 118 replicates' "$alerts" \
   || fail 'replication monitoring must record VM 118 as Carter-owned'
 grep -Fq 'VM 200 replicates' "$alerts" \

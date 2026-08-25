@@ -198,6 +198,8 @@ Start it from an authenticated Carter session, connect to it, and validate its c
 before making changes:
 
 ```bash
+ssh root@YOUR_CARTER_IP 'qm status 201'
+# If VM 201 exists, it must report stopped. Shut it down and re-check before continuing.
 ssh root@YOUR_CARTER_IP 'qm start 128'
 ssh simon@YOUR_SECONDARY_MGMT_IP
 cd ~/src/homelab
@@ -218,6 +220,8 @@ If Apophis is actually down, Carter first loses quorum. Confirm this is a real n
 than a network partition, then use the already-authorized operator desktop path:
 
 ```bash
+ssh root@YOUR_CARTER_IP 'qm status 201'
+# VM 201 must be stopped before recovery capacity is activated.
 ssh root@YOUR_CARTER_IP 'pvecm expected 1 && pvecm status && qm start 128'
 ```
 
@@ -878,50 +882,24 @@ qm guest exec 199 -- /bin/ls /home/simon/homelab/ansible/inventory/group_vars/  
 qm stop 199 && qm destroy 199 --purge
 ```
 
-**HA native partial restore (operator-guided).** HAOS restore is UI-driven, and the restored
-Zigbee2MQTT **must not touch the live SLZB-06 coordinator** (two Z2M instances on one coordinator
-disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18):
+**Historical HA native partial restore record.** The 2026-06-18 drill proved that an encrypted
+native backup could restore Home Assistant configuration and the Zigbee2MQTT pairing database to a
+throwaway HAOS VM without connecting the coordinator. Its former command sequence is intentionally
+not retained as a current runbook: it predated ADR-026, allowed broad Test-to-External access, used
+an unauthenticated temporary HTTP server, and did not establish the current exact-guest pre-restore
+deny evidence. Do not repeat that procedure.
 
-1. **Isolated test VLAN.** A dedicated VLAN (its own `/24`, its own UniFi zone): **Test→External =
-   Allow, Test→all internal = Block** — critically including the **Unsecure zone** (where the IoT/
-   coordinator lives; the zone matrix must show `Test → Unsecure = Block All`). Add a one-way
-   **Secure→Test, TCP 8123, Allow + "Auto Allow Return Traffic"** (ordered above the blocks) so your
-   browser reaches the test HA UI without opening Test→internal. (The return path matters: Test→Secure
-   is blocked, so without "Auto Allow Return" the SYN-ACK is dropped and `:8123` times out.)
-2. **Throwaway HAOS VM** on apophis, mirroring prod (OVMF/q35 + EFI disk, 2 cores/3 GB), NIC on the
-   test VLAN tag, from the latest HAOS `ova` image:
-   ```bash
-   curl -fsSL -o /var/lib/vz/haos.qcow2.xz <haos_ova-*.qcow2.xz>; unxz /var/lib/vz/haos.qcow2.xz
-   qm create 299 --name ha-restore-test --bios ovmf --machine q35 --cores 2 --memory 3072 \
-     --net0 virtio,bridge=vmbr0,tag=<TEST_VLAN> --scsihw virtio-scsi-pci --serial0 socket \
-     --ostype l26 --efidisk0 local-lvm:0,efitype=4m,pre-enrolled-keys=0 --agent 1 --onboot 0
-   qm importdisk 299 /var/lib/vz/haos.qcow2 local-lvm
-   qm set 299 --sata0 local-lvm:vm-299-disk-1 --boot order=sata0 && qm start 299
-   qm agent 299 network-get-interfaces   # read the test HA's DHCP IP on the test VLAN from this
-   ```
-   Check `ha core info` / `ha network info` on the Proxmox console: Core version should match prod,
-   `host_internet/supervisor_internet: true` (so it can pull Core + add-on images).
-3. **Get the backup to your browser** — the isolated test HA can't reach the share, so serve the
-   latest `.tar` over HTTP from a **Home-subnet** host and download it in your browser:
-   ```bash
-   # on oneill (backup-hub host); the file lives in CT 113
-   mkdir -p /tmp/harestore && pct pull 113 /srv/ha-backups/<latest>.tar /tmp/harestore/ha-backup.tar
-   systemd-run --unit=harestore-http --collect --working-directory=/tmp/harestore \
-     /usr/bin/python3 -m http.server 8000 --bind 0.0.0.0
-   # browser → http://<oneill-ip>:8000/ha-backup.tar  (encrypted; key entered at restore time)
-   # after download: systemctl stop harestore-http; rm -rf /tmp/harestore
-   ```
-4. **Restore** at `http://<test-ip>:8123` → onboarding **"Restore from backup"** → upload the `.tar`
-   → enter the **encryption key** (Google Password Manager) → full restore (~5–10 min, re-pulls add-ons).
-5. **Verify**: log in with prod credentials; dashboards/entities present; **Zigbee devices listed**
-   (Settings → Devices, count ≈ prod ⇒ the **Z2M pairing database restored**). Z2M logging
-   "can't connect to coordinator" is **expected** (isolated) — we prove the *database*, not live radio.
-6. **Teardown**: `qm stop 299 && qm destroy 299 --purge`; `rm` the HAOS image; stop the temp server.
+The next recovery-replica drill requires its own reviewed, attended runbook. Before the encrypted
+backup is uploaded or the restored appliance can boot, prove the exact disposable guest is denied
+access to production subnets, MQTT, coordinators, discovery, vendor clouds, notifications, tunnels,
+and External. Transfer the backup only through an authenticated, narrowly bound path; never attach
+a production coordinator or reuse the persistent synthetic VM. Preserve the historical result below
+as recovery evidence, not implementation authority.
 
 | Date | Backup tier | Result |
 |------|-------------|--------|
 | 2026-06-17 | PBS mgmt-vm (VM 100) | ✅ PASS — restored 24 s, booted, `group_vars/all.yml` + git repo present |
-| 2026-06-18 | HA native partial → fresh HAOS (isolated VLAN 5) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
+| 2026-06-18 | HA native partial → fresh HAOS (isolated Test VLAN) | ✅ PASS — encrypted backup restored into HAOS 17.3, config/entities + **Zigbee device DB** present. Held `vzdump-qemu-200` retired. |
 | 2026-06-25 | **VM 200 `pvesr` failover (apophis→carter)** | ✅ PASS — disabled job 200-0, `zfs clone` of the latest `__replicate__` snapshot → **no-network** test VM 299 on carter; HAOS **booted off the replicated copy** (~1 GB read / 119 MB written, CPU climbing). Procedure validated (clone→create→start). Live HA untouched; clones+VM destroyed; replication re-enabled + re-synced OK. *Bootability proven non-destructively; full app-on-network is the real failover's job (uses VM 200's own config/IP).* |
 | 2026-06-26 | **PBS image of VM 118 (Vaultwarden)** | ✅ PASS — `qmrestore` of the 02:01Z image → throwaway VM 119 (NIC stripped, never on the tailnet), restored in 11 s. Guest agent up; `/opt/vaultwarden/data/db.sqlite3` present (272 KB, non-zero) + `rsa_key.pem` intact. 119 destroyed; live 118 untouched. **Vault recovery is now proven, not a hypothesis.** |
 | 2026-07-15 | **Encrypted PBS image of VM 127 (Actual Budget)** | ✅ PASS — restored the data-bearing 05:22Z image to throwaway VM 197 on Carter, removed its NIC before boot, and verified the account database, non-empty budget files, and Compose definition. RTO 155 s. VM 197 destroyed; live VM 127 remained running. **Finance-state recovery is proven.** |
@@ -930,6 +908,80 @@ disrupts production), so the test HA is **isolated**. Procedure (done 2026-06-18
 | _pending_ | CT 123 (Sonarr) Ansible reprovision | untested — simplest Phase 7 drill (no VPN credential dep); re-add qBit + root folder, verify hardlink import |
 | _pending_ | CT 124 (Radarr) Ansible reprovision | untested — same drill path as Sonarr |
 | _pending_ | VM 125 (Seerr + Prowlarr + ByParr) Ansible reprovision | untested — needs `prowlarr_vpn_wg_config` in `all.yml`; verify Prowlarr egress = ProtonVPN after rebuild |
+
+### Home Assistant synthetic VM
+
+This is the persistent automation-development environment from ADR-026, not the disposable native
+backup restore drill above. It uses fresh HAOS plus the private repository's Git-owned mock package;
+do not restore a production backup into it.
+
+1. In gitignored `ansible/inventory/group_vars/all.yml`, set the actual Test VLAN tag while leaving
+   `ha_synthetic_activation: staged`. Before first start, prove the Test zone blocks **all** guest
+   egress: every production/internal zone, MQTT, coordinators, multicast discovery, notifications,
+   tunnels, vendor clouds, and External. The Proxmox host downloads the pinned HAOS image; guest
+   bootstrap is not authority for a general internet path. Retain the rule export/canary results in
+   a local evidence file and calculate its SHA-256.
+2. **Deploy the qemu/201 expected-off rules before allocation** so its normal stopped state does not
+   create a false GuestDown incident or clutter the workload table:
+
+   ```bash
+   cd /home/simon/homelab/ansible
+   ansible-playbook playbooks/deploy-monitoring-rules.yml
+   ansible-playbook playbooks/provision-glance.yml --limit oneill
+   ```
+
+3. Generate a new mode-0600 allocation approval from the current preflight evidence. The helper
+   binds VMID, image digest, storage and actual VLAN, expires it after 15 minutes, and refuses to
+   overwrite an old approval. Then stage the stopped guest:
+
+   ```bash
+   cd /home/simon/homelab/ansible
+   ../scripts/new-ha-synthetic-approval.sh allocate YOUR_TEST_VLAN_TAG \
+     YOUR_LOCAL_PREFLIGHT_EVIDENCE_FILE YOUR_LOCAL_ALLOCATION_APPROVAL_JSON
+   ansible-playbook playbooks/provision-ha-synthetic.yml --limit carter
+   ```
+
+   The playbook must report VM 201 stopped. It fails if the VMID is foreign, Carter recovery guests
+   conflict, capacity is below the guardrail, the pinned image fails verification, or a backup or
+   replication job would capture the VM.
+4. Review the stopped VM's generated NIC/MAC and repeat the rule-order/canary review for its exact
+   reservation while guest egress remains deny-all. Capture that result in a separate evidence
+   file, generate a distinct `start` approval, set `ha_synthetic_activation: start`, and run the
+   playbook within the approval's 15-minute lifetime. Allocation and start approvals cannot be the
+   same file and neither is a standing grant.
+
+   ```bash
+   cd /home/simon/homelab/ansible
+   ../scripts/new-ha-synthetic-approval.sh start YOUR_TEST_VLAN_TAG \
+     YOUR_LOCAL_START_EVIDENCE_FILE YOUR_LOCAL_START_APPROVAL_JSON
+   ansible-playbook playbooks/provision-ha-synthetic.yml --limit carter \
+     -e ha_synthetic_activation=start
+   ```
+5. Before onboarding or loading the Git fixture, run active deny tests from the exact VM 201 guest
+   for every production subnet and named endpoint class above. Correlate the attempts with firewall
+   logs. Also prove only the intended operator-to-test-HA TCP 8123 path.
+   Stop the VM immediately if guest-specific DHCP, identity, or firewall behavior differs from the
+   reviewed canary.
+6. If fresh HAOS needs Core or add-on artifacts, open a separately attended, time-bounded update
+   window only after the exact-guest deny proof, with no production credentials or integrations
+   present. Record destinations, close the window, and repeat the external deny test before loading
+   the fixture. Then onboard with test-only credentials and load only the private repository's
+   synthetic package.
+   Do not add production integrations, MQTT, Zigbee/Thread radios, mobile-app notifications,
+   Cloudflare, backup storage, or vendor accounts.
+7. Keep `onboot=0`. Stop VM 201 before starting VM 128, recovering VM 200 onto Carter, or doing
+   Carter recovery/maintenance. The VM has no PBS or replication lifecycle; rebuild it from the
+   pinned HAOS image and Git-owned fixture if lost.
+8. At the end of commissioning or a test session, return the appliance to its healthy cold state:
+
+   ```bash
+   ssh root@YOUR_CARTER_IP 'qm shutdown 201 --timeout 120; qm status 201'
+   # expect: status: stopped
+   ```
+
+   Record the runtime HAOS, Core and Supervisor versions, the fixture commit, validation result,
+   host/ZFS/replication health, and observed rebuild or test duration without recording addresses or
+   credentials.
 
 > **Timezone note:** apophis runs **AEST (UTC+10)**. Backup-job schedules (e.g. `02:30`) are
 > local; PBS snapshot names are **UTC** (`…T16:30:03Z` = 02:30 AEST). Don't mistake the offset
@@ -1381,8 +1433,10 @@ start replicas during an uncertain network partition**: duplicate owners can cor
    ```
    Start CTs 120/121/123/124 in order, followed by VM 125, to restore the standard running state.
 
-If Apophis dies in the accepted placement, Vaultwarden remains on Carter. Recover VM 200 from its
-Carter replica and start cold VM 128 for an independent management plane.
+If Apophis dies in the accepted placement, Vaultwarden remains on Carter. Before recovering VM 200
+or starting cold VM 128, run `qm status 201` on Carter and require `status: stopped` (shut down the
+synthetic guest first if necessary). Then recover VM 200 from its Carter replica and start cold VM
+128 for an independent management plane.
 
 ## Onboarding a new guest / node / storage (ADR-017)
 

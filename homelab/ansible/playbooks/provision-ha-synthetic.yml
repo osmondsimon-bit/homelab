@@ -1,0 +1,741 @@
+---
+# Build the isolated Home Assistant synthetic-test VM on Carter.
+# The default staged mode leaves it stopped; first boot is separately attended.
+- name: Provision the staged Home Assistant synthetic VM
+  hosts: carter
+  become: true
+  gather_facts: false
+
+  vars:
+    ha_synthetic_image_url: >-
+      https://github.com/home-assistant/operating-system/releases/download/{{ ha_synthetic_image_version }}/haos_ova-{{ ha_synthetic_image_version }}.qcow2.xz
+    ha_synthetic_image_archive: >-
+      /var/lib/vz/template/cache/haos_ova-{{ ha_synthetic_image_version }}.qcow2.xz
+    ha_synthetic_image: >-
+      /var/lib/vz/template/cache/haos_ova-{{ ha_synthetic_image_version }}.qcow2
+    ha_synthetic_expected_tags: "ha-synthetic;rebuildable;test-only"
+    ha_synthetic_expected_description: >-
+      Synthetic HAOS only; no production restore, backup, replication, radio, or device authority
+    ha_synthetic_approval_contract: >-
+      carter-vm201-haos18.2-q35-2vcpu-8192mb-64gb-local-zfs-test-v1
+
+  tasks:
+    - name: Validate the reviewed synthetic-VM contract
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'carter'
+          - ha_synthetic_vmid | int == 201
+          - ha_synthetic_hostname == 'ha-synthetic'
+          - ha_synthetic_cores | int == 2
+          - ha_synthetic_ram_mb | int == 8192
+          - ha_synthetic_disk_gb | int == 64
+          - ha_synthetic_storage == 'local-zfs'
+          - ha_synthetic_bridge == 'vmbr0'
+          - ha_synthetic_activation in ['staged', 'start']
+          - ha_synthetic_image_version == '18.2'
+          - ha_synthetic_image_sha256 == '254e53f354df0739e3afc09be5431a07df53f0df6b703885404f665c454f254e'
+          - ha_synthetic_min_host_headroom_mb | int >= 3072
+          - ha_synthetic_recovery_vmids | map('int') | list == [128, 200]
+          - "'YOUR_' not in (ha_synthetic_vlan_tag | string)"
+          - ha_synthetic_vlan_tag | int > 0
+          - "'YOUR_' not in ha_synthetic_bridge"
+        fail_msg: >-
+          The local inventory does not match the reviewed Carter/VMID 201 synthetic-HAOS
+          contract, or it still contains a public YOUR_* placeholder.
+
+    - name: Read cluster quorum health
+      ansible.builtin.command: pvecm status
+      register: ha_synthetic_cluster_status
+      changed_when: false
+
+    - name: Read production replication health
+      ansible.builtin.command: pvesr status
+      register: ha_synthetic_pvesr_status
+      changed_when: false
+
+    - name: Read Carter ZFS pool health
+      ansible.builtin.command: zpool status -x
+      register: ha_synthetic_zpool_status
+      changed_when: false
+
+    - name: Require healthy cluster, production replicas, and Carter storage
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_cluster_status.stdout is regex('(?m)^Quorate:\\s+Yes$')
+          - ha_synthetic_pvesr_status.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
+          - ha_synthetic_pvesr_status.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
+          - "'all pools are healthy' in ha_synthetic_zpool_status.stdout"
+        fail_msg: >-
+          Carter allocation requires quorum, healthy replication jobs 118-0 and 200-0,
+          and a clean ZFS pool. Resolve infrastructure health before creating test load.
+
+    - name: Read cluster VM ownership before mutation
+      ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
+      register: ha_synthetic_cluster_resources_raw
+      changed_when: false
+
+    - name: Resolve the requested VMID cluster-wide
+      ansible.builtin.set_fact:
+        ha_synthetic_cluster_resources: "{{ ha_synthetic_cluster_resources_raw.stdout | from_json }}"
+        ha_synthetic_existing_matches: >-
+          {{ (ha_synthetic_cluster_resources_raw.stdout | from_json)
+             | selectattr('vmid', 'equalto', ha_synthetic_vmid | int) | list }}
+        ha_synthetic_created_this_run: false
+
+    - name: Resolve the production Home Assistant VM owner
+      ansible.builtin.set_fact:
+        ha_synthetic_production_ha_matches: >-
+          {{ ha_synthetic_cluster_resources
+             | selectattr('vmid', 'equalto', 200) | list }}
+
+    - name: Require the production HAOS identity to be unambiguous
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_production_ha_matches | length == 1
+        fail_msg: >-
+          Production Home Assistant VM 200 is absent or ambiguous. Stop before adding a
+          second HAOS appliance to the cluster.
+
+    - name: Read the known-good production HAOS machine shape
+      ansible.builtin.command: >-
+        cat /etc/pve/nodes/{{ ha_synthetic_production_ha_matches[0].node }}/qemu-server/200.conf
+      register: ha_synthetic_production_ha_config
+      changed_when: false
+
+    - name: Require the established HAOS compatibility baseline
+      ansible.builtin.assert:
+        that:
+          - "'bios: ovmf' in ha_synthetic_production_ha_config.stdout"
+          - "'machine: q35' in ha_synthetic_production_ha_config.stdout"
+          - "'sata0:' in ha_synthetic_production_ha_config.stdout"
+        fail_msg: >-
+          Production VM 200 no longer matches ADR-004's q35/OVMF/SATA HAOS baseline.
+          Review the synthetic shape before allocation.
+
+    - name: Read Proxmox HA-manager resources
+      ansible.builtin.command: ha-manager config
+      register: ha_synthetic_ha_manager_config
+      changed_when: false
+
+    - name: Keep the synthetic guest outside Proxmox HA-manager
+      ansible.builtin.assert:
+        that:
+          - >-
+            ha_synthetic_ha_manager_config.stdout is not
+            regex('(?m)^vm:' ~ (ha_synthetic_vmid | string) ~ '\\s')
+        fail_msg: >-
+          VM {{ ha_synthetic_vmid }} is an on-demand test appliance and must not be an
+          HA-manager resource.
+
+    - name: Reject duplicate or foreign VMID ownership
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_existing_matches | length <= 1
+          - >-
+            ha_synthetic_existing_matches | length == 0 or
+            (ha_synthetic_existing_matches[0].node == inventory_hostname and
+             ha_synthetic_existing_matches[0].name == ha_synthetic_hostname)
+        fail_msg: >-
+          VMID {{ ha_synthetic_vmid }} is already owned by another cluster guest or node.
+          No VM was changed.
+
+    - name: Reject authoritative pool membership for an existing synthetic VM
+      ansible.builtin.assert:
+        that:
+          - (ha_synthetic_existing_matches[0].pool | default('') | string) == ''
+        fail_msg: >-
+          Existing VM {{ ha_synthetic_vmid }} belongs to a Proxmox resource pool and may
+          be selected by a pool-scoped backup job.
+      when: ha_synthetic_existing_matches | length == 1
+
+    - name: Require a separately staged guest for attended start mode
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_existing_matches | length == 1
+          - (ha_synthetic_existing_matches[0].status | default('unknown')) == 'stopped'
+        fail_msg: >-
+          Start mode requires an exact pre-existing stopped synthetic VM from an earlier
+          staged run. A guest cannot be allocated and first-booted in one invocation.
+      when: ha_synthetic_activation == 'start'
+
+    - name: Search every cluster node for stale VMID configuration
+      ansible.builtin.shell: >-
+        find /etc/pve/nodes -type f -path '*/qemu-server/{{ ha_synthetic_vmid }}.conf' -print
+      args:
+        executable: /bin/bash
+      register: ha_synthetic_config_paths
+      changed_when: false
+
+    - name: Read Carter ZFS datasets and snapshots before allocation
+      ansible.builtin.command: zfs list -H -o name -t filesystem,volume,snapshot
+      register: ha_synthetic_zfs_names
+      changed_when: false
+
+    - name: Check for a stale per-VM firewall file
+      ansible.builtin.stat:
+        path: "/etc/pve/firewall/{{ ha_synthetic_vmid }}.fw"
+      register: ha_synthetic_firewall_file
+
+    - name: Reject stale VMID state when the cluster reports VMID free
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_config_paths.stdout | trim == ''
+          - not ha_synthetic_firewall_file.stat.exists
+          - >-
+            ha_synthetic_zfs_names.stdout is not
+            regex('(?m)^.*vm-' ~ (ha_synthetic_vmid | string) ~ '-.*$')
+        fail_msg: >-
+          VMID {{ ha_synthetic_vmid }} is absent from the resource API but stale config,
+          ZFS volume, or snapshot state remains. Reconcile it manually before allocation.
+      when: ha_synthetic_existing_matches | length == 0
+
+    - name: Read an existing synthetic VM configuration as structured data
+      ansible.builtin.command: >-
+        pvesh get /nodes/{{ inventory_hostname }}/qemu/{{ ha_synthetic_vmid }}/config
+        --output-format json
+      register: ha_synthetic_existing_config_raw
+      changed_when: false
+      when: ha_synthetic_existing_matches | length == 1
+
+    - name: Parse an existing synthetic VM configuration
+      ansible.builtin.set_fact:
+        ha_synthetic_config_json: "{{ ha_synthetic_existing_config_raw.stdout | from_json }}"
+      when: ha_synthetic_existing_matches | length == 1
+
+    - name: Validate an existing synthetic VM before convergence
+      ansible.builtin.include_tasks: ../tasks/validate-ha-synthetic-config.yml
+      when: ha_synthetic_existing_matches | length == 1
+
+    - name: Enforce Carter recovery precedence
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.node != inventory_hostname or
+            (item.vmid | int == 128 and
+             (item.status | default('stopped')) == 'stopped')
+        fail_msg: >-
+          Recovery guest VM {{ item.vmid }} is active on Carter. Stop or relocate the
+          synthetic VM workload before using Carter for recovery.
+      loop: "{{ ha_synthetic_cluster_resources }}"
+      loop_control:
+        label: "VM {{ item.vmid | default('unknown') }} on {{ item.node | default('unknown') }}"
+      when: item.vmid | default(-1) | int in ha_synthetic_recovery_vmids
+
+    - name: Read Carter MemAvailable
+      ansible.builtin.command: grep '^MemAvailable:' /proc/meminfo
+      register: ha_synthetic_memavailable_raw
+      changed_when: false
+
+    - name: Calculate Carter memory headroom
+      ansible.builtin.set_fact:
+        ha_synthetic_memavailable_mb: >-
+          {{ (ha_synthetic_memavailable_raw.stdout | regex_findall('[0-9]+') | first | int) // 1024 }}
+
+    - name: Preserve Carter recovery headroom
+      ansible.builtin.assert:
+        that:
+          - >-
+            ha_synthetic_memavailable_mb | int - ha_synthetic_ram_mb | int >=
+            ha_synthetic_min_host_headroom_mb | int
+        fail_msg: >-
+          Carter does not have enough currently available memory for the 8 GiB synthetic
+          guest while preserving the {{ ha_synthetic_min_host_headroom_mb }} MiB recovery guardrail.
+      when: >-
+        ha_synthetic_existing_matches | length == 0 or
+        (ha_synthetic_existing_matches[0].status | default('stopped')) == 'stopped'
+
+    - name: Read target storage status
+      ansible.builtin.command: >-
+        pvesm status --storage {{ ha_synthetic_storage }} --output-format json
+      register: ha_synthetic_storage_status_raw
+      changed_when: false
+
+    - name: Read target storage configuration through the Proxmox API
+      ansible.builtin.command: >-
+        pvesh get /storage/{{ ha_synthetic_storage }} --output-format json
+      register: ha_synthetic_storage_config_raw
+      changed_when: false
+
+    - name: Resolve target storage status
+      ansible.builtin.set_fact:
+        ha_synthetic_storage_status: "{{ (ha_synthetic_storage_status_raw.stdout | from_json) | first }}"
+        ha_synthetic_storage_config: "{{ ha_synthetic_storage_config_raw.stdout | from_json }}"
+
+    - name: Validate thin VM storage capacity
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_storage_status.active | int == 1
+          - ha_synthetic_storage_config.type == 'zfspool'
+          - "'images' in (ha_synthetic_storage_config.content | string).split(',')"
+          - >-
+            ha_synthetic_storage_config.nodes is not defined or
+            inventory_hostname in (ha_synthetic_storage_config.nodes | string).split(',')
+          - ha_synthetic_storage_status.avail | int >= 10737418240
+          - >-
+            (ha_synthetic_storage_status.used | float /
+             ha_synthetic_storage_status.total | float) < 0.70
+        fail_msg: >-
+          {{ ha_synthetic_storage }} must be active, support VM images, retain at least
+          10 GiB free, and remain below the repository's 70% warning band before
+          importing the thin test disk.
+
+    - name: Read cluster backup jobs before mutation
+      ansible.builtin.command: pvesh get /cluster/backup --output-format json
+      register: ha_synthetic_backup_jobs_raw
+      changed_when: false
+
+    - name: Reject backup jobs that would capture the rebuildable VM
+      ansible.builtin.assert:
+        that:
+          - >-
+            not ((item.all | default(0) | int == 1) and
+                 (ha_synthetic_vmid | string) not in
+                 ((item.exclude | default('') | string).split(',')))
+          - >-
+            (ha_synthetic_vmid | string) not in
+            ((item.vmid | default('') | string).split(','))
+        fail_msg: >-
+          Backup job {{ item.id | default('unnamed') }} would include VM
+          {{ ha_synthetic_vmid }}. Add an explicit exclusion before provisioning.
+      loop: "{{ ha_synthetic_backup_jobs_raw.stdout | from_json }}"
+      loop_control:
+        label: "{{ item.id | default('unnamed backup job') }}"
+
+    - name: Read cluster replication jobs before mutation
+      ansible.builtin.command: pvesr status
+      register: ha_synthetic_replication_jobs
+      changed_when: false
+
+    - name: Reject replication for the rebuildable VM
+      ansible.builtin.assert:
+        that:
+          - >-
+            ha_synthetic_replication_jobs.stdout is not
+            regex('(?m)^\\s*' ~ (ha_synthetic_vmid | string) ~ '-')
+        fail_msg: >-
+          VM {{ ha_synthetic_vmid }} already has a replication job; the synthetic guest
+          must remain rebuildable from Git rather than consume recovery storage.
+
+    - name: Validate fresh allocation approval before live mutation
+      ansible.builtin.include_tasks: ../tasks/validate-ha-synthetic-approval.yml
+      vars:
+        ha_synthetic_approval_action: allocate
+        ha_synthetic_approval_file: "{{ ha_synthetic_allocation_approval_file }}"
+      when: ha_synthetic_existing_matches | length == 0
+
+    - name: Download, verify, and create the synthetic VM when absent
+      when: ha_synthetic_existing_matches | length == 0
+      block:
+        - name: Download the pinned official HAOS image
+          ansible.builtin.get_url:
+            url: "{{ ha_synthetic_image_url }}"
+            dest: "{{ ha_synthetic_image_archive }}"
+            mode: "0644"
+            checksum: "sha256:{{ ha_synthetic_image_sha256 }}"
+
+        - name: Regenerate the qcow2 from the verified compressed asset
+          ansible.builtin.command:
+            argv:
+              - xz
+              - --decompress
+              - --keep
+              - --force
+              - "{{ ha_synthetic_image_archive }}"
+
+        - name: Validate the decompressed HAOS disk image
+          ansible.builtin.command: "qemu-img check {{ ha_synthetic_image }}"
+          changed_when: false
+
+        - name: Create the stopped q35 and OVMF guest shell
+          ansible.builtin.command:
+            argv:
+              - qm
+              - create
+              - "{{ ha_synthetic_vmid | string }}"
+              - --name
+              - "{{ ha_synthetic_hostname }}"
+              - --machine
+              - q35
+              - --bios
+              - ovmf
+              - --ostype
+              - l26
+              - --sockets
+              - "1"
+              - --cores
+              - "{{ ha_synthetic_cores | string }}"
+              - --memory
+              - "{{ ha_synthetic_ram_mb | string }}"
+              - --balloon
+              - "0"
+              - --cpu
+              - x86-64-v2-AES
+              - --efidisk0
+              - "{{ ha_synthetic_storage }}:0,efitype=4m,pre-enrolled-keys=0"
+              - --net0
+              - "virtio,bridge={{ ha_synthetic_bridge }},tag={{ ha_synthetic_vlan_tag }},firewall=1"
+              - --serial0
+              - socket
+              - --agent
+              - enabled=1
+              - --onboot
+              - "0"
+              - --tags
+              - "{{ ha_synthetic_expected_tags }}"
+              - --description
+              - "{{ ha_synthetic_expected_description }}"
+          register: ha_synthetic_create_result
+          failed_when: false
+
+        - name: Record successful guest creation for bounded failure cleanup
+          ansible.builtin.set_fact:
+            ha_synthetic_created_this_run: "{{ ha_synthetic_create_result.rc == 0 }}"
+
+        - name: Stop safely when Proxmox did not confirm guest creation
+          ansible.builtin.fail:
+            msg: >-
+              Proxmox did not confirm creation of VM {{ ha_synthetic_vmid }}. Any partial
+              state is retained for manual inspection rather than being deleted ambiguously.
+          when: ha_synthetic_create_result.rc != 0
+
+        - name: Import the HAOS image as the SATA boot disk
+          ansible.builtin.command: >-
+            qm set {{ ha_synthetic_vmid }} --sata0
+            {{ ha_synthetic_storage }}:0,import-from={{ ha_synthetic_image }},discard=on,ssd=1
+
+        - name: Set the reviewed thin virtual disk capacity
+          ansible.builtin.command: >-
+            qm disk resize {{ ha_synthetic_vmid }} sata0 {{ ha_synthetic_disk_gb }}G
+
+        - name: Set the HAOS boot order
+          ansible.builtin.command: >-
+            qm set {{ ha_synthetic_vmid }} --boot order=sata0
+
+      rescue:
+        - name: Re-read the partial guest identity before cleanup
+          ansible.builtin.command: >-
+            pvesh get /nodes/{{ inventory_hostname }}/qemu/{{ ha_synthetic_vmid }}/config
+            --output-format json
+          register: ha_synthetic_cleanup_identity
+          changed_when: false
+          failed_when: false
+          when: ha_synthetic_created_this_run | bool
+
+        - name: Parse the partial guest identity before cleanup
+          ansible.builtin.set_fact:
+            ha_synthetic_cleanup_identity_json: >-
+              {{ ha_synthetic_cleanup_identity.stdout | from_json }}
+          when:
+            - ha_synthetic_created_this_run | bool
+            - ha_synthetic_cleanup_identity.rc == 0
+
+        - name: Fail closed if partial-guest ownership cannot be proven
+          ansible.builtin.assert:
+            that:
+              - ha_synthetic_cleanup_identity.rc == 0
+              - ha_synthetic_cleanup_identity_json.name == ha_synthetic_hostname
+              - ha_synthetic_cleanup_identity_json.description == ha_synthetic_expected_description
+              - >-
+                (ha_synthetic_cleanup_identity_json.tags | string).split(';') | sort ==
+                ha_synthetic_expected_tags.split(';') | sort
+            fail_msg: >-
+              Partial VM cleanup was withheld because exact identity could not be proven.
+              Inspect VM {{ ha_synthetic_vmid }} manually.
+          when: ha_synthetic_created_this_run | bool
+
+        - name: Stop the partial guest owned by this run
+          ansible.builtin.command: "qm stop {{ ha_synthetic_vmid }} --skiplock 1"
+          failed_when: false
+          changed_when: true
+          when:
+            - ha_synthetic_created_this_run | bool
+            - ha_synthetic_cleanup_identity.rc == 0
+            - ha_synthetic_cleanup_identity_json.name == ha_synthetic_hostname
+
+        - name: Remove only the partial guest owned by this run
+          ansible.builtin.command: >-
+            qm destroy {{ ha_synthetic_vmid }} --purge 1 --destroy-unreferenced-disks 1
+          when:
+            - ha_synthetic_created_this_run | bool
+            - ha_synthetic_cleanup_identity.rc == 0
+            - ha_synthetic_cleanup_identity_json.name == ha_synthetic_hostname
+
+        - name: Report the failed staged build
+          ansible.builtin.fail:
+            msg: >-
+              Synthetic HAOS provisioning failed. Any partial VM created by this run was
+              removed only after its exact identity was revalidated.
+
+    - name: Read synthetic ZFS volume reservation state
+      ansible.builtin.command: zfs list -H -o name,refreservation -t volume
+      register: ha_synthetic_zvol_reservations
+      changed_when: false
+
+    - name: Remove thick reservation from synthetic VM volumes
+      ansible.builtin.command:
+        argv:
+          - zfs
+          - set
+          - refreservation=none
+          - "{{ item.split()[0] }}"
+      loop: "{{ ha_synthetic_zvol_reservations.stdout_lines }}"
+      loop_control:
+        label: "{{ item.split()[0] if item.split() | length > 0 else 'unknown' }}"
+      when:
+        - "'/vm-' ~ (ha_synthetic_vmid | string) ~ '-disk-' in item"
+        - not item.endswith('none')
+
+    - name: Re-read synthetic ZFS volume reservation state
+      ansible.builtin.command: zfs list -H -o name,refreservation -t volume
+      register: ha_synthetic_final_zvol_reservations
+      changed_when: false
+
+    - name: Prove the synthetic disks remain thin
+      ansible.builtin.assert:
+        that:
+          - >-
+            ha_synthetic_final_zvol_reservations.stdout_lines
+            | select('search', '/vm-' ~ (ha_synthetic_vmid | string) ~ '-disk-')
+            | list | length >= 2
+          - >-
+            ha_synthetic_final_zvol_reservations.stdout_lines
+            | select('search', '/vm-' ~ (ha_synthetic_vmid | string) ~ '-disk-')
+            | reject('search', '\\snone$') | list | length == 0
+        fail_msg: >-
+          Every VM {{ ha_synthetic_vmid }} zvol, including EFI and HAOS, must have
+          refreservation=none so the 64 GiB virtual size remains thin.
+
+    - name: Read the final synthetic VM configuration as structured data
+      ansible.builtin.command: >-
+        pvesh get /nodes/{{ inventory_hostname }}/qemu/{{ ha_synthetic_vmid }}/config
+        --output-format json
+      register: ha_synthetic_final_config_raw
+      changed_when: false
+
+    - name: Parse the final synthetic VM configuration
+      ansible.builtin.set_fact:
+        ha_synthetic_config_json: "{{ ha_synthetic_final_config_raw.stdout | from_json }}"
+
+    - name: Validate the final non-production VM boundary
+      ansible.builtin.include_tasks: ../tasks/validate-ha-synthetic-config.yml
+
+    - name: Read authoritative final cluster membership
+      ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
+      register: ha_synthetic_final_cluster_resources_raw
+      changed_when: false
+
+    - name: Resolve authoritative final cluster membership
+      ansible.builtin.set_fact:
+        ha_synthetic_final_cluster_matches: >-
+          {{ (ha_synthetic_final_cluster_resources_raw.stdout | from_json)
+             | selectattr('vmid', 'equalto', ha_synthetic_vmid | int) | list }}
+
+    - name: Require one authoritative final cluster identity
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_final_cluster_matches | length == 1
+          - ha_synthetic_final_cluster_matches[0].node == inventory_hostname
+          - ha_synthetic_final_cluster_matches[0].name == ha_synthetic_hostname
+
+    - name: Resolve final cluster VM for backup-pool validation
+      ansible.builtin.set_fact:
+        ha_synthetic_final_cluster_vm: "{{ ha_synthetic_final_cluster_matches[0] }}"
+
+    - name: Keep the synthetic VM outside every Proxmox resource pool
+      ansible.builtin.assert:
+        that:
+          - (ha_synthetic_final_cluster_vm.pool | default('') | string) == ''
+        fail_msg: >-
+          VM {{ ha_synthetic_vmid }} belongs to a Proxmox pool and may be selected by a
+          pool-scoped backup job. Remove that membership before continuing.
+
+    - name: Re-read backup jobs after provisioning
+      ansible.builtin.command: pvesh get /cluster/backup --output-format json
+      register: ha_synthetic_final_backup_jobs_raw
+      changed_when: false
+
+    - name: Prove the new VM remains outside cluster backup jobs
+      ansible.builtin.assert:
+        that:
+          - >-
+            not ((item.all | default(0) | int == 1) and
+                 (ha_synthetic_vmid | string) not in
+                 ((item.exclude | default('') | string).split(',')))
+          - >-
+            (ha_synthetic_vmid | string) not in
+            ((item.vmid | default('') | string).split(','))
+      loop: "{{ ha_synthetic_final_backup_jobs_raw.stdout | from_json }}"
+      loop_control:
+        label: "{{ item.id | default('unnamed backup job') }}"
+
+    - name: Re-read replication jobs after provisioning
+      ansible.builtin.command: pvesr status
+      register: ha_synthetic_final_replication_jobs
+      changed_when: false
+
+    - name: Re-read cluster quorum after provisioning
+      ansible.builtin.command: pvecm status
+      register: ha_synthetic_final_cluster_status
+      changed_when: false
+
+    - name: Re-read Carter ZFS health after provisioning
+      ansible.builtin.command: zpool status -x
+      register: ha_synthetic_final_zpool_status
+      changed_when: false
+
+    - name: Re-read target storage capacity after provisioning
+      ansible.builtin.command: >-
+        pvesm status --storage {{ ha_synthetic_storage }} --output-format json
+      register: ha_synthetic_final_storage_status_raw
+      changed_when: false
+
+    - name: Prove infrastructure health and replication after provisioning
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_final_cluster_status.stdout is regex('(?m)^Quorate:\\s+Yes$')
+          - "'all pools are healthy' in ha_synthetic_final_zpool_status.stdout"
+          - >-
+            (((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).used | float /
+             ((ha_synthetic_final_storage_status_raw.stdout | from_json) | first).total | float) < 0.70
+          - ha_synthetic_final_replication_jobs.stdout is regex('(?m)^\\s*118-0\\s+.*\\bOK\\b')
+          - ha_synthetic_final_replication_jobs.stdout is regex('(?m)^\\s*200-0\\s+.*\\bOK\\b')
+          - >-
+            ha_synthetic_final_replication_jobs.stdout is not
+            regex('(?m)^\\s*' ~ (ha_synthetic_vmid | string) ~ '-')
+
+    - name: Read the staged VM status
+      ansible.builtin.command: "qm status {{ ha_synthetic_vmid }}"
+      register: ha_synthetic_status
+      changed_when: false
+
+    - name: Require the VM already be stopped before start approval
+      ansible.builtin.assert:
+        that:
+          - "'status: stopped' in ha_synthetic_status.stdout"
+        fail_msg: >-
+          VM {{ ha_synthetic_vmid }} must already be stopped before start approval; this
+          playbook will not retroactively adopt or approve an unauthorized running guest.
+
+    - name: Validate fresh attended start approval
+      ansible.builtin.include_tasks: ../tasks/validate-ha-synthetic-approval.yml
+      vars:
+        ha_synthetic_approval_action: start
+        ha_synthetic_approval_file: "{{ ha_synthetic_start_approval_file }}"
+      when: ha_synthetic_activation == 'start'
+
+    - name: Refresh cluster VM state immediately before attended start
+      ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
+      register: ha_synthetic_start_cluster_resources_raw
+      changed_when: false
+      when: ha_synthetic_activation == 'start'
+
+    - name: Resolve the exact pre-start cluster identity
+      ansible.builtin.set_fact:
+        ha_synthetic_pre_start_matches: >-
+          {{ (ha_synthetic_start_cluster_resources_raw.stdout | from_json)
+             | selectattr('vmid', 'equalto', ha_synthetic_vmid | int) | list }}
+      when: ha_synthetic_activation == 'start'
+
+    - name: Re-prove exact stopped ownership immediately before start
+      ansible.builtin.assert:
+        that:
+          - ha_synthetic_pre_start_matches | length == 1
+          - ha_synthetic_pre_start_matches[0].node == inventory_hostname
+          - ha_synthetic_pre_start_matches[0].name == ha_synthetic_hostname
+          - (ha_synthetic_pre_start_matches[0].status | default('unknown')) == 'stopped'
+          - (ha_synthetic_pre_start_matches[0].pool | default('') | string) == ''
+        fail_msg: >-
+          VM {{ ha_synthetic_vmid }} changed identity, owner, state, or pool membership
+          after validation. Start is withheld.
+      when: ha_synthetic_activation == 'start'
+
+    - name: Re-enforce Carter recovery precedence immediately before start
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.node != inventory_hostname or
+            (item.vmid | int == 128 and
+             (item.status | default('stopped')) == 'stopped')
+      loop: "{{ ha_synthetic_start_cluster_resources_raw.stdout | from_json }}"
+      loop_control:
+        label: "VM {{ item.vmid | default('unknown') }}"
+      when:
+        - ha_synthetic_activation == 'start'
+        - item.vmid | default(-1) | int in ha_synthetic_recovery_vmids
+
+    - name: Re-read the exact VM configuration immediately before start
+      ansible.builtin.command: >-
+        pvesh get /nodes/{{ inventory_hostname }}/qemu/{{ ha_synthetic_vmid }}/config
+        --output-format json
+      register: ha_synthetic_pre_start_config_raw
+      changed_when: false
+      when: ha_synthetic_activation == 'start'
+
+    - name: Parse the exact pre-start VM configuration
+      ansible.builtin.set_fact:
+        ha_synthetic_config_json: "{{ ha_synthetic_pre_start_config_raw.stdout | from_json }}"
+      when: ha_synthetic_activation == 'start'
+
+    - name: Revalidate the authority surface immediately before start
+      ansible.builtin.include_tasks: ../tasks/validate-ha-synthetic-config.yml
+      when: ha_synthetic_activation == 'start'
+
+    - name: Refresh Carter MemAvailable immediately before attended start
+      ansible.builtin.command: grep '^MemAvailable:' /proc/meminfo
+      register: ha_synthetic_pre_start_memavailable_raw
+      changed_when: false
+      when: ha_synthetic_activation == 'start'
+
+    - name: Require pre-start Carter recovery headroom
+      ansible.builtin.assert:
+        that:
+          - >-
+            ((ha_synthetic_pre_start_memavailable_raw.stdout
+              | regex_findall('[0-9]+') | first | int) // 1024) -
+            (ha_synthetic_ram_mb | int) >= ha_synthetic_min_host_headroom_mb | int
+        fail_msg: >-
+          Carter no longer has enough current headroom for an attended 8 GiB start.
+      when: ha_synthetic_activation == 'start'
+
+    - name: Start and validate Carter headroom for the attended synthetic VM
+      when: ha_synthetic_activation == 'start'
+      block:
+        - name: Start the attended isolated synthetic VM
+          ansible.builtin.command: "qm start {{ ha_synthetic_vmid }}"
+
+        - name: Read Carter MemAvailable after synthetic start
+          ansible.builtin.command: grep '^MemAvailable:' /proc/meminfo
+          register: ha_synthetic_post_start_memavailable_raw
+          changed_when: false
+
+        - name: Resolve Carter post-start headroom
+          ansible.builtin.set_fact:
+            ha_synthetic_post_start_memavailable_mb: >-
+              {{ (ha_synthetic_post_start_memavailable_raw.stdout
+                  | regex_findall('[0-9]+') | first | int) // 1024 }}
+
+        - name: Require the post-start Carter recovery guardrail
+          ansible.builtin.assert:
+            that:
+              - >-
+                ha_synthetic_post_start_memavailable_mb | int >=
+                ha_synthetic_min_host_headroom_mb | int
+
+      rescue:
+        - name: Stop the synthetic VM if the post-start guardrail fails
+          ansible.builtin.command: "qm stop {{ ha_synthetic_vmid }} --skiplock 1"
+          failed_when: false
+          changed_when: true
+
+        - name: Report the rejected attended start
+          ansible.builtin.fail:
+            msg: >-
+              VM {{ ha_synthetic_vmid }} was returned to stopped because Carter did not
+              preserve its recovery headroom after start.
+
+    - name: Report the staged or attended result
+      ansible.builtin.debug:
+        msg:
+          - "Synthetic HAOS VM {{ ha_synthetic_vmid }} is {{ ha_synthetic_activation }} on Carter."
+          - "It has no production backup, replication, coordinator, passthrough, or device authority."
+          - "Before loading the Git-owned fixture, run the exact-guest isolation checks in the runbook."

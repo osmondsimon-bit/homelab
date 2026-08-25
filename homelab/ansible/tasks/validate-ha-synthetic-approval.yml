@@ -1,0 +1,73 @@
+---
+# Validate a short-lived, controller-local approval bound to one HA synthetic action.
+- name: Check the local attended approval artifact
+  ansible.builtin.stat:
+    path: "{{ ha_synthetic_approval_file }}"
+  delegate_to: localhost
+  become: false
+  register: ha_synthetic_approval_stat
+
+- name: Require a private operator-owned approval artifact
+  ansible.builtin.assert:
+    that:
+      - "'YOUR_' not in ha_synthetic_approval_file"
+      - ha_synthetic_approval_stat.stat.exists
+      - ha_synthetic_approval_stat.stat.isreg
+      - ha_synthetic_approval_stat.stat.mode == '0600'
+      - ha_synthetic_approval_stat.stat.pw_name == lookup('env', 'USER')
+    fail_msg: >-
+      The {{ ha_synthetic_approval_action }} approval must be a local regular file owned by
+      the controller user with mode 0600. Public placeholders and reusable repository data
+      are not approval.
+
+- name: Read the attended approval artifact without logging it
+  ansible.builtin.slurp:
+    src: "{{ ha_synthetic_approval_file }}"
+  delegate_to: localhost
+  become: false
+  register: ha_synthetic_approval_raw
+  no_log: true
+
+- name: Parse the attended approval artifact
+  ansible.builtin.set_fact:
+    ha_synthetic_validated_approval: >-
+      {{ ha_synthetic_approval_raw.content | b64decode | from_json }}
+    ha_synthetic_approval_now_utc: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+  no_log: true
+
+- name: Validate approval scope, binding, and lifetime
+  ansible.builtin.assert:
+    that:
+      - ha_synthetic_validated_approval.schema | int == 1
+      - ha_synthetic_validated_approval.action == ha_synthetic_approval_action
+      - ha_synthetic_validated_approval.node == inventory_hostname
+      - ha_synthetic_validated_approval.vmid | int == ha_synthetic_vmid | int
+      - ha_synthetic_validated_approval.hostname == ha_synthetic_hostname
+      - ha_synthetic_validated_approval.image_version == ha_synthetic_image_version
+      - ha_synthetic_validated_approval.image_sha256 == ha_synthetic_image_sha256
+      - ha_synthetic_validated_approval.storage == ha_synthetic_storage
+      - ha_synthetic_validated_approval.vlan_tag | int == ha_synthetic_vlan_tag | int
+      - ha_synthetic_validated_approval.contract == ha_synthetic_approval_contract
+      - ha_synthetic_validated_approval.evidence_sha256 is regex('^[0-9a-f]{64}$')
+      - ha_synthetic_validated_approval.nonce is regex('^[0-9a-f]{32,128}$')
+      - >-
+        (ha_synthetic_validated_approval.issued_at_utc
+         | to_datetime('%Y-%m-%dT%H:%M:%SZ')) <=
+        (ha_synthetic_approval_now_utc | to_datetime('%Y-%m-%dT%H:%M:%SZ'))
+      - >-
+        (ha_synthetic_validated_approval.expires_at_utc
+         | to_datetime('%Y-%m-%dT%H:%M:%SZ')) >
+        (ha_synthetic_approval_now_utc | to_datetime('%Y-%m-%dT%H:%M:%SZ'))
+      - >-
+        ((ha_synthetic_validated_approval.expires_at_utc
+          | to_datetime('%Y-%m-%dT%H:%M:%SZ')) -
+         (ha_synthetic_validated_approval.issued_at_utc
+          | to_datetime('%Y-%m-%dT%H:%M:%SZ'))).total_seconds() <= 1800
+      - >-
+        ((ha_synthetic_approval_now_utc | to_datetime('%Y-%m-%dT%H:%M:%SZ')) -
+         (ha_synthetic_validated_approval.issued_at_utc
+          | to_datetime('%Y-%m-%dT%H:%M:%SZ'))).total_seconds() <= 1800
+    fail_msg: >-
+      The {{ ha_synthetic_approval_action }} approval is expired, malformed, or not bound
+      to this exact Carter/VMID/image/storage/Test-VLAN contract and evidence digest.
+  no_log: true

@@ -21,6 +21,26 @@ secondary_mgmt_disk_gb: 64
 secondary_mgmt_ip: YOUR_SECONDARY_MGMT_IP/24
 secondary_mgmt_cpu: x86-64-v2-AES
 
+# --- Synthetic Home Assistant VM (Carter, ADR-026) --------------------------
+# Persistent but rebuildable automation test appliance. The default only creates a stopped VM.
+# The Test VLAN must already be isolated; real tag/evidence stay in the gitignored all.yml.
+ha_synthetic_vmid: 201
+ha_synthetic_hostname: ha-synthetic
+ha_synthetic_cores: 2
+ha_synthetic_ram_mb: 8192
+ha_synthetic_disk_gb: 64
+ha_synthetic_storage: local-zfs
+ha_synthetic_bridge: vmbr0
+ha_synthetic_vlan_tag: YOUR_TEST_VLAN_TAG
+ha_synthetic_activation: staged
+ha_synthetic_allocation_approval_file: YOUR_LOCAL_ALLOCATION_APPROVAL_JSON
+ha_synthetic_start_approval_file: YOUR_LOCAL_START_APPROVAL_JSON
+ha_synthetic_min_host_headroom_mb: 3072
+ha_synthetic_recovery_vmids: [128, 200]
+ha_synthetic_image_version: "18.2"
+# Official digest published on the Home Assistant OS 18.2 GitHub release asset.
+ha_synthetic_image_sha256: 254e53f354df0739e3afc09be5431a07df53f0df6b703885404f665c454f254e
+
 # --- Tailscale LXC -----------------------------------------------------------
 tailscale_ctid: 110                                         # ensure this VMID is free
 tailscale_hostname: tailscale
