@@ -915,12 +915,23 @@ This is the persistent automation-development environment from ADR-026, not the 
 backup restore drill above. It uses fresh HAOS plus the private repository's Git-owned mock package;
 do not restore a production backup into it.
 
-1. In gitignored `ansible/inventory/group_vars/all.yml`, set the actual Test VLAN tag while leaving
-   `ha_synthetic_activation: staged`. Before first start, prove the Test zone blocks **all** guest
-   egress: every production/internal zone, MQTT, coordinators, multicast discovery, notifications,
-   tunnels, vendor clouds, and External. The Proxmox host downloads the pinned HAOS image; guest
-   bootstrap is not authority for a general internet path. Retain the rule export/canary results in
-   a local evidence file and calculate its SHA-256.
+1. Commission a dedicated UniFi network and attach it to the existing named Test zone. The
+   2026-08-25 read-only preflight found that zone empty and its predefined Test→External and
+   Test→Gateway actions permissive. Add higher-priority rules that:
+
+   - allow only the minimum gateway DHCP, DNS and NTP services actually selected for the guest;
+   - block all remaining Test→Gateway and Test→External traffic;
+   - retain Test→every internal/production zone blocks, including MQTT, coordinators and multicast
+     discovery; and
+   - allow one named commissioning source to Test TCP 8123 with stateful return traffic, while all
+     other ingress stays blocked.
+
+   Do not enable mDNS reflection or attach an SSID. In gitignored
+   `ansible/inventory/group_vars/all.yml`, set the actual Test VLAN tag while leaving
+   `ha_synthetic_activation: staged`. Before allocation, export the effective network, zone, rule
+   order and negative canary results to a local evidence file and calculate its SHA-256. The
+   Proxmox host downloads the pinned HAOS image; guest bootstrap is not authority for a general
+   internet path.
 2. **Deploy the qemu/201 expected-off rules before allocation** so its normal stopped state does not
    create a false GuestDown incident or clutter the workload table:
 

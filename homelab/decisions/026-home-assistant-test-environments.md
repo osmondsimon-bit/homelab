@@ -21,9 +21,14 @@ Maintain two distinct Home Assistant test environment types:
    It is not the development baseline.
 
 The synthetic VM uses VMID 201, two vCPUs, 8 GiB RAM, a 64 GiB thin `local-zfs` disk, q35/OVMF,
-and a VirtIO NIC on the existing Test VLAN. It is `onboot=0`, excluded from Proxmox replication and
+and a VirtIO NIC on a dedicated Test network. It is `onboot=0`, excluded from Proxmox replication and
 backup jobs, and starts only after a separate attended isolation approval. Public configuration
 uses a `YOUR_TEST_VLAN_TAG` placeholder; the actual tag remains in gitignored inventory.
+
+The 2026-08-25 read-only UniFi preflight found that the named Test zone exists but no network is
+attached to it. Its predefined policy also permits Test-to-External and Test-to-Gateway traffic.
+Commissioning the network and ordered fail-closed overrides is therefore a pre-allocation gate, not
+an existing capability.
 
 Home Assistant OS 18.2 is pinned for initial parity with the current live appliance. The official
 [OVA qcow2 release asset](https://github.com/home-assistant/operating-system/releases/tag/18.2)

@@ -23,7 +23,8 @@ secondary_mgmt_cpu: x86-64-v2-AES
 
 # --- Synthetic Home Assistant VM (Carter, ADR-026) --------------------------
 # Persistent but rebuildable automation test appliance. The default only creates a stopped VM.
-# The Test VLAN must already be isolated; real tag/evidence stay in the gitignored all.yml.
+# The dedicated Test network and fail-closed policy must be commissioned first; real
+# tag/reservation/evidence stay in the gitignored all.yml.
 ha_synthetic_vmid: 201
 ha_synthetic_hostname: ha-synthetic
 ha_synthetic_cores: 2
