@@ -26,10 +26,12 @@ backup jobs, and starts only after a separate attended isolation approval. Publi
 uses a `YOUR_TEST_VLAN_TAG` placeholder; the actual tag remains in gitignored inventory.
 
 The initial 2026-08-25 read-only UniFi preflight found that the named Test zone existed without an
-attached network. After operator creation, a same-day recheck confirmed a dedicated network is now
-attached and mDNS is disabled. Its network-level internet access and predefined Test-to-External
-and Test-to-Gateway permits remain enabled, however, and no narrow commissioning-source-to-Test UI
-rule exists. Ordered fail-closed overrides are therefore still a pre-allocation gate.
+attached network. After operator changes, a same-day recheck confirmed a dedicated network with
+internet access and mDNS disabled. Higher-priority rules block Test-to-External and all non-DHCP
+Test-to-Gateway traffic, while existing internal-zone blocks remain effective. A named
+commissioning client has TCP 8123 access using any ephemeral source port and automatic return
+traffic. This satisfies the static stopped-staging gate; exact-guest active deny evidence remains a
+separate pre-onboarding gate.
 
 Home Assistant OS 18.2 is pinned for initial parity with the current live appliance. The official
 [OVA qcow2 release asset](https://github.com/home-assistant/operating-system/releases/tag/18.2)

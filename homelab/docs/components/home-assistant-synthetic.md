@@ -27,10 +27,11 @@ tunnel, passthrough, or vendor-account authority. The first boot is an attended 
 The exact guest must prove allowed operator UI access and denied production paths before onboarding
 or receiving the test fixture.
 
-The 2026-08-25 read-only preflight initially found an empty named Test zone. A same-day recheck after
-operator creation confirmed a dedicated network is attached and mDNS is disabled. Network-level
-internet access, default Test-to-External and Test-to-Gateway permits, and the missing narrow UI
-ingress remain open gates; this page does not claim that live isolation is already deployed.
+The 2026-08-25 read-only preflight initially found an empty named Test zone. After operator changes,
+a same-day recheck accepted the static boundary: internet access and mDNS are disabled, Test egress
+is limited to DHCP at the gateway, External and internal destinations are blocked, and one named
+commissioning client has stateful TCP 8123 access. Live isolation is not yet claimed; exact-guest
+deny probes and firewall-log correlation follow stopped staging and MAC reservation.
 
 ## Continuity
 
