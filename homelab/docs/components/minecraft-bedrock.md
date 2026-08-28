@@ -9,7 +9,7 @@ describes the accepted build; `PLAN.md` remains authoritative for whether the gu
 | Address | `YOUR_MINECRAFT_IP`, UDP `19132`; HTTP `9098` is health-only |
 | Shape | 2 vCPU / 4 GiB RAM / 32 GiB thin ZFS root disk |
 | Clients | iPad, Switch/Switch 2 on LAN, and Minecraft for Windows; remote iPad/Windows via Tailscale subnet route |
-| Software | Official BDS `1.26.44.3`, URL and SHA-256 pinned in inventory |
+| Software | Official BDS `1.26.45.1`, URL and SHA-256 pinned in inventory |
 | State | `/var/lib/minecraft` (world, allow list, permissions); explicit properties under `/etc/minecraft-bedrock` |
 | Backup | Separate daily encrypted PBS stop-mode image to Oneill, 7 daily / 4 weekly; isolated restore drill passed 2026-08-28 (150 s) |
 

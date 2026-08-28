@@ -63,9 +63,9 @@ minecraft_tick_distance: 4
 minecraft_accept_eula: false                              # operator must review and opt in
 minecraft_allowlist: [YOUR_PARENT_XBOX_GAMERTAG, YOUR_CHILD_XBOX_GAMERTAG]
 minecraft_operators: [YOUR_PARENT_XBOX_GAMERTAG]
-minecraft_bds_version: "1.26.44.3"
-minecraft_bds_url: "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.26.44.3.zip"
-minecraft_bds_sha256: "a6d85efb2d72588b725afc12588bb1aab57547252ff1f84e7f9c3646816438c1"
+minecraft_bds_version: "1.26.45.1"
+minecraft_bds_url: "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.26.45.1.zip"
+minecraft_bds_sha256: "b0db86098ee418a9bb226f6f3f51ff2be36542236839375627b29aef3dfa5cda"
 minecraft_backup_job_id: minecraft-bedrock-daily
 minecraft_backup_schedule: "04:30"
 

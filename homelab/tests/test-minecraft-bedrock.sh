@@ -32,8 +32,8 @@ require_text "$example_vars" 'minecraft_ctid: 129' 'Minecraft must use the prefl
 require_text "$example_vars" 'minecraft_ram_mb: 4096' 'Minecraft must start at the official 4 GiB baseline'
 require_text "$example_vars" 'minecraft_cores: 2' 'Minecraft must start with two Carter cores'
 require_text "$example_vars" 'minecraft_disk_gb: 32' 'Minecraft must have room for the world and upgrades'
-require_text "$example_vars" 'minecraft_bds_version: "1.26.44.3"' 'BDS must use the resolved stable version'
-require_text "$example_vars" 'minecraft_bds_sha256: "a6d85efb2d72588b725afc12588bb1aab57547252ff1f84e7f9c3646816438c1"' \
+require_text "$example_vars" 'minecraft_bds_version: "1.26.45.1"' 'BDS must use the resolved stable version'
+require_text "$example_vars" 'minecraft_bds_sha256: "b0db86098ee418a9bb226f6f3f51ff2be36542236839375627b29aef3dfa5cda"' \
   'BDS must verify the official artifact checksum'
 require_text "$example_vars" 'minecraft_port: 19132' 'Bedrock IPv4 must use the LAN-discovery default port'
 
