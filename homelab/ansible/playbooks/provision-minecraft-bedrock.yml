@@ -1,0 +1,443 @@
+---
+# Provision the private family Minecraft Bedrock server on Carter (ADR-027).
+# The unprivileged Ubuntu LXC is reachable on the Home LAN and, through the existing
+# subnet-router pair, by explicitly authorised Tailscale identities. It has ordinary
+# outbound access for Xbox authentication and updates but no public ingress.
+#
+# Prerequisites in the gitignored all.yml:
+#   - reserve minecraft_mac + minecraft_ip in UniFi before running
+#   - set minecraft_allowlist and minecraft_operators to the exact Xbox gamertags
+#   - set minecraft_accept_eula=true after reviewing https://www.minecraft.net/eula
+#
+# Run from homelab/ansible on mgmt-vm:
+#   ansible-playbook playbooks/provision-minecraft-bedrock.yml --limit carter
+
+- name: Provision Minecraft Bedrock LXC on Carter
+  hosts: carter
+  gather_facts: false
+  vars:
+    minecraft_ip_bare: "{{ minecraft_ip | regex_replace('/.*$', '') }}"
+    minecraft_ip_config: "{{ minecraft_ip if '/' in minecraft_ip else minecraft_ip ~ '/24' }}"
+    minecraft_allowlist_values: "{{ [minecraft_allowlist] if minecraft_allowlist is string else minecraft_allowlist }}"
+    minecraft_operator_values: "{{ [minecraft_operators] if minecraft_operators is string else minecraft_operators }}"
+    minecraft_effective_allowlist: "{{ (minecraft_allowlist_values + minecraft_operator_values) | unique | list }}"
+    minecraft_ubuntu_template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Validate the accepted private-service inputs
+      ansible.builtin.assert:
+        that:
+          - minecraft_ctid | int == 129
+          - minecraft_enabled | bool
+          - minecraft_accept_eula | bool
+          - "'YOUR_' not in minecraft_ip"
+          - "'YOUR_' not in minecraft_mac"
+          - minecraft_ip is match('^[0-9.]+(?:/[0-9]{1,2})?$')
+          - minecraft_mac is match('^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+          - minecraft_server_name is match('^[^\\r\\n]{1,64}$')
+          - minecraft_level_name is match('^[A-Za-z0-9_-]{1,32}$')
+          - minecraft_allowlist_values | length > 0
+          - minecraft_operator_values | length > 0
+          - (minecraft_effective_allowlist | select('match', '^[^\\r\\n\\t]{1,64}$') | list | length) == (minecraft_effective_allowlist | length)
+          - minecraft_bds_version is match('^[0-9]+(?:\\.[0-9]+){3}$')
+          - minecraft_bds_url is match('^https://www\\.minecraft\\.net/bedrockdedicatedserver/bin-linux/bedrock-server-' ~ (minecraft_bds_version | regex_escape) ~ '\\.zip$')
+          - minecraft_bds_sha256 is match('^[0-9a-f]{64}$')
+        fail_msg: >-
+          Reserve the Minecraft MAC/IP, accept the EULA, and declare at least one allowlisted
+          operator gamertag in the gitignored all.yml before provisioning.
+        quiet: true
+
+    - name: Check whether CT {{ minecraft_ctid }} exists
+      ansible.builtin.command: "pct status {{ minecraft_ctid }}"
+      register: minecraft_ct_status
+      changed_when: false
+      failed_when: false
+
+    - name: Read any existing CT 129 configuration
+      ansible.builtin.command: >-
+        pvesh get /nodes/{{ inventory_hostname }}/lxc/{{ minecraft_ctid }}/config
+        --output-format json
+      register: minecraft_existing_config
+      changed_when: false
+      when: minecraft_ct_status.rc == 0
+
+    - name: Refuse to configure an unexpected existing CT 129
+      ansible.builtin.assert:
+        that:
+          - (minecraft_existing_config.stdout | from_json).hostname == minecraft_hostname
+          - (minecraft_existing_config.stdout | from_json).unprivileged | int == 1
+        fail_msg: "CT 129 exists but is not the accepted unprivileged minecraft-bedrock guest."
+        quiet: true
+      when: minecraft_ct_status.rc == 0
+
+    - name: Read current Carter memory headroom
+      ansible.builtin.shell: "awk '/MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo"
+      register: minecraft_mem_available
+      changed_when: false
+      when: minecraft_ct_status.rc != 0
+
+    - name: Preserve Carter recovery headroom before creating Minecraft
+      ansible.builtin.assert:
+        that:
+          - minecraft_mem_available.stdout | int >= (minecraft_ram_mb | int) + 3072
+        fail_msg: >-
+          Carter cannot add the {{ minecraft_ram_mb }} MiB Minecraft guest while preserving
+          the 3072 MiB recovery guardrail.
+        quiet: true
+      when: minecraft_ct_status.rc != 0
+
+    - name: Download the supported Ubuntu LXC template
+      ansible.builtin.command: "pveam download {{ template_store }} {{ minecraft_ubuntu_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ minecraft_ubuntu_template }}"
+      when: minecraft_ct_status.rc != 0
+
+    - name: Require the reserved Minecraft address to be unused before creation
+      ansible.builtin.command: "ping -c 2 -W 1 {{ minecraft_ip_bare }}"
+      register: minecraft_address_probe
+      changed_when: false
+      failed_when: minecraft_address_probe.rc == 0
+      when: minecraft_ct_status.rc != 0
+
+    - name: Create the unprivileged Minecraft LXC
+      ansible.builtin.command: >-
+        pct create {{ minecraft_ctid }} {{ template_store }}:vztmpl/{{ minecraft_ubuntu_template }}
+        --hostname {{ minecraft_hostname }}
+        --cores {{ minecraft_cores }}
+        --memory {{ minecraft_ram_mb }}
+        --swap 512
+        --rootfs {{ rootfs_storage }}:{{ minecraft_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},hwaddr={{ minecraft_mac }},ip={{ minecraft_ip_config }},gw={{ gateway }},firewall=1
+        --unprivileged 1
+        --onboot 1
+        --startup order=7,up=10
+      register: minecraft_ct_create
+      when: minecraft_ct_status.rc != 0
+      changed_when: minecraft_ct_create.rc == 0
+
+    - name: Pin the reserved MAC and static Home-LAN address before first boot
+      ansible.builtin.command: >-
+        pct set {{ minecraft_ctid }}
+        --net0 name=eth0,bridge={{ bridge }},hwaddr={{ minecraft_mac }},ip={{ minecraft_ip_config }},gw={{ gateway }},firewall=1
+        --onboot 1
+        --startup order=7,up=10
+      changed_when: true
+
+    - name: Ensure the Minecraft LXC is running
+      ansible.builtin.command: "pct start {{ minecraft_ctid }}"
+      register: minecraft_ct_start
+      changed_when: "'already running' not in (minecraft_ct_start.stderr | default(''))"
+      failed_when:
+        - minecraft_ct_start.rc != 0
+        - "'already running' not in (minecraft_ct_start.stderr | default(''))"
+
+    - name: Wait for the LXC to become responsive
+      ansible.builtin.command: "pct exec {{ minecraft_ctid }} -- true"
+      register: minecraft_ct_ready
+      until: minecraft_ct_ready.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Install the native Bedrock runtime and firewall tools
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq ca-certificates curl wget unzip libcurl4 libssl3 nftables iproute2 python3 >/dev/null
+        '
+      changed_when: true
+
+    - name: Create the dedicated service account and persistent paths
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          set -e
+          id minecraft >/dev/null 2>&1 || useradd --system --home /var/lib/minecraft --shell /usr/sbin/nologin minecraft
+          install -d -o minecraft -g minecraft -m 0750 /var/lib/minecraft /var/lib/minecraft/worlds
+          install -d -o root -g root -m 0755 /opt/minecraft/versions /etc/minecraft-bedrock /usr/local/libexec
+          test -f /var/lib/minecraft/allowlist.json || printf "[]\n" > /var/lib/minecraft/allowlist.json
+          test -f /var/lib/minecraft/permissions.json || printf "[]\n" > /var/lib/minecraft/permissions.json
+          chown minecraft:minecraft /var/lib/minecraft/allowlist.json /var/lib/minecraft/permissions.json
+        '
+      changed_when: true
+
+    - name: Install and verify the pinned official BDS release
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          set -e
+          version_dir=/opt/minecraft/versions/{{ minecraft_bds_version }}
+          marker="$version_dir/.artifact-sha256"
+          if [ -x "$version_dir/bedrock_server" ] && [ "$(cat "$marker" 2>/dev/null)" = "{{ minecraft_bds_sha256 }}" ]; then
+            exit 0
+          fi
+          archive=$(mktemp /tmp/bedrock-server.XXXXXX.zip)
+          trap "rm -f $archive" EXIT
+          wget -q --timeout=180 -O "$archive" "{{ minecraft_bds_url }}"
+          echo "{{ minecraft_bds_sha256 }}  $archive" | sha256sum -c -
+          rm -rf "$version_dir"
+          install -d -o minecraft -g minecraft -m 0755 "$version_dir"
+          unzip -q "$archive" -d "$version_dir"
+          printf "%s\n" "{{ minecraft_bds_sha256 }}" > "$marker"
+          chown -R minecraft:minecraft "$version_dir"
+        '
+      register: minecraft_release_install
+      changed_when: minecraft_release_install.rc == 0
+
+    - name: Write the explicit Bedrock server properties
+      ansible.builtin.shell: >-
+        echo '{{ minecraft_server_properties | b64encode }}' | base64 -d |
+        pct exec {{ minecraft_ctid }} -- bash -c
+        'cat > /etc/minecraft-bedrock/server.properties && chown root:minecraft /etc/minecraft-bedrock/server.properties && chmod 0640 /etc/minecraft-bedrock/server.properties'
+      vars:
+        minecraft_server_properties: |
+          server-name={{ minecraft_server_name }}
+          gamemode=survival
+          force-gamemode=false
+          difficulty=normal
+          allow-cheats=false
+          max-players={{ minecraft_max_players }}
+          online-mode=true
+          allow-list=true
+          server-port={{ minecraft_port }}
+          server-portv6=19133
+          enable-lan-visibility=true
+          view-distance={{ minecraft_view_distance }}
+          tick-distance={{ minecraft_tick_distance }}
+          player-idle-timeout=30
+          max-threads=0
+          level-name={{ minecraft_level_name }}
+          level-seed=
+          default-player-permission-level=member
+          texturepack-required=false
+          content-log-file-enabled=false
+      changed_when: true
+
+    - name: Link persistent state into the pinned release
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          set -e
+          version_dir=/opt/minecraft/versions/{{ minecraft_bds_version }}
+          rm -rf "$version_dir/worlds" "$version_dir/server.properties" "$version_dir/allowlist.json" "$version_dir/permissions.json"
+          ln -s /var/lib/minecraft/worlds "$version_dir/worlds"
+          ln -s /etc/minecraft-bedrock/server.properties "$version_dir/server.properties"
+          ln -s /var/lib/minecraft/allowlist.json "$version_dir/allowlist.json"
+          ln -s /var/lib/minecraft/permissions.json "$version_dir/permissions.json"
+          ln -sfn "$version_dir" /opt/minecraft/current
+          chown -h minecraft:minecraft "$version_dir"/worlds "$version_dir"/server.properties "$version_dir"/allowlist.json "$version_dir"/permissions.json /opt/minecraft/current
+        '
+      changed_when: true
+
+    - name: Verify the pinned native binary has no missing runtime libraries
+      ansible.builtin.command: >-
+        pct exec {{ minecraft_ctid }} -- bash -c
+        '! ldd /opt/minecraft/current/bedrock_server | grep -q "not found"'
+      changed_when: false
+
+    - name: Install Bedrock service, console, and health assets
+      ansible.builtin.shell: |
+        set -e
+        echo '{{ lookup('file', playbook_dir + '/../files/minecraft/minecraft-bedrock-run') | b64encode }}' | base64 -d | pct exec {{ minecraft_ctid }} -- bash -c 'cat > /usr/local/libexec/minecraft-bedrock-run && chmod 0755 /usr/local/libexec/minecraft-bedrock-run'
+        echo '{{ lookup('file', playbook_dir + '/../files/minecraft/minecraft-console') | b64encode }}' | base64 -d | pct exec {{ minecraft_ctid }} -- bash -c 'cat > /usr/local/bin/minecraft-console && chmod 0755 /usr/local/bin/minecraft-console'
+        echo '{{ lookup('file', playbook_dir + '/../files/minecraft/minecraft-bedrock.service') | b64encode }}' | base64 -d | pct exec {{ minecraft_ctid }} -- bash -c 'cat > /etc/systemd/system/minecraft-bedrock.service'
+        echo '{{ lookup('file', playbook_dir + '/../files/minecraft/minecraft-health.py') | b64encode }}' | base64 -d | pct exec {{ minecraft_ctid }} -- bash -c 'cat > /usr/local/bin/minecraft-health.py && chmod 0755 /usr/local/bin/minecraft-health.py'
+        echo '{{ lookup('file', playbook_dir + '/../files/minecraft/minecraft-health.service') | b64encode }}' | base64 -d | pct exec {{ minecraft_ctid }} -- bash -c 'cat > /etc/systemd/system/minecraft-health.service'
+      changed_when: true
+
+    - name: Install the default-deny guest firewall
+      ansible.builtin.shell: >-
+        echo '{{ minecraft_nftables | b64encode }}' | base64 -d |
+        pct exec {{ minecraft_ctid }} -- bash -c
+        'cat > /etc/nftables.conf && nft -c -f /etc/nftables.conf && systemctl enable --now nftables && nft -f /etc/nftables.conf'
+      vars:
+        minecraft_nftables: |
+          # Managed by provision-minecraft-bedrock.yml. Public ingress is never allowed.
+          flush ruleset
+          table inet minecraft_filter {
+            chain input {
+              type filter hook input priority 0; policy drop;
+              iifname "lo" accept
+              ct state established,related accept
+              ip protocol icmp accept
+              ip6 nexthdr ipv6-icmp accept
+              ip saddr {{ lan_cidr }} udp dport {{ minecraft_port }} accept
+              ip saddr { {{ monitoring_ip | regex_replace('/.*$', '') }}, {{ glance_ip | regex_replace('/.*$', '') }} } tcp dport {{ minecraft_health_port }} accept
+            }
+            chain forward { type filter hook forward priority 0; policy drop; }
+            chain output { type filter hook output priority 0; policy accept; }
+          }
+      changed_when: true
+
+    - name: Enrol the Ubuntu LXC in security-only patching
+      ansible.builtin.shell: >-
+        echo '{{ lookup('file', playbook_dir + '/../files/patching/setup-unattended.sh') | b64encode }}'
+        | base64 -d
+        | pct exec {{ minecraft_ctid }} -- bash -s -- '{{ ntfy_base_url }}/{{ ntfy_topic }}' '{{ patching_timezone | default("") }}'
+      no_log: true
+      changed_when: true
+
+    - name: Start Bedrock and its health endpoint
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          systemctl daemon-reload
+          systemd-analyze verify minecraft-bedrock.service minecraft-health.service
+          systemctl enable minecraft-bedrock.service minecraft-health.service >/dev/null
+          systemctl restart minecraft-bedrock.service
+          systemctl restart minecraft-health.service
+        '
+      changed_when: true
+
+    - name: Wait for the Bedrock UDP listener
+      ansible.builtin.command: >-
+        pct exec {{ minecraft_ctid }} -- bash -c
+        'systemctl is-active --quiet minecraft-bedrock.service && ss -H -lun sport = :{{ minecraft_port }} | grep -q .'
+      register: minecraft_listener
+      until: minecraft_listener.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Add the declared Xbox gamertags to the allow list
+      ansible.builtin.command: >-
+        pct exec {{ minecraft_ctid }} -- /usr/local/bin/minecraft-console allowlist add {{ item }}
+      loop: "{{ minecraft_effective_allowlist }}"
+      loop_control:
+        label: "private gamertag"
+      no_log: true
+      changed_when: true
+
+    - name: Grant operator only to the declared parent gamertags
+      ansible.builtin.command: >-
+        pct exec {{ minecraft_ctid }} -- /usr/local/bin/minecraft-console op {{ item }}
+      loop: "{{ minecraft_operator_values }}"
+      loop_control:
+        label: "private gamertag"
+      no_log: true
+      changed_when: true
+
+    - name: Read resolved operator permission count without exposing XUIDs
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ minecraft_ctid }}"
+          - --
+          - python3
+          - -c
+          - >-
+            import json;
+            entries=json.load(open('/var/lib/minecraft/permissions.json'));
+            print(sum(1 for entry in entries if entry.get('permission') == 'operator'))
+      register: minecraft_resolved_operator_count
+      changed_when: false
+
+    - name: Report whether the parent account needs its first join
+      ansible.builtin.debug:
+        msg: >-
+          Operator permissions resolved: {{ minecraft_resolved_operator_count.stdout }} of
+          {{ minecraft_operator_values | length }}. If incomplete, the parent must join once and
+          then re-run this playbook or send the documented op command.
+
+    - name: Verify the LAN-only health endpoint locally
+      ansible.builtin.command: >-
+        pct exec {{ minecraft_ctid }} -- curl -fsS --max-time 5 http://127.0.0.1:{{ minecraft_health_port }}/
+      register: minecraft_health
+      until: minecraft_health.stdout == "OK"
+      retries: 10
+      delay: 2
+      changed_when: false
+
+    - name: Read post-start Carter memory headroom
+      ansible.builtin.shell: "awk '/MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo"
+      register: minecraft_post_start_mem
+      changed_when: false
+
+    - name: Preserve Carter recovery headroom after starting Minecraft
+      block:
+        - name: Require 3 GiB of post-start host memory
+          ansible.builtin.assert:
+            that:
+              - minecraft_post_start_mem.stdout | int >= 3072
+            fail_msg: "Minecraft start left Carter below the 3072 MiB recovery guardrail."
+            quiet: true
+      rescue:
+        - name: Stop the shed-first guest after a failed capacity check
+          ansible.builtin.command: "pct stop {{ minecraft_ctid }}"
+          changed_when: true
+        - name: Report the capacity failure
+          ansible.builtin.fail:
+            msg: "CT 129 was stopped because Carter fell below its recovery memory guardrail."
+
+- name: Enrol Minecraft in a separate stop-mode PBS job
+  hosts: carter
+  gather_facts: false
+  vars:
+    minecraft_ip_bare: "{{ minecraft_ip | regex_replace('/.*$', '') }}"
+
+  tasks:
+    - name: Read the dedicated Minecraft PBS job
+      ansible.builtin.command: "pvesh get /cluster/backup/{{ minecraft_backup_job_id }} --output-format json"
+      register: minecraft_backup_job
+      changed_when: false
+      failed_when: false
+
+    - name: Create the daily application-consistent Minecraft PBS job
+      ansible.builtin.command: >-
+        pvesh create /cluster/backup
+        --id {{ minecraft_backup_job_id }}
+        --storage pbs-oneill
+        --vmid {{ minecraft_ctid }}
+        --mode stop
+        --schedule {{ minecraft_backup_schedule }}
+        --prune-backups keep-daily=7,keep-weekly=4
+        --enabled 1
+      when: minecraft_backup_job.rc != 0
+      changed_when: true
+
+    - name: Require any existing Minecraft PBS job to retain the accepted contract
+      ansible.builtin.assert:
+        that:
+          - (minecraft_backup_job.stdout | from_json).storage == 'pbs-oneill'
+          - (minecraft_backup_job.stdout | from_json).vmid | string == minecraft_ctid | string
+          - (minecraft_backup_job.stdout | from_json).mode == 'stop'
+        fail_msg: "Existing {{ minecraft_backup_job_id }} job differs from the accepted stop-mode PBS contract."
+        quiet: true
+      when: minecraft_backup_job.rc == 0
+
+    - name: Check for an existing Minecraft backup
+      ansible.builtin.shell: >-
+        pvesm list pbs-oneill --content backup --vmid {{ minecraft_ctid }}
+        | grep -q 'backup/ct/{{ minecraft_ctid }}/'
+      register: minecraft_backups_before
+      changed_when: false
+      failed_when: false
+
+    - name: Take the first encrypted application-consistent PBS image
+      ansible.builtin.command: >-
+        vzdump {{ minecraft_ctid }} --storage pbs-oneill --mode stop
+        --prune-backups keep-daily=7,keep-weekly=4
+      when: minecraft_backups_before.rc != 0
+      changed_when: true
+
+    - name: Verify the PBS image is present
+      ansible.builtin.shell: >-
+        pvesm list pbs-oneill --content backup --vmid {{ minecraft_ctid }}
+        | grep -q 'backup/ct/{{ minecraft_ctid }}/'
+      changed_when: false
+
+    - name: Verify the service recovered after the stop-mode backup
+      ansible.builtin.shell: >-
+        pct exec {{ minecraft_ctid }} -- curl -fsS --max-time 5
+        http://127.0.0.1:{{ minecraft_health_port }}/ | grep -qx OK
+      register: minecraft_post_backup_health
+      until: minecraft_post_backup_health.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Report the remaining commissioning actions
+      ansible.builtin.debug:
+        msg:
+          - "Minecraft Bedrock {{ minecraft_bds_version }} is live on CT {{ minecraft_ctid }} at its reserved LAN address on UDP {{ minecraft_port }}."
+          - "No public ingress exists; LAN and authorised Tailscale subnet-route access only."
+          - "NEXT: deploy monitoring/Glance, apply the versioned Tailscale grant, join from iPad/Switch, and run the isolated PBS restore drill."

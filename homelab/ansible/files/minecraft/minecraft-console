@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Send one administrative command to the running Bedrock console.
+set -euo pipefail
+
+console=/run/minecraft-bedrock/console
+[[ $# -gt 0 ]] || { echo "usage: minecraft-console COMMAND [ARG ...]" >&2; exit 2; }
+[[ -p "$console" ]] || { echo "minecraft console is unavailable" >&2; exit 1; }
+printf '%s\n' "$*" > "$console"

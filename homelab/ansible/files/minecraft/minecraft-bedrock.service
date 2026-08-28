@@ -1,0 +1,35 @@
+[Unit]
+Description=Minecraft Bedrock Dedicated Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+WorkingDirectory=/opt/minecraft/current
+Environment=LD_LIBRARY_PATH=/opt/minecraft/current
+RuntimeDirectory=minecraft-bedrock
+RuntimeDirectoryMode=0750
+ExecStart=/usr/local/libexec/minecraft-bedrock-run
+ExecStop=/usr/local/bin/minecraft-console stop
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadOnlyPaths=/opt/minecraft /etc/minecraft-bedrock
+ReadWritePaths=/var/lib/minecraft
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

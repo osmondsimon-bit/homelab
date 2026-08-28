@@ -1,0 +1,97 @@
+---
+# Create CT 129 stopped so Proxmox generates its stable MAC before any network use.
+# This staging play does not boot the guest, download BDS, or accept the Minecraft EULA.
+# After it runs, read the MAC in Proxmox, reserve the desired Home-LAN IP in UniFi, copy
+# the resulting MAC/IP into the gitignored all.yml, then run provision-minecraft-bedrock.yml.
+
+- name: Stage the stopped Minecraft Bedrock LXC allocation on Carter
+  hosts: carter
+  gather_facts: false
+  vars:
+    minecraft_stage_ctid: "{{ minecraft_ctid | default(129) }}"
+    minecraft_stage_hostname: "{{ minecraft_hostname | default('minecraft-bedrock') }}"
+    minecraft_stage_cores: "{{ minecraft_cores | default(2) }}"
+    minecraft_stage_ram_mb: "{{ minecraft_ram_mb | default(4096) }}"
+    minecraft_stage_disk_gb: "{{ minecraft_disk_gb | default(32) }}"
+    minecraft_ubuntu_template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Require the accepted staged shape
+      ansible.builtin.assert:
+        that:
+          - minecraft_stage_ctid | int == 129
+          - minecraft_stage_cores | int == 2
+          - minecraft_stage_ram_mb | int == 4096
+          - minecraft_stage_disk_gb | int == 32
+        fail_msg: "The staged Minecraft allocation must retain CT 129 at 2 vCPU / 4 GiB / 32 GiB."
+        quiet: true
+
+    - name: Check whether CT 129 already exists
+      ansible.builtin.command: "pct status {{ minecraft_stage_ctid }}"
+      register: minecraft_stage_status
+      changed_when: false
+      failed_when: false
+
+    - name: Read Carter memory before a new allocation
+      ansible.builtin.shell: "awk '/MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo"
+      register: minecraft_stage_mem
+      changed_when: false
+      when: minecraft_stage_status.rc != 0
+
+    - name: Preserve the recovery guardrail before staging
+      ansible.builtin.assert:
+        that:
+          - minecraft_stage_mem.stdout | int >= (minecraft_stage_ram_mb | int) + 3072
+        fail_msg: "Carter cannot stage Minecraft while preserving its 3 GiB recovery guardrail."
+        quiet: true
+      when: minecraft_stage_status.rc != 0
+
+    - name: Download the supported Ubuntu LXC template
+      ansible.builtin.command: "pveam download {{ template_store }} {{ minecraft_ubuntu_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ minecraft_ubuntu_template }}"
+      when: minecraft_stage_status.rc != 0
+
+    - name: Create CT 129 stopped with an auto-generated MAC and no fixed address
+      ansible.builtin.command: >-
+        pct create {{ minecraft_stage_ctid }} {{ template_store }}:vztmpl/{{ minecraft_ubuntu_template }}
+        --hostname {{ minecraft_stage_hostname }}
+        --cores {{ minecraft_stage_cores }}
+        --memory {{ minecraft_stage_ram_mb }}
+        --swap 512
+        --rootfs {{ rootfs_storage }}:{{ minecraft_stage_disk_gb }}
+        --net0 name=eth0,bridge={{ bridge }},ip=dhcp,firewall=1
+        --unprivileged 1
+        --onboot 0
+      when: minecraft_stage_status.rc != 0
+      changed_when: true
+
+    - name: Read the staged allocation
+      ansible.builtin.command: >-
+        pvesh get /nodes/{{ inventory_hostname }}/lxc/{{ minecraft_stage_ctid }}/config
+        --output-format json
+      register: minecraft_stage_config
+      changed_when: false
+
+    - name: Require the staged guest to remain stopped and unprivileged
+      ansible.builtin.assert:
+        that:
+          - (minecraft_stage_config.stdout | from_json).hostname == minecraft_stage_hostname
+          - (minecraft_stage_config.stdout | from_json).unprivileged | int == 1
+          - (minecraft_stage_config.stdout | from_json).onboot | int == 0
+          - (minecraft_stage_config.stdout | from_json).net0 is search('ip=dhcp')
+        fail_msg: "CT 129 exists but does not match the safe stopped staging contract."
+        quiet: true
+
+    - name: Confirm CT 129 has never been booted by this workflow
+      ansible.builtin.command: "pct status {{ minecraft_stage_ctid }}"
+      register: minecraft_stage_final_status
+      changed_when: false
+      failed_when: "'status: stopped' not in minecraft_stage_final_status.stdout"
+
+    - name: Report the reservation handoff without printing the private MAC
+      ansible.builtin.debug:
+        msg:
+          - "CT 129 is staged and stopped; no guest software has run."
+          - "Open Carter -> CT 129 -> Network in Proxmox to read the generated MAC."
+          - "Reserve that MAC plus the desired Home-LAN IP in UniFi, then set the private inventory and run provision-minecraft-bedrock.yml."

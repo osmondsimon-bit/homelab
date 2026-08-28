@@ -54,6 +54,10 @@ while qBittorrent is intentionally held fail-closed after its local WireGuard re
 delay absorbs normal one-minute health checks and a single controlled recovery attempt; healthy
 probes and short interruptions send no notifications.
 
+`MinecraftUnavailable` similarly covers the process-inside-a-running-guest gap for CT 129. Its
+LAN-only HTTP endpoint returns success only when the `minecraft`-owned BDS process exists and UDP
+19132 is bound; a five-minute failure warns without attempting unauthenticated game-protocol probes.
+
 ## Operations
 
 Health checks, the alert-pipeline test (`amtool alert add …`), exporter/target troubleshooting,

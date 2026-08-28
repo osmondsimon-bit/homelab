@@ -28,6 +28,7 @@ recovery stays non-circular.
 | **Home Assistant** (VM 200) dies | restart on Apophis; if Apophis is lost, recover its Carter replica; ultimate fallback is HA's native partial backup | ✅ HA restore 2026-06-18 · ✅ replica boot 2026-06-25 | [HA native partial backup](#home-assistant--native-partial-backup-primary-for-ha) · [Rebuild Apophis](#phase-4b-rebuild-apophis-on-zfs-one-time--infra-designer-reviewed-2026-06-22) |
 | **Vaultwarden** (VM 118) dies | restart on Carter; if Carter is lost, recover its Apophis replica; ultimate fallback is the PBS image | ✅ PBS restore 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Capacity-aware failover](#capacity-aware-manual-failover-vm-118-when-carter-is-truly-dead--adr-009) |
 | **Actual Budget** (VM 127) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ✅ PBS restore 2026-07-15 | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
+| **Minecraft Bedrock** (CT 129) dies | restart/reprovision the LXC; recover the family world from its dedicated stop-mode PBS image | ✅ isolated restore 2026-08-28 | [Minecraft component](../components/minecraft-bedrock.md) · [Minecraft operations](#minecraft-bedrock--ct-129) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
 | **Jellyfin** (CT 120) dies | reproducible from code → re-run `provision-jellyfin.yml`, redo wizard + re-add `/media/library`; **media persists on the USB SSD**, config not imaged (cheap to recreate) | n/a — not imaged by design | [jellyfin.md](../components/jellyfin.md) |
 | **qBittorrent** (CT 121) dies | reproducible → re-run `provision-qbittorrent.yml` (needs WG config + IP in gitignored `all.yml`); downloads persist on the USB SSD; killswitch must pass leak-test after | n/a — not imaged by design | [qbittorrent.md](../components/qbittorrent.md) · [leak-test](#qbittorrent--wireguard-killswitch-ct-121--adr-021-phase-6b) |
 | **Sonarr** (CT 123) dies | reproducible → re-run `provision-sonarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/tv`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored series) is lost** — re-add manually or from a Sonarr backup export. | n/a — not imaged by design | [sonarr.md](../components/sonarr.md) |
@@ -783,8 +784,9 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
   `pbs-oneill`, daily **02:30**, snapshot mode, retention **keep-daily 7 / keep-weekly 4**.
   `provision-actual.yml` idempotently enrols VM 127 and takes its first image immediately.
   A cluster backup job follows each selected VM to its current node; a separate Carter schedule is
-  unnecessary. CTs and HA are **excluded** — CTs rebuild from playbooks and HA uses the native
-  partial below. The imaged VMs contain state that Ansible cannot reproduce.
+  unnecessary. Stateful Minecraft CT 129 has a separate Carter-owned daily **stop-mode** job with
+  the same retention. Other CTs are excluded because they rebuild from playbooks; HA uses the native
+  partial below. These four images contain state that Ansible cannot reproduce.
 - **GC:** datastore `main` runs garbage collection daily.
 - **Encryption (2026-06-17, ADR-012):** client-side encryption is **on** (`pvesm set pbs-oneill
   --encryption-key autogen`) — backups are encrypted before leaving apophis. The key lives at
@@ -798,7 +800,8 @@ curl -s 'http://YOUR_MONITORING_IP:9090/api/v1/query?query=homelab_reboot_requir
 ssh root@YOUR_PROXMOX_IP "pvesm list pbs-oneill"                                            # list points
 ssh root@YOUR_PROXMOX_IP "qmrestore pbs-oneill:backup/vm/118/<ISO-timestamp> <newvmid>"     # Vaultwarden
 ssh root@YOUR_CARTER_IP "qmrestore pbs-oneill:backup/vm/127/<ISO-timestamp> <newvmid>"       # Actual Budget
-# CTs are reprovisioned from Ansible, NOT restored from PBS (no CT is in the backup job).
+ssh root@YOUR_CARTER_IP "pct restore <newvmid> pbs-oneill:backup/ct/129/<ISO-timestamp>"       # Minecraft
+# Other CTs are reprovisioned from Ansible rather than restored from PBS.
 ```
 
 ### Home Assistant — native partial backup (primary for HA)
@@ -832,18 +835,20 @@ don't need image backups — only genuinely stateful or hand-built things do.
 |---|---|---|
 | Ansible playbooks | **the LXCs end-to-end** — `pct create` + config (Tailscale, Technitium, PBS, share) | git (public) |
 | Private repo (ADR-007) | real inventory/group_vars/host_vars, `.claude` | git (private) |
-| PBS images | **mgmt-vm** (hand-built) + **vaultwarden VM 118** + **Actual VM 127** (stateful Docker data) | oneill |
+| PBS images | **mgmt-vm** + **vaultwarden VM 118** + **Actual VM 127** + **Minecraft CT 129** (stateful world) | oneill |
 | HA native partial | HA config + Zigbee2MQTT + add-ons (restore onto a fresh HAOS) | oneill share |
 | Terraform (ADR-008) | **planned** — declarative VM/LXC definitions; not yet imported (empty scaffold) | git (public) |
 
-**Reality check (2026-06-16):** Terraform manages nothing yet (no state) — the four LXCs are
-created **and** configured by their Ansible playbooks today (re-run to rebuild). The CTs are
-deliberately not in PBS (the playbooks rebuild them). **mgmt-vm, the HA VM, Vaultwarden (VM 118),
-and Actual (VM 127) are the exceptions — none is fully recreatable from code:** mgmt-vm relies on its PBS image; HA
+**Reality check (2026-08-28):** Terraform manages nothing yet (no state). LXCs are created and
+configured by their Ansible playbooks today. Most CTs deliberately remain outside PBS because the
+playbooks rebuild them. **mgmt-vm, the HA VM, Vaultwarden (VM 118), Actual (VM 127), and Minecraft
+(CT 129) are the stateful exceptions:** mgmt-vm relies on its PBS image; HA
 relies on manually creating a HAOS VM then restoring the native partial; Vaultwarden's playbook
 rebuilds the VM+container but its vault data comes from the PBS image (or carter replica); Actual's
-playbook rebuilds the VM+container but its finance data comes from PBS or the portable ZIP. VM 118's
-PBS restore path is **proven ✅ 2026-06-26** and VM 127's is **proven ✅ 2026-07-15** (see Restore drills table). The playbook rebuild path is unproven
+playbook rebuilds the VM+container but its finance data comes from PBS or the portable ZIP; Minecraft's
+playbook rebuilds the service but its family world comes from PBS. VM 118's PBS restore path is
+**proven ✅ 2026-06-26**, VM 127's is **proven ✅ 2026-07-15**, and CT 129's is
+**proven ✅ 2026-08-28** (see Restore drills table). The playbook rebuild path is unproven
 until the **CT 111 reprovision drill** (pending) actually runs it.
 
 **Restore by scenario:**
@@ -904,6 +909,7 @@ as recovery evidence, not implementation authority.
 | 2026-06-26 | **PBS image of VM 118 (Vaultwarden)** | ✅ PASS — `qmrestore` of the 02:01Z image → throwaway VM 119 (NIC stripped, never on the tailnet), restored in 11 s. Guest agent up; `/opt/vaultwarden/data/db.sqlite3` present (272 KB, non-zero) + `rsa_key.pem` intact. 119 destroyed; live 118 untouched. **Vault recovery is now proven, not a hypothesis.** |
 | 2026-07-15 | **Encrypted PBS image of VM 127 (Actual Budget)** | ✅ PASS — restored the data-bearing 05:22Z image to throwaway VM 197 on Carter, removed its NIC before boot, and verified the account database, non-empty budget files, and Compose definition. RTO 155 s. VM 197 destroyed; live VM 127 remained running. **Finance-state recovery is proven.** |
 | 2026-07-23 | **Encrypted PBS image of VM 100 (mgmt-vm)** | ✅ PASS — restored the newest known-good `2026-07-21T16:30:01Z` image to protected VM 198 on Carter in 49 s, removed every NIC before first boot, and verified guest boot, readable filesystems, clean normal Git history, and required local-only Ansible inventory. A zero-valued Codex checkpoint ref was isolated from normal Git refs. VM 198 was retained running and isolated through recovery, then destroyed with its disks after final acceptance checks passed. |
+| 2026-08-28 | **Encrypted stop-mode PBS image of CT 129 (Minecraft Bedrock)** | ✅ PASS — restored to throwaway CT 130 on Carter with no NIC and `onboot=0`; verified the pinned binary, world data, two allow-list entries, Bedrock service, and health endpoint. RTO 150 s. CT 130 and its disk were destroyed; live CT 129 remained running and untouched. |
 | _pending_ | CT 111 / CT 117 Ansible reprovision | untested — records the real RTO |
 | _pending_ | CT 123 (Sonarr) Ansible reprovision | untested — simplest Phase 7 drill (no VPN credential dep); re-add qBit + root folder, verify hardlink import |
 | _pending_ | CT 124 (Radarr) Ansible reprovision | untested — same drill path as Sonarr |
@@ -1448,6 +1454,77 @@ If Apophis dies in the accepted placement, Vaultwarden remains on Carter. Before
 or starting cold VM 128, run `qm status 201` on Carter and require `status: stopped` (shut down the
 synthetic guest first if necessary). Then recover VM 200 from its Carter replica and start cold VM
 128 for an independent management plane.
+
+## Minecraft Bedrock — CT 129
+
+CT 129 on Carter runs the official native Bedrock server. It is a non-critical, shed-first guest:
+stop it before Carter absorbs recovery load if the host approaches the 3 GiB memory guardrail.
+
+### Health, logs, and restart
+
+```bash
+# Healthy only when the minecraft-owned BDS process exists and UDP 19132 is bound
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- curl -fsS http://127.0.0.1:9098/'
+
+# Logs and current players
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- journalctl -u minecraft-bedrock --since today'
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- /usr/local/bin/minecraft-console list'
+
+# Controlled restart
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- systemctl restart minecraft-bedrock'
+```
+
+Expected health output is `OK`. `MinecraftUnavailable` warns if the CT remains reachable while BDS
+or its UDP listener is unhealthy for five minutes; `GuestDown` covers the whole LXC.
+
+### Player access
+
+Manage Xbox gamertags through the declared private inventory lists and re-run the playbook. For a
+one-off console operation:
+
+```bash
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- /usr/local/bin/minecraft-console allowlist add GAMERTAG'
+ssh root@YOUR_CARTER_IP 'pct exec 129 -- /usr/local/bin/minecraft-console allowlist remove GAMERTAG'
+```
+
+On the first deployment, the parent account must join once before Bedrock has an XUID to place in
+`permissions.json`. After that join, send
+`pct exec 129 -- /usr/local/bin/minecraft-console op PARENT_GAMERTAG` or re-run the playbook. Verify
+only the parent is an operator from the in-game player permissions screen.
+
+Home clients use `YOUR_MINECRAFT_IP:19132/udp`; Switch should discover it as a LAN game. Remote iPad
+or Windows clients run Tailscale and enter the same LAN address. Operator access already follows the
+existing broad operator policy; the restricted child grant in `tailscale-acl.hujson` must be copied
+to the live Tailscale admin-console policy before child identities can use it remotely. Remote Switch
+play, public port forwarding, DNS-redirection proxies, Cloudflare, and Funnel are outside the accepted
+design.
+
+If CT 129 has not yet been commissioned, run `stage-minecraft-bedrock.yml --limit carter` once. It
+creates the allocation stopped with DHCP only so Proxmox generates a MAC without sending traffic.
+Read that MAC from the CT network device, reserve its final Home-LAN address in UniFi, record both in
+the gitignored inventory, and only then run the production playbook that sets the static network and
+boots the guest.
+
+### Update BDS
+
+1. Confirm a fresh `ct/129` PBS image exists.
+2. Query Minecraft's official download API and record the stable Linux URL/version.
+3. Download the official archive temporarily, calculate SHA-256, and update
+   `minecraft_bds_version`, `minecraft_bds_url`, and `minecraft_bds_sha256` together.
+4. Run `bash homelab/tests/test-minecraft-bedrock.sh`, then re-run
+   `provision-minecraft-bedrock.yml --limit carter`.
+5. Verify local health and join from the current iPad, Windows, and Switch clients. Keep the prior
+   release directory until the observation is accepted.
+
+### Restore drill
+
+Restore the newest PBS image to an unused CTID with no NIC or on the isolated Test network. Do not
+attach it to the Home LAN while CT 129 is running. Verify the world directory, allow list,
+permissions, current release symlink, and successful service start. Record the RTO in the restore
+drills table before removing the throwaway. The first such drill passed on 2026-08-28 in 150 seconds;
+repeat it after material storage or backup changes.
+
+---
 
 ## Onboarding a new guest / node / storage (ADR-017)
 

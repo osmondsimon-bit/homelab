@@ -407,6 +407,18 @@
                 - { source_labels: [__address__], target_label: __param_target }
                 - { source_labels: [__param_target], target_label: instance }
                 - { target_label: __address__, replacement: "localhost:9115" }
+          {% if minecraft_enabled | default(false) | bool %}
+            - job_name: blackbox-minecraft
+              metrics_path: /probe
+              params: { module: ["http_2xx"] }
+              static_configs:
+                - targets: ["http://{{ minecraft_ip | regex_replace('/.*$', '') }}:{{ minecraft_health_port }}/"]
+              # The guest endpoint reports healthy only when BDS is active and UDP 19132 is bound.
+              relabel_configs:
+                - { source_labels: [__address__], target_label: __param_target }
+                - { source_labels: [__param_target], target_label: instance }
+                - { target_label: __address__, replacement: "localhost:9115" }
+          {% endif %}
       changed_when: true
 
     - name: Set Prometheus TSDB retention

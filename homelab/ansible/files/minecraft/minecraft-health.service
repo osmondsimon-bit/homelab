@@ -1,0 +1,22 @@
+[Unit]
+Description=Minecraft Bedrock health endpoint
+After=minecraft-bedrock.service
+Wants=minecraft-bedrock.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/minecraft-health.py
+Restart=on-failure
+RestartSec=5
+DynamicUser=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

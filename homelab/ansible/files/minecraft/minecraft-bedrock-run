@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Keep a read/write console FIFO open while running the pinned Bedrock release.
+set -euo pipefail
+
+console=/run/minecraft-bedrock/console
+rm -f "$console"
+mkfifo -m 0600 "$console"
+exec 3<>"$console"
+exec /opt/minecraft/current/bedrock_server <&3

@@ -299,6 +299,7 @@ groups:
       # id map: lxc/110 tailscale · 111 technitium · 112 pbs · 113 ha-backup-share · 114 monitoring
       #         · 115 glance · 116 infra-portal · 117 technitium2 · 120 jellyfin · 121 qbittorrent
       #         · 123 sonarr · 124 radarr · 126 tailscale2 (HA subnet router #2, on oneill)
+      #         · 129 minecraft-bedrock
       #         · qemu/100 mgmt-vm · 118 vaultwarden · 125 seerr+prowlarr+gluetun
       #         · 127 actual-budget · 128 mgmt-vm2 · 200 home-assistant
       #         · 201 ha-synthetic (intentional on-demand test appliance).
@@ -339,6 +340,17 @@ groups:
         annotations:
           summary: "qBittorrent unavailable after VPN recovery window"
           description: "qBittorrent's Web UI has been unreachable for 5m while monitored externally. CT 121 may still be running with qBittorrent held fail-closed after WireGuard recovery failed. Check qbittorrent-vpn-health.service, wg-quick@wg0, and the Proton profile."
+
+      # CT 129 can remain up while the native Bedrock process or its UDP listener has failed.
+      # The guest-owned HTTP endpoint checks both without requiring a game-protocol probe.
+      - alert: MinecraftUnavailable
+        expr: probe_success{job="blackbox-minecraft"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Minecraft Bedrock is unavailable"
+          description: "CT 129 is reachable by monitoring, but minecraft-bedrock.service or its UDP 19132 listener has been unhealthy for 5m."
 
       # pvesr replication health — the manual-failover safety net (ADR-009). VM 118 replicates
       # carter->apophis and VM 200 replicates apophis->carter every 15 min; if either silently

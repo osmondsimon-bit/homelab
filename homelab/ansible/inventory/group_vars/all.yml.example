@@ -42,6 +42,33 @@ ha_synthetic_image_version: "18.2"
 # Official digest published on the Home Assistant OS 18.2 GitHub release asset.
 ha_synthetic_image_sha256: 254e53f354df0739e3afc09be5431a07df53f0df6b703885404f665c454f254e
 
+# --- Minecraft Bedrock LXC (Carter, ADR-027) -------------------------------
+# Private family game server. Reserve the MAC/IP before setting enabled=true; the Xbox
+# gamertags belong only in the gitignored all.yml. BDS upgrades are pinned and attended.
+minecraft_enabled: false
+minecraft_ctid: 129
+minecraft_hostname: minecraft-bedrock
+minecraft_cores: 2
+minecraft_ram_mb: 4096
+minecraft_disk_gb: 32
+minecraft_ip: YOUR_MINECRAFT_IP/24
+minecraft_mac: YOUR_MINECRAFT_MAC
+minecraft_port: 19132
+minecraft_health_port: 9098
+minecraft_server_name: Osmond Family Minecraft
+minecraft_level_name: family-world
+minecraft_max_players: 10
+minecraft_view_distance: 12
+minecraft_tick_distance: 4
+minecraft_accept_eula: false                              # operator must review and opt in
+minecraft_allowlist: [YOUR_PARENT_XBOX_GAMERTAG, YOUR_CHILD_XBOX_GAMERTAG]
+minecraft_operators: [YOUR_PARENT_XBOX_GAMERTAG]
+minecraft_bds_version: "1.26.44.3"
+minecraft_bds_url: "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.26.44.3.zip"
+minecraft_bds_sha256: "a6d85efb2d72588b725afc12588bb1aab57547252ff1f84e7f9c3646816438c1"
+minecraft_backup_job_id: minecraft-bedrock-daily
+minecraft_backup_schedule: "04:30"
+
 # --- Tailscale LXC -----------------------------------------------------------
 tailscale_ctid: 110                                         # ensure this VMID is free
 tailscale_hostname: tailscale
@@ -244,6 +271,7 @@ glance_services:
   # node_exporter endpoint provides an honest VM-reachability check without exposing the app port.
   - { title: "Vaultwarden", node: carter, workload: "VM 118", url: "{{ vaultwarden_domain }}", check_url: "http://{{ vaultwarden_ip | regex_replace('/.*$','') }}:9100/metrics", icon: "di:vaultwarden" }
   - { title: "Actual Budget", node: carter, workload: "VM 127", url: "{{ actual_domain }}", check_url: "http://{{ actual_ip | regex_replace('/.*$','') }}:9100/metrics", icon: "di:actual-budget", enabled: "{{ actual_enabled | default(false) | bool }}" }
+  - { title: "Minecraft", node: carter, workload: "CT 129", url: "http://{{ minecraft_ip | regex_replace('/.*$','') }}:{{ minecraft_health_port }}", check_url: "http://{{ minecraft_ip | regex_replace('/.*$','') }}:{{ minecraft_health_port }}/", icon: "di:minecraft", enabled: "{{ minecraft_enabled | default(false) | bool }}" }
   - { title: "Grafana", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:3000/api/health", icon: "di:grafana" }
   - { title: "Prometheus", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy", icon: "di:prometheus" }
   - { title: "Alertmanager", node: oneill, workload: "CT 114", url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093", check_url: "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9093/-/healthy", icon: "di:alertmanager" }
