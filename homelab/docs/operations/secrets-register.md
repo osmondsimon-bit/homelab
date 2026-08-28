@@ -50,6 +50,7 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | UniFi read-only monitoring password | unpoller / Prometheus |
 | PVE API scrape token | Prometheus pve exporter (cluster-wide; carter reuses apophis's) |
 | HA long-lived access token | Prometheus HA exporter |
+| HA-15 Synthetic HAOS test token | Attended Synthetic HAOS scenario runner; retain only through HA-15 and revoke at closeout. |
 
 ## Tier 4 — `vars_prompt` at provisioning (ephemeral — not stored anywhere)
 
