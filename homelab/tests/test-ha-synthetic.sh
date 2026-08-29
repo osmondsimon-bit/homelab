@@ -185,10 +185,16 @@ grep -Fq 'qm shutdown 201' "$runbook" \
   || fail 'the commissioning runbook must return the on-demand guest to stopped state'
 grep -Fq 'do not restore a production backup' "$runbook" \
   || fail 'the synthetic commissioning runbook must preserve the no-restore boundary'
-grep -Fq 'ha-synthetic (staged)' "$plan" \
-  || fail 'PLAN must record the created guest as staged'
-grep -Fq 'never booted' "$plan" \
-  || fail 'stopped allocation must not be misrepresented as a completed first boot'
+grep -Fq 'ha-synthetic (on-demand)' "$plan" \
+  || fail 'PLAN must record the commissioned guest as on-demand'
+grep -Fq 'guarded HA-MCP 8.3.0' "$plan" \
+  || fail 'PLAN must record the Synthetic-only administrative MCP harness'
+grep -Fq 'one exact management source on TCP 9583' "$decision" \
+  || fail 'the MCP management path must remain exact and sanitized'
+grep -Fq 'raw-YAML, filesystem and custom-tool beta' "$runbook" \
+  || fail 'the runbook must disable broad beta configuration surfaces'
+grep -Fq 'close all temporary DNS/HTTP/HTTPS egress' "$runbook" \
+  || fail 'the MCP install window must end with external deny re-proof'
 grep -Fq '`provision-ha-synthetic.yml`' "$ansible_readme" \
   || fail 'the new playbook must be present in the Ansible catalogue'
 grep -Fq 'Reproducible from code' "$component" \

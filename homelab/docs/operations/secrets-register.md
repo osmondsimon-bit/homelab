@@ -43,7 +43,7 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | 2FA / TOTP recovery codes (per account) | A lost/desynced phone must not lock root out of Proxmox (Phase 4 401 saga). |
 | Vaultwarden master password | The vault can't protect its own unlock secret. |
 
-## Tier 3 — gitignored env files on mgmt-vm (machine tokens — not in Vaultwarden)
+## Tier 3 — protected local files on mgmt-vm (machine tokens — not in Vaultwarden)
 
 | Token | Consumer |
 |-------|----------|
@@ -51,6 +51,7 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | PVE API scrape token | Prometheus pve exporter (cluster-wide; carter reuses apophis's) |
 | HA long-lived access token | Prometheus HA exporter |
 | HA-15 Synthetic HAOS test token | Attended Synthetic HAOS scenario runner; retain only through HA-15 and revoke at closeout. |
+| HA-15 Synthetic HA-MCP capability URL | Codex global MCP configuration, mode 0600; never copy to project config or Git, and remove at HA-15 closeout. |
 
 ## Tier 4 — `vars_prompt` at provisioning (ephemeral — not stored anywhere)
 

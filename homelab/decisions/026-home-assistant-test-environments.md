@@ -1,7 +1,7 @@
 # ADR-026: Home Assistant test environments
 
 **Date:** 2026-08-21
-**Status:** Accepted — synthetic environment staged stopped; first boot pending
+**Status:** Accepted — synthetic environment commissioned for on-demand HA-15 development
 
 ## Purpose
 
@@ -33,13 +33,30 @@ commissioning client has TCP 8123 access using any ephemeral source port and aut
 traffic. This satisfies the static stopped-staging gate; exact-guest active deny evidence remains a
 separate pre-onboarding gate.
 
-VM 201 was created on Carter and independently revalidated in its stopped state on 2026-08-25. It
-has never been booted. Its generated MAC now enables a local-only DHCP reservation and destination
-rule refinement; neither that reservation nor first-boot authority is implied by staging.
+VM 201 was created on Carter and independently revalidated in its stopped state on 2026-08-25. Its
+generated MAC enabled a local-only DHCP reservation and destination-rule refinement. A later
+attended start commissioned fresh HAOS, loaded only the Git-owned synthetic fixture and retained
+the VM-level `onboot=0`, backup-exclusion and replication-exclusion contract.
 
 A subsequent read-only comparison confirmed the UniFi fixed-address record matches the generated
 VM NIC and the stateful TCP 8123 rule is narrowed to that reservation. This closes the reservation
 gate but does not grant first-boot authority or replace post-boot exact-guest deny probes.
+
+On 2026-08-29, HA-15 added stable HA-MCP 8.3.0 as a Synthetic-only administrative test harness.
+It is reachable from one exact management source on TCP 9583 and has no route from the internet or
+to production/device networks. Secret redaction, automatic per-edit backups and strict
+best-practice gating are enabled; snapshot deletion and raw-YAML, filesystem and custom-tool beta
+surfaces are disabled. Its capability URL lives only in the management client's mode-0600 global
+configuration. Runtime MCP edits remain non-authoritative until exported to the private repository,
+reviewed and reproduced by its renderer and tests. This exception does not authorize production
+MCP, production credentials, production restore or physical-device control.
+
+Installing or updating HAOS apps uses a separately attended egress window: only the selected DNS,
+NetworkManager HTTP connectivity check and HTTPS artifact fetch are opened, then closed and
+actively re-proved denied. Normal operation retains only the exact management-to-MCP path. The
+kill switch is to stop or uninstall the app, remove that network rule and remove the client entry.
+The initial 2026-08-29 installation closed with public DNS, HTTP and HTTPS all timing out from the
+exact guest while the management-to-MCP path still returned the expected unauthenticated denial.
 
 Home Assistant OS 18.2 is pinned for initial parity with the current live appliance. The official
 [OVA qcow2 release asset](https://github.com/home-assistant/operating-system/releases/tag/18.2)

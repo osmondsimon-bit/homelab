@@ -986,6 +986,26 @@ do not restore a production backup into it.
    synthetic package.
    Do not add production integrations, MQTT, Zigbee/Thread radios, mobile-app notifications,
    Cloudflare, backup storage, or vendor accounts.
+
+   The approved HA-15 administrative MCP exception uses stable HA-MCP 8.3.0. Before installation,
+   create a named HA backup. Temporarily allow only the exact guest to its selected public DNS on
+   TCP/UDP 53, the HAOS NetworkManager connectivity check on TCP 80, and artifact retrieval on TCP
+   443. Install from the reviewed upstream repository, then configure:
+
+   - boot with HAOS and watchdog enabled, while the VM itself remains `onboot=0`;
+   - secret redaction and automatic per-edit backups enabled;
+   - mandatory and strict best-practice gating enabled;
+   - snapshot deletion disabled;
+   - raw-YAML, filesystem and custom-tool beta tools disabled; and
+   - one exact management source to the guest on TCP 9583, above inter-zone denies.
+
+   Store the generated capability URL only in the management client's mode-0600 global MCP
+   configuration, with client write-tool approvals enabled. Never record it in Git, inventory,
+   screenshots or evidence. Restart the client session after adding the server so its tool catalogue
+   reloads. Then close all temporary DNS/HTTP/HTTPS egress, prove those probes fail from the exact
+   guest, and prove TCP 9583 still works only from the management source. Runtime MCP edits are drift
+   until exported, reviewed and reproduced by the private renderer and tests. The kill switch is to
+   stop/uninstall HA-MCP, remove the TCP 9583 rule and remove the client entry.
 7. Keep `onboot=0`. Stop VM 201 before starting VM 128, recovering VM 200 onto Carter, or doing
    Carter recovery/maintenance. The VM has no PBS or replication lifecycle; rebuild it from the
    pinned HAOS image and Git-owned fixture if lost.

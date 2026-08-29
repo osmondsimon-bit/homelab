@@ -6,10 +6,10 @@ VM 201 is a fresh, isolated HAOS appliance for developing Home Assistant configu
 Git-owned mock entities while the new house is being built. It is persistent for convenience but
 contains no authoritative state and can be destroyed and recreated.
 
-**As built:** staged on Carter on 2026-08-25 and left powered off without a first boot. The exact
-machine, disk, NIC and exclusion contract passed an idempotent post-create validation. A read-only
-hash comparison proved its generated NIC matches the local-only DHCP reservation, and the
-commissioning rule is narrowed to that address on stateful TCP 8123.
+**As built:** staged on Carter on 2026-08-25, then commissioned through an attended first boot for
+HA-15. The exact machine, disk, NIC and exclusion contract passed idempotent validation. Fresh HAOS
+contains only the Git-owned synthetic fixture and a guarded HA-MCP 8.3.0 test harness; it contains
+no production restore or device binding. The VM remains on-demand with `onboot=0`.
 
 ## Placement and lifecycle
 
@@ -33,10 +33,21 @@ The exact guest must prove allowed operator UI access and denied production path
 or receiving the test fixture.
 
 The 2026-08-25 read-only preflight initially found an empty named Test zone. After operator changes,
-a same-day recheck accepted the static boundary: internet access and mDNS are disabled, Test egress
-is limited to DHCP at the gateway, External and internal destinations are blocked, and one named
-commissioning client has stateful TCP 8123 access. Live isolation is not yet claimed; exact-guest
-deny probes and firewall-log correlation follow stopped staging and MAC reservation.
+a same-day recheck accepted the static boundary: normal internet access and mDNS are disabled,
+gateway services are narrowly selected, and External and internal destinations are blocked. Named
+commissioning access is exact and stateful. App installation uses a temporary DNS/HTTP/HTTPS egress
+window that must be closed and deny-tested after each attended update.
+
+HA-MCP is an administrative exception inside this otherwise synthetic boundary. Only the exact
+management client may reach TCP 9583. The app uses a secret capability path, redacts secrets,
+captures per-edit backups and requires strict best-practice acknowledgement. Snapshot deletion and
+raw-YAML, filesystem and custom-tool beta surfaces are disabled. Its runtime changes are disposable
+experiments until reproduced from the private repository; it has no production or commissioning
+authority.
+
+The initial 2026-08-29 app window was closed and actively verified: public DNS, HTTP and HTTPS were
+denied from the guest, while the exact management path to TCP 9583 remained reachable and rejected
+an unauthenticated request as designed.
 
 ## Continuity
 
@@ -49,4 +60,6 @@ and record the observed RTO; never restore production state to shorten recovery.
 
 Use `ansible/playbooks/provision-ha-synthetic.yml` and the Home Assistant synthetic VM section of
 the operations runbook. The default stages a stopped VM. Start mode requires separate attended
-isolation approval and a dated evidence reference.
+isolation approval and a dated evidence reference. HA-MCP lifecycle, egress-window closure and the
+client kill switch remain explicit operator steps because the secret path and HA runtime state do
+not belong in public Ansible inventory.
