@@ -8,7 +8,7 @@ no inbound from the internet** (ADR-003).
 |---|---|
 | Host / CTID | **apophis** / CT 120 (unprivileged Debian 12 LXC — **not** a VM; `nesting=1`) |
 | IP | `YOUR_JELLYFIN_IP` (static; reserved in UniFi) — UI on `:8096` |
-| Shape | 2 GB / 2 cores / **16 GB rootfs** (grown from 8 GB 2026-06-29 — transcode temp lives here) |
+| Shape | 2 GB / 4 cores / **16 GB rootfs** (grown from 8 GB 2026-06-29 — transcode temp lives here) |
 | iGPU | UHD 630 passed through: `/dev/dri` bind + cgroup allow `c 226:0` / `c 226:128`; host **render GID 993** mapped 1:1 into the CT; `jellyfin` user in that group |
 | Storage | media bind-mounted from the USB SSD — `/mnt/usb-media/library` → `/media/library`, `/mnt/usb-media/downloads` → `/media/downloads` (ext4, by-id, `nofail`) |
 | Service config | on the CT **rootfs** (internal SSD), `/var/lib/jellyfin` — deliberately **not** on the USB disk |
