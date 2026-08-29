@@ -1479,18 +1479,16 @@ or its UDP listener is unhealthy for five minutes; `GuestDown` covers the whole 
 
 ### Player access
 
-Manage Xbox gamertags through the declared private inventory lists and re-run the playbook. For a
-one-off console operation:
+The accepted temporary setting is `minecraft_online_mode: false`. BDS therefore runs with both
+`online-mode=false` and `allow-list=false`; its stored allow-list entries are dormant. Admission is
+enforced only by the guest's LAN-source firewall and the Tailscale policy. Do not use `allowlist` or
+`op` console commands in this mode: player names are unauthenticated, and provisioning deliberately
+keeps `permissions.json` empty. Use the Carter console for administration.
 
-```bash
-ssh root@YOUR_CARTER_IP 'pct exec 129 -- /usr/local/bin/minecraft-console allowlist add GAMERTAG'
-ssh root@YOUR_CARTER_IP 'pct exec 129 -- /usr/local/bin/minecraft-console allowlist remove GAMERTAG'
-```
-
-On the first deployment, the parent account must join once before Bedrock has an XUID to place in
-`permissions.json`. After that join, send
-`pct exec 129 -- /usr/local/bin/minecraft-console op PARENT_GAMERTAG` or re-run the playbook. Verify
-only the parent is an operator from the in-game player permissions screen.
+To return to authenticated admission, first prove a current client can complete an authenticated
+join, set `minecraft_online_mode: true` in the gitignored inventory, and rerun the playbook. It will
+reenable BDS's allow list and apply the preserved private gamertag lists. After the parent joins and
+BDS resolves its XUID, rerun provisioning to apply the declared operator grant.
 
 Home clients use `YOUR_MINECRAFT_IP:19132/udp`; Switch should discover it as a LAN game. Remote iPad
 or Windows clients run Tailscale and enter the same LAN address. Operator access already follows the

@@ -10,27 +10,29 @@ describes the accepted build; `PLAN.md` remains authoritative for whether the gu
 | Shape | 2 vCPU / 4 GiB RAM / 32 GiB thin ZFS root disk |
 | Clients | iPad, Switch/Switch 2 on LAN, and Minecraft for Windows; remote iPad/Windows via Tailscale subnet route |
 | Software | Official BDS `1.26.45.1`, URL and SHA-256 pinned in inventory |
-| State | `/var/lib/minecraft` (world, allow list, permissions); explicit properties under `/etc/minecraft-bedrock` |
+| State | `/var/lib/minecraft` (world, dormant allow list, empty permissions); explicit properties under `/etc/minecraft-bedrock` |
 | Backup | Separate daily encrypted PBS stop-mode image to Oneill, 7 daily / 4 weekly; isolated restore drill passed 2026-08-28 (150 s) |
 
 ## Access and family controls
 
-The server has normal outbound access for Xbox authentication and updates but no public inbound
-path. The guest firewall default-drops inbound traffic and admits UDP `19132` only from the Home
-subnet, which includes the two subnet routers' SNAT addresses. No port-forward, Cloudflare route,
-Funnel, public DNS record, or Tailscale daemon belongs on the guest.
+The server has normal outbound access for updates but no public inbound path. The guest firewall
+default-drops inbound traffic and admits UDP `19132` only from the Home subnet, which includes the
+two subnet routers' SNAT addresses. No port-forward, Cloudflare route, Funnel, public DNS record, or
+Tailscale daemon belongs on the guest.
 
-`online-mode`, `allow-list`, and LAN visibility are explicitly enabled. Players are ordinary
-members, cheats are disabled, and only the parent gamertag is an operator. Gamertags live in the
-gitignored `minecraft_allowlist` / `minecraft_operators` inventory lists. Remote child iPads must
-use separate tailnet identities covered by the versioned single-address `udp:19132` grant; apply
-that reference change in the Tailscale admin console before relying on remote child access. Never
-sign them into the all-powerful operator identity.
+As a temporary, explicitly accepted local-only workaround, `minecraft_online_mode: false` disables
+Xbox authentication and BDS's allow list together. Controlled testing on 2026-08-29 proved that the
+same current clients could complete a join only with authentication disabled; disabling the allow
+list alone did not change the failure. BDS refuses to start with an allow list but no online
+authentication, so the LAN/Tailscale firewall boundary is now the player admission control. Anyone
+who can reach UDP `19132` can join and can claim an arbitrary player name.
 
-Bedrock resolves operator permissions by XUID only after the account has joined. On a new server,
-the parent joins once as an allowlisted member, then the operator reruns the playbook or sends the
-documented `op` console command. The playbook reports only resolved counts and never prints names or
-XUIDs.
+The saved allow-list entries remain dormant for an authenticated-mode rollback. Provisioning skips
+all gamertag and `op` commands and empties `permissions.json` before restart, so no spoofable player
+identity receives operator rights. Cheats remain disabled and administration is console-only while
+offline mode is active. Remote child iPads must use separate tailnet identities covered by the
+versioned single-address `udp:19132` grant; apply that reference change in the Tailscale admin
+console before relying on remote child access.
 
 Switch has no supported Tailscale client or dependable arbitrary remote-server entry. Local LAN
 discovery is expected and was accepted without a pre-build proof. DNS-redirection and featured-server
@@ -46,7 +48,8 @@ ansible-playbook playbooks/stage-minecraft-bedrock.yml --limit carter
 ```
 
 Read the generated MAC from Carter's CT 129 network device, reserve the desired Home-LAN address in
-UniFi, and copy that pair plus the private gamertag lists into the gitignored inventory. Then run:
+UniFi, and copy that pair plus the private gamertag lists into the gitignored inventory. Keep those
+lists for rollback even though they are inactive while `minecraft_online_mode` is false. Then run:
 
 ```bash
 cd ~/homelab/ansible
@@ -66,8 +69,8 @@ playbook, then join from iPad, Windows, and Switch. Do not deploy Preview builds
 
 - Process/listener: `pct exec 129 -- curl -fsS http://127.0.0.1:9098/` must return `OK`.
 - Logs: `pct exec 129 -- journalctl -u minecraft-bedrock --since today`.
-- Console: `pct exec 129 -- /usr/local/bin/minecraft-console list` or
-  `... /usr/local/bin/minecraft-console allowlist add GAMERTAG`.
+- Console: `pct exec 129 -- /usr/local/bin/minecraft-console list`. Do not grant in-game operators
+  while authentication is disabled.
 - Restart: `pct exec 129 -- systemctl restart minecraft-bedrock`.
 - Monitoring: `GuestDown` covers CT 129; `MinecraftUnavailable` checks the service plus bound UDP
   listener through the LAN-only health endpoint; Glance shows placement and health.
@@ -77,7 +80,7 @@ playbook, then join from iPad, Windows, and Switch. Do not deploy Preview builds
 ## Recovery
 
 Restore the newest `ct/129` PBS image to an unused CTID with its NIC detached or on the isolated Test
-network. Confirm `/var/lib/minecraft/worlds`, the allow list, permissions, pinned release, and service
+network. Confirm `/var/lib/minecraft/worlds`, the dormant allow list, empty permissions, pinned release, and service
 startup before attaching a production NIC. A no-NIC restore to throwaway CT 130 passed on 2026-08-28
 in 150 seconds; the binary, world, two allow-list entries, Bedrock service, and health endpoint were
 verified before CT 130 and its disk were destroyed. CT 129 remained running and untouched.

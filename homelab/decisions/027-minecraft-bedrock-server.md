@@ -24,9 +24,9 @@ and recovery-capacity balance; Minecraft is non-critical and must be stopped bef
 the 3 GiB host-memory guardrail is threatened.
 
 The native binary runs as a dedicated non-login user under a hardened systemd unit. Configuration
-explicitly enables Xbox authentication, the game allow list, ordinary-member permissions, and LAN
-visibility while disabling cheats. Only declared parent gamertags receive operator permission. BDS
-releases are URL- and SHA-256-pinned and upgraded deliberately to remain compatible with clients.
+keeps ordinary-member permissions and LAN visibility enabled while disabling cheats. BDS releases
+are URL- and SHA-256-pinned and upgraded deliberately to remain compatible with clients. The
+authentication and identity-based admission decision is amended below.
 
 Attach the LXC to the Home LAN with a pre-reserved MAC and static address. Its default-deny guest
 firewall allows Bedrock UDP 19132 only from the Home subnet; the existing Tailscale subnet routers
@@ -39,6 +39,25 @@ retaining seven daily and four weekly images. The brief overnight stop makes the
 application-consistent. Backup freshness is auto-discovered, but recovery is not considered proven
 until an isolated restore drill succeeds. Do not replicate the guest or add it to Proxmox HA.
 
+## Amendment: local-only authentication exception (2026-08-29)
+
+After upgrading server and clients to the same current protocol, controlled tests showed that iPad
+and Windows clients reached BDS but were rejected before login while Xbox authentication was on.
+The same client completed a real join only with `online-mode=false`. Disabling only the BDS allow
+list did not fix the rejection, and BDS refuses to start with its allow list enabled while online
+authentication is disabled.
+
+The operator explicitly accepts offline mode for this low-value family world. Set
+`minecraft_online_mode: false`, which renders both `online-mode` and `allow-list` false. The existing
+allow-list data remains stored for rollback but is not an admission control. The LAN/Tailscale
+firewall boundary is the sole player admission control: anyone able to reach UDP 19132 may join and
+may spoof a player name. Provisioning therefore clears identity-based operator permissions and
+skips all allow-list and `op` commands; administration is console-only. No public ingress is added.
+
+This exception is reversible. Re-enable `minecraft_online_mode` and rerun provisioning when current
+clients can complete an authenticated join, then validate the restored allow list and operator XUID
+resolution before considering identity-based access effective again.
+
 ## Consequences
 
 - The current hardware can host the server without a purchase, and failure of Minecraft cannot
@@ -47,8 +66,8 @@ until an isolated restore drill succeeds. Do not replicate the guest or add it t
   Switch play is local-only and depends on LAN discovery in the actual installed client build.
 - Xbox gamertags and child Tailscale identities remain private inventory/policy values rather than
   committed documentation.
-- The server has no public attack surface, but authenticated play and maintenance retain ordinary
-  outbound internet dependencies.
+- The server has no public attack surface. While the exception is active, player identity is not
+  authenticated and every device that can reach the LAN/Tailscale UDP boundary can join.
 - Client auto-updates may force prompt attended BDS upgrades. Roll back by restoring the previous
   pinned release or the latest verified PBS image.
 - The two local copies do not close ADR-012's site-disaster/off-site-backup gap.

@@ -61,6 +61,7 @@ minecraft_max_players: 10
 minecraft_view_distance: 12
 minecraft_tick_distance: 4
 minecraft_accept_eula: false                              # operator must review and opt in
+minecraft_online_mode: false                              # accepted local-only workaround; disables BDS allowlist too
 minecraft_allowlist: [YOUR_PARENT_XBOX_GAMERTAG, YOUR_CHILD_XBOX_GAMERTAG]
 minecraft_operators: [YOUR_PARENT_XBOX_GAMERTAG]
 minecraft_bds_version: "1.26.45.1"

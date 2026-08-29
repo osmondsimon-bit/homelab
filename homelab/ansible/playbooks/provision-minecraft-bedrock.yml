@@ -2,11 +2,13 @@
 # Provision the private family Minecraft Bedrock server on Carter (ADR-027).
 # The unprivileged Ubuntu LXC is reachable on the Home LAN and, through the existing
 # subnet-router pair, by explicitly authorised Tailscale identities. It has ordinary
-# outbound access for Xbox authentication and updates but no public ingress.
+# outbound access for updates but no public ingress. Xbox authentication is an explicit
+# inventory decision because the current client/server path rejects valid family accounts.
 #
 # Prerequisites in the gitignored all.yml:
 #   - reserve minecraft_mac + minecraft_ip in UniFi before running
-#   - set minecraft_allowlist and minecraft_operators to the exact Xbox gamertags
+#   - preserve minecraft_allowlist and minecraft_operators for authenticated-mode rollback
+#   - set minecraft_online_mode=false only when accepting network-boundary admission control
 #   - set minecraft_accept_eula=true after reviewing https://www.minecraft.net/eula
 #
 # Run from homelab/ansible on mgmt-vm:
@@ -36,15 +38,15 @@
           - minecraft_mac is match('^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
           - minecraft_server_name is match('^[^\\r\\n]{1,64}$')
           - minecraft_level_name is match('^[A-Za-z0-9_-]{1,32}$')
-          - minecraft_allowlist_values | length > 0
-          - minecraft_operator_values | length > 0
+          - (not (minecraft_online_mode | bool)) or (minecraft_allowlist_values | length > 0)
+          - (not (minecraft_online_mode | bool)) or (minecraft_operator_values | length > 0)
           - (minecraft_effective_allowlist | select('match', '^[^\\r\\n\\t]{1,64}$') | list | length) == (minecraft_effective_allowlist | length)
           - minecraft_bds_version is match('^[0-9]+(?:\\.[0-9]+){3}$')
           - minecraft_bds_url is match('^https://www\\.minecraft\\.net/bedrockdedicatedserver/bin-linux/bedrock-server-' ~ (minecraft_bds_version | regex_escape) ~ '\\.zip$')
           - minecraft_bds_sha256 is match('^[0-9a-f]{64}$')
         fail_msg: >-
-          Reserve the Minecraft MAC/IP, accept the EULA, and declare at least one allowlisted
-          operator gamertag in the gitignored all.yml before provisioning.
+          Reserve the Minecraft MAC/IP and accept the EULA. Authenticated mode also requires at
+          least one allowlisted operator gamertag in the gitignored all.yml.
         quiet: true
 
     - name: Check whether CT {{ minecraft_ctid }} exists
@@ -197,8 +199,8 @@
           difficulty=normal
           allow-cheats=false
           max-players={{ minecraft_max_players }}
-          online-mode=true
-          allow-list=true
+          online-mode={{ minecraft_online_mode | bool | lower }}
+          allow-list={{ minecraft_online_mode | bool | lower }}
           server-port={{ minecraft_port }}
           server-portv6=19133
           enable-lan-visibility=true
@@ -268,6 +270,18 @@
           }
       changed_when: true
 
+    - name: Remove identity-based permissions while Xbox authentication is off
+      ansible.builtin.shell: |
+        pct exec {{ minecraft_ctid }} -- bash -c '
+          set -e
+          systemctl stop minecraft-bedrock.service >/dev/null 2>&1 || true
+          printf "[]\n" > /var/lib/minecraft/permissions.json
+          chown minecraft:minecraft /var/lib/minecraft/permissions.json
+          chmod 0640 /var/lib/minecraft/permissions.json
+        '
+      when: not (minecraft_online_mode | bool)
+      changed_when: true
+
     - name: Enrol the Ubuntu LXC in security-only patching
       ansible.builtin.shell: >-
         echo '{{ lookup('file', playbook_dir + '/../files/patching/setup-unattended.sh') | b64encode }}'
@@ -305,6 +319,7 @@
         label: "private gamertag"
       no_log: true
       changed_when: true
+      when: minecraft_online_mode | bool
 
     - name: Grant operator only to the declared parent gamertags
       ansible.builtin.command: >-
@@ -314,6 +329,7 @@
         label: "private gamertag"
       no_log: true
       changed_when: true
+      when: minecraft_online_mode | bool
 
     - name: Read resolved operator permission count without exposing XUIDs
       ansible.builtin.command:
@@ -330,6 +346,7 @@
             print(sum(1 for entry in entries if entry.get('permission') == 'operator'))
       register: minecraft_resolved_operator_count
       changed_when: false
+      when: minecraft_online_mode | bool
 
     - name: Report whether the parent account needs its first join
       ansible.builtin.debug:
@@ -337,6 +354,15 @@
           Operator permissions resolved: {{ minecraft_resolved_operator_count.stdout }} of
           {{ minecraft_operator_values | length }}. If incomplete, the parent must join once and
           then re-run this playbook or send the documented op command.
+      when: minecraft_online_mode | bool
+
+    - name: Report the offline-mode admission boundary
+      ansible.builtin.debug:
+        msg: >-
+          Authentication is off; the LAN/Tailscale firewall boundary is the player admission control.
+          The BDS allowlist and identity-based operator permissions are disabled; administer through
+          the Carter console only.
+      when: not (minecraft_online_mode | bool)
 
     - name: Verify the LAN-only health endpoint locally
       ansible.builtin.command: >-

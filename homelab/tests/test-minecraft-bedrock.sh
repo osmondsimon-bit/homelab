@@ -36,6 +36,8 @@ require_text "$example_vars" 'minecraft_bds_version: "1.26.45.1"' 'BDS must use 
 require_text "$example_vars" 'minecraft_bds_sha256: "b0db86098ee418a9bb226f6f3f51ff2be36542236839375627b29aef3dfa5cda"' \
   'BDS must verify the official artifact checksum'
 require_text "$example_vars" 'minecraft_port: 19132' 'Bedrock IPv4 must use the LAN-discovery default port'
+require_text "$example_vars" 'minecraft_online_mode: false' \
+  'the accepted local-only workaround must disable broken Xbox authentication explicitly'
 
 require_text "$playbook" 'hosts: carter' 'the Minecraft LXC must be Carter-only'
 require_text "$stage_playbook" 'ip=dhcp,firewall=1' 'staging must generate a MAC without using a fixed address'
@@ -49,8 +51,10 @@ require_text "$playbook" 'Pin the reserved MAC and static Home-LAN address befor
   'production provisioning must replace staging DHCP with the reservation before boot'
 require_text "$playbook" '--unprivileged 1' 'the Minecraft LXC must be unprivileged'
 require_text "$playbook" 'firewall=1' 'the Proxmox NIC firewall flag must be enabled'
-require_text "$playbook" 'online-mode=true' 'Xbox authentication must remain enabled'
-require_text "$playbook" 'allow-list=true' 'the Bedrock allow list must be enabled explicitly'
+require_text "$playbook" 'online-mode={{ minecraft_online_mode | bool | lower }}' \
+  'Xbox authentication must be controlled by the explicit inventory decision'
+require_text "$playbook" 'allow-list={{ minecraft_online_mode | bool | lower }}' \
+  'the Bedrock allow list must never be enabled without Xbox authentication'
 require_text "$playbook" 'default-player-permission-level=member' 'ordinary players must not be operators'
 require_text "$playbook" 'allow-cheats=false' 'cheats must be disabled by default'
 require_text "$playbook" 'enable-lan-visibility=true' 'Switch LAN discovery must remain enabled'
@@ -67,6 +71,14 @@ require_text "$playbook" 'minecraft-console op' 'only declared parent accounts m
   || fail 'allowlist task output must hide private gamertags'
 [[ "$(grep -A9 -F 'Grant operator only' "$playbook" | grep -Fc 'no_log: true')" -eq 1 ]] \
   || fail 'operator task output must hide private gamertags'
+[[ "$(grep -A10 -F 'Add the declared Xbox gamertags' "$playbook" | grep -Fc 'when: minecraft_online_mode | bool')" -eq 1 ]] \
+  || fail 'allowlist changes must run only while Xbox authentication is enabled'
+[[ "$(grep -A10 -F 'Grant operator only' "$playbook" | grep -Fc 'when: minecraft_online_mode | bool')" -eq 1 ]] \
+  || fail 'operator grants must run only while Xbox authentication is enabled'
+require_text "$playbook" 'Remove identity-based permissions while Xbox authentication is off' \
+  'offline mode must clear spoofable operator permissions before restart'
+require_text "$playbook" 'Authentication is off; the LAN/Tailscale firewall boundary is the player admission control.' \
+  'offline mode must report its effective admission boundary'
 require_text "$playbook" 'Read resolved operator permission count without exposing XUIDs' \
   'provisioning must report that Bedrock cannot resolve offline operator XUIDs'
 require_text "$playbook" '--mode stop' 'PBS backups must stop the small stateful guest for consistency'
@@ -84,12 +96,14 @@ require_text "$monitoring_playbook" 'job_name: blackbox-minecraft' 'Prometheus m
 require_text "$alerts" 'alert: MinecraftUnavailable' 'Alertmanager must cover a live guest with a dead BDS process'
 require_text "$acl_reference" 'group:minecraft' 'the versioned tailnet policy must define restricted players'
 require_text "$acl_reference" 'udp:19132' 'the tailnet policy must grant only the Bedrock UDP port'
+require_text "$component_doc" '`minecraft_online_mode: false`' \
+  'the component guide must identify the accepted offline-mode switch'
+require_text "$component_doc" 'The saved allow-list entries remain dormant' \
+  'the component guide must explain that saved identities are not admission controls in offline mode'
+require_text "$adr" '## Amendment: local-only authentication exception (2026-08-29)' \
+  'the architecture record must preserve the dated offline-mode exception'
 
 if grep -Fq 'server-port=25565' "$playbook"; then
   fail 'Java Edition TCP port 25565 must not appear in the Bedrock deployment'
 fi
-if grep -Fq 'online-mode=false' "$playbook"; then
-  fail 'offline authentication must never be enabled'
-fi
-
 printf 'PASS: Minecraft Bedrock deployment regression contract\n'
