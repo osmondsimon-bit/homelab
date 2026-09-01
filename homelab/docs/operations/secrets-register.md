@@ -28,7 +28,7 @@ Folder layout in the vault: `Homelab/Proxmox`, `Homelab/Services`, `Homelab/Netw
 | UniFi controller (UDM) | Read-only monitoring credential is Tier 3, not here. |
 | SLZB-06 Zigbee coordinator | IoT VLAN web UI. |
 | Google account | **Root identity** — SSO for Tailscale; Keychain anchor. |
-| Tailscale | Google SSO;No separate password; pointer entry. |
+| Tailscale | Google SSO; no separate password; pointer entry. |
 | Cloudflare | Zero Trust tunnel for HA. |
 | GitHub | Public IaC repo. |
 | ProtonVPN Plus | Phase 6 (Gluetun/qBittorrent); WireGuard config attached. |
