@@ -30,8 +30,9 @@ prompt (blank = keep current). Reset: `pct exec 114 -- grafana-cli admin reset-a
 
 Physical-host telemetry and monthly ZFS scrub/trim scheduling are deployed separately by
 `ansible/playbooks/install-node-exporter.yml`; then `deploy-monitoring-rules.yml` stages,
-`promtool`-validates, and atomically loads the matching failure-only rules without rebuilding the
-stack or recreating its API tokens. Healthy runs only refresh metrics. The collector never sends
+`promtool`-validates, and atomically loads the matching failure-only rules, recording rules, and
+narrow HA memory allow-list without rebuilding the stack or recreating its API tokens. Healthy runs
+only refresh metrics. The collector never sends
 notifications, starts tests, clears ZFS state, scrubs, trims, or reboots a host.
 
 > **Invariant:** dashboards + alert rules are code. Grafana has `allowUiUpdates: true` for live
@@ -43,6 +44,19 @@ resource queries omit them for the same reason. Their existence, exact shape, `o
 gates and stopped end state are verified by their provisioning playbooks/runbooks, not by an
 always-up alert. `SyntheticHAUnexpectedlyRunning` warns if VM 201 remains up for 12 hours, catching
 an abandoned test session without treating a normal attended session as an immediate failure.
+
+### HAOS memory semantics
+
+Proxmox's QEMU memory value counts memory held by a guest, including reclaimable filesystem cache;
+it is therefore not evidence of guest pressure by itself. VM 200's dashboard value instead comes
+from Home Assistant's System Monitor `Memory usage (%)` entity. The approved System Monitor set is
+memory free/use/usage, swap usage, and the 60-second `some`/`full` memory PSI averages; all other
+System Monitor entities remain outside Prometheus's measurements-only allow-list.
+
+`HomeAssistantMemoryHigh` warns only after true HAOS utilization exceeds 90% for 15 minutes.
+`HomeAssistantMemoryPressure` warns after either 60-second PSI value exceeds 5% for 10 minutes.
+For either alert, inspect HA Core and per-add-on statistics first. Do not restart HAOS or resize VM
+200 solely because Proxmox reports a high QEMU RAM-held percentage.
 
 The media guests returned to the default-on service tier with Apophis's 32 GB restoration on
 2026-07-28. `GuestDown` therefore covers CTs 120/121/123/124 and VM 125 again, and VM 125's direct

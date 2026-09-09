@@ -803,7 +803,7 @@ pages:
             cache: 30s
             url: << prom >>
             parameters:
-              query: sort_desc(max without(resource) (label_replace(guest:pve_cpu_util:percent{id!="qemu/128",id!="qemu/201"}, "resource", "cpu", "__name__", ".*") or label_replace(guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201"}, "resource", "ram", "__name__", ".*") or label_replace(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128",id!="qemu/201"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128",id!="qemu/201"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info), "resource", "disk", "__name__", ".*")))
+              query: sort_desc(max without(resource) (label_replace(guest:pve_cpu_util:percent{id!="qemu/128",id!="qemu/201"}, "resource", "cpu", "__name__", ".*") or label_replace((guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201",id!="qemu/200"} or guest:ha_mem_util:percent), "resource", "ram", "__name__", ".*") or label_replace(max by(id,name,node,type) (((pve_disk_usage_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128",id!="qemu/201"} / pve_disk_size_bytes{id=~"lxc/.*|qemu/.*",id!="qemu/128",id!="qemu/201"}) * 100) * on(id,instance,job) group_left(name,node,type) pve_guest_info), "resource", "disk", "__name__", ".*")))
             subrequests:
               cpu:
                 url: << prom >>
@@ -816,11 +816,11 @@ pages:
               ram:
                 url: << prom >>
                 parameters:
-                  query: guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201"}
+                  query: guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201",id!="qemu/200"} or guest:ha_mem_util:percent
               ram_peak:
                 url: << prom >>
                 parameters:
-                  query: max by(id) (max_over_time(guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201"}[24h:5m]))
+                  query: max by(id) (max_over_time((guest:pve_mem_util:percent{id!="qemu/128",id!="qemu/201",id!="qemu/200"} or guest:ha_mem_util:percent)[24h:5m]))
               disk:
                 url: << prom >>
                 parameters:
@@ -828,7 +828,7 @@ pages:
             template: |
               {{ $cpuResult := .Subrequest "cpu" }}{{ $cpuPeak := .Subrequest "cpu_peak" }}{{ $ramResult := .Subrequest "ram" }}{{ $ramPeak := .Subrequest "ram_peak" }}{{ $diskResult := .Subrequest "disk" }}
               <div>
-                <div class="workload-note">VM guest filesystem usage is not collected; a dash in Disk means unavailable.</div>
+                <div class="workload-note">HA uses System Monitor; other VM values include reclaimable guest cache. VM guest filesystem usage is not collected; a dash in Disk means unavailable.</div>
               <% for h in glance_hosts %>
                 <section class="workload-host">
                   <div class="color-highlight size-h3"><< h.name >></div>
@@ -843,7 +843,7 @@ pages:
                     <div class="workload-row {{ if ge $score 90.0 }}color-negative{{ end }}">
                       <div class="workload-identity"><div class="color-highlight text-truncate">{{ .String "metric.name" }}</div><div class="placement-label">{{ $id }} · highest resource {{ printf "%.0f%%" $score }}</div></div>
                       <div class="workload-metric"><div class="resource-heading"><div class="resource-label">CPU</div><div>{{ if and (gt $cpu 0.0) (lt $cpu 1.0) }}&lt;1%{{ else }}{{ printf "%.0f%%" $cpu }}{{ end }}</div></div><meter class="resource-meter {{ if ge $cpu 90.0 }}is-critical{{ else if ge $cpu 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $cpu }}"></meter><div class="placement-label">peak {{ if and (gt $cpuP 0.0) (lt $cpuP 1.0) }}&lt;1%{{ else }}{{ printf "%.0f%%" $cpuP }}{{ end }}</div></div>
-                      <div class="workload-metric"><div class="resource-heading"><div class="resource-label">RAM</div><div>{{ printf "%.0f%%" $ram }}</div></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter><div class="placement-label">peak {{ printf "%.0f%%" $ramP }}</div></div>
+                      <div class="workload-metric"><div class="resource-heading"><div class="resource-label">{{ if eq $id "qemu/200" }}RAM used{{ else if eq $guestType "qemu" }}RAM held{{ else }}RAM{{ end }}</div><div>{{ printf "%.0f%%" $ram }}</div></div><meter class="resource-meter {{ if ge $ram 90.0 }}is-critical{{ else if ge $ram 75.0 }}is-warning{{ end }}" min="0" max="100" low="75" high="90" optimum="0" value="{{ $ram }}"></meter><div class="placement-label">peak {{ printf "%.0f%%" $ramP }}</div></div>
                       <div class="workload-metric"><div class="resource-heading"><div class="resource-label">Disk</div><div>{{ if $diskFound }}{{ printf "%.0f%%" $disk }}{{ else }}&mdash;{{ end }}</div></div>{{ if $diskFound }}<meter class="resource-meter {{ if ge $disk 85.0 }}is-critical{{ else if ge $disk 70.0 }}is-warning{{ end }}" min="0" max="100" low="70" high="85" optimum="0" value="{{ $disk }}"></meter>{{ else }}<div class="resource-meter-spacer" aria-hidden="true"></div>{{ end }}</div>
                     </div>
                   {{ end }}{{ end }}

@@ -39,3 +39,15 @@ groups:
             ((pve_memory_usage_bytes{id=~"lxc/.*|qemu/.*"} / pve_memory_size_bytes{id=~"lxc/.*|qemu/.*"}) * 100)
             * on(id,instance,job) group_left(name,node,type) pve_guest_info
           )
+
+      # PVE/QEMU treats guest cache as used memory. HAOS System Monitor reports the
+      # workload-aware value operators expect and is used for VM 200 in Glance.
+      - record: guest:ha_mem_util:percent
+        expr: >
+          max({__name__=~"(hass|homeassistant)_sensor_unit_percent",
+               job="home-assistant", entity="sensor.system_monitor_memory_usage"})
+        labels:
+          id: qemu/200
+          name: home-assistant
+          node: apophis
+          type: qemu

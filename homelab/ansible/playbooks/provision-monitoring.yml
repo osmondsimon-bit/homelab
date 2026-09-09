@@ -379,10 +379,12 @@
                 # `entity` is concatenated) OR the ONE pinned Zigbee bridge connectivity sensor.
                 # binary_sensor_state is otherwise excluded by ADR-016; this single, named series
                 # is the signal for Zigbee2MQTTBridgeDown and adds negligible cardinality.
+                # The six pinned System Monitor entities provide truthful HAOS memory/PSI
+                # telemetry; unlike PVE's QEMU value, memory usage excludes reclaimable cache.
                 # (up/scrape_* are synthetic and bypass relabeling.)
                 - source_labels: [__name__, entity]
                   separator: ';'
-                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state'
+                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state|(hass|homeassistant)_sensor_(unit_percent|data_size_mib);sensor\.system_monitor_(memory_free|memory_use|memory_usage|swap_usage|memory_pressure_some_60s_average|memory_pressure_full_60s_average)'
                   action: keep
           {% endif %}
           {% if zigbee_coordinator_target is defined %}

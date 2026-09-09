@@ -97,6 +97,29 @@ groups:
           summary: "Apophis below its 3 GiB memory guardrail"
           description: "Apophis has had less than 3 GiB MemAvailable for 10m. Stop the newest optional media workload and inspect memory pressure before adding load."
 
+      # HAOS System Monitor excludes reclaimable guest cache, unlike PVE's QEMU
+      # memory figure. Alert only on sustained true exhaustion or task stalls.
+      - alert: HomeAssistantMemoryHigh
+        expr: guest:ha_mem_util:percent > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant has less than 10% usable memory"
+          description: "HAOS System Monitor has reported over 90% memory utilization for 15m. Inspect HA Core and add-on statistics before restarting or resizing VM 200."
+
+      - alert: HomeAssistantMemoryPressure
+        expr: >
+          max({__name__=~"(hass|homeassistant)_sensor_unit_percent",
+               job="home-assistant",
+               entity=~"sensor.system_monitor_memory_pressure_(some|full)_60s_average"}) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant is experiencing sustained memory stalls"
+          description: "HAOS memory PSI has exceeded 5% for 10m. Inspect HA Core and add-on statistics; a high PVE RAM-held value without PSI is not itself a fault."
+
       # Physical-host failure telemetry is emitted by host-health-collector.sh every five minutes.
       # Healthy state is silent: only these failure conditions reach Alertmanager/ntfy.
       - alert: HostHealthCollectorAbsent
