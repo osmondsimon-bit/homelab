@@ -9,7 +9,7 @@ LAN or the internet.**
 | Host / VMID | **carter** / VM 118 (Ubuntu 24.04 cloud-image VM, **not** an LXC; built on Apophis, moved 2026-07-22) |
 | IP | `YOUR_VAULTWARDEN_IP` (static; reserve in UniFi) |
 | Shape | 2 GB / 1 core / 10 GB; CPU `Skylake-Client-noTSX-IBRS` (migratable across the Coffee-Lake pair) |
-| Runtime | Official `vaultwarden/server` **Docker container**, Docker **confined to this VM** — live `1.36.0` verified 2026-09-10; desired pin `1.37.2` pending deployment |
+| Runtime | Official `vaultwarden/server:1.37.2` **Docker container**, Docker **confined to this VM**; verified live and healthy 2026-09-10 |
 | Bind | container published to `127.0.0.1:8080` only |
 | TLS / access | **Tailscale Serve** terminates TLS → `https://vaultwarden.<tailnet>.ts.net`; tailnet ACL restricts it to `group:operators` (node tagged `tag:vaultwarden`, default-deny) |
 | Hardening | container `cap_drop: ALL` + `no-new-privileges`; **signups OFF**; **Argon2id `ADMIN_TOKEN`** (hash only on the VM) |
