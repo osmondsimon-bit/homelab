@@ -18,7 +18,7 @@
 #
 # Run from the mgmt-vm, inside homelab/ansible/ (targets carter):
 #   ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
-# Prompts for a Tailscale auth key + the admin-panel token (neither is stored).
+# Prompts for an optional first-join Tailscale auth key + the admin-panel token (neither is stored).
 #
 # FIRST-RUN account bootstrap (signups default OFF): run once with signups ON to register the
 # operator account at the printed URL, then re-run with the default (OFF) to lock it:
@@ -36,16 +36,17 @@
     vw_ip_bare: "{{ vaultwarden_ip | regex_replace('/.*$', '') }}"
   vars_prompt:
     - name: ts_authkey
-      prompt: "Tailscale auth key for the Vaultwarden VM (tskey-auth-...)"
+      prompt: "Tailscale auth key for first join only (tskey-auth-...; Enter if already joined)"
       private: true
     - name: vw_admin_token
       prompt: "Vaultwarden admin-panel token (min 16 chars — stored only as an Argon2id hash)"
       private: true
   tasks:
-    - name: Validate inputs
+    - name: Validate the admin token
       ansible.builtin.assert:
-        that: [ "ts_authkey is match('^tskey-')", "vw_admin_token | length >= 16" ]
-        fail_msg: "Need a tskey-... auth key and an admin token of at least 16 chars."
+        that:
+          - vw_admin_token | length >= 16
+        fail_msg: "Need an admin token of at least 16 chars."
         quiet: true
 
     - name: Check whether VM {{ vaultwarden_vmid }} already exists
@@ -139,6 +140,15 @@
       ansible.builtin.command: "tailscale status --json"
       register: ts_state
       changed_when: false
+
+    - name: Require a scoped key only when the node is not joined
+      ansible.builtin.assert:
+        that:
+          - hostvars['vaultwarden-vm'].vw_ts_authkey is match('^tskey-')
+        fail_msg: "The VM is not joined to Tailscale; rerun with a valid tskey-... auth key."
+        quiet: true
+      no_log: true
+      when: (ts_state.stdout | from_json).BackendState != 'Running'
 
     - name: Bring Tailscale up (only if not already Running)
       ansible.builtin.command: >
