@@ -389,13 +389,14 @@
           {{ (actual_backup_jobs_raw.stdout | from_json)
              | selectattr('type', 'equalto', 'vzdump')
              | selectattr('storage', 'equalto', 'pbs-oneill')
+             | selectattr('mode', 'equalto', 'snapshot')
              | list }}
 
     - name: Require one unambiguous PBS job
       ansible.builtin.assert:
         that:
           - actual_pbs_jobs | length == 1
-        fail_msg: "Expected exactly one cluster backup job targeting pbs-oneill; refusing to alter an ambiguous schedule."
+        fail_msg: "Expected exactly one snapshot-mode cluster backup job targeting pbs-oneill; refusing to alter an ambiguous schedule."
         quiet: true
 
     - name: Calculate the protected VM list

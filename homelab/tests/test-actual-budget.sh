@@ -61,6 +61,8 @@ grep -Fq 'include_tasks: tasks/install-maintenance-collector.yml' "$playbook" \
   || fail 'apt operations must tolerate Ubuntu first-boot package locks'
 grep -Fq 'pvesh get /cluster/backup --output-format json' "$playbook" \
   || fail 'provisioning must discover the existing PBS backup job'
+grep -Fq "selectattr('mode', 'equalto', 'snapshot')" "$playbook" \
+  || fail 'Actual must select the shared snapshot job without matching the Minecraft stop-mode job'
 grep -Fq "grep -q 'backup/vm/{{ actual_vmid }}/'" "$playbook" \
   || fail 'PBS verification must use the PVE 9-compatible volume identifier'
 grep -Fq 'vzdump {{ actual_vmid }} --storage pbs-oneill --mode snapshot' "$playbook" \
