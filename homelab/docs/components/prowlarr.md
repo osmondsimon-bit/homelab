@@ -8,7 +8,7 @@ indexer domains *and* the VPN keeps a consistent exit IP for Cloudflare solving.
 |---|---|
 | Host / VMID | **apophis** / VM 125 (the Docker VM, shared with Seerr) |
 | WebUI | `http://YOUR_JELLYSEERR_IP:9696` (published on the VM IP by Gluetun) |
-| Packaging | `lscr.io/linuxserver/prowlarr` Docker container, **`network_mode: service:gluetun`** (digest-pinned) |
+| Packaging | `lscr.io/linuxserver/prowlarr` `2.5.2.5491-ls159` Docker container, **`network_mode: service:gluetun`** (digest-pinned; verified live 2026-09-10) |
 | VPN | **Gluetun** → a 2nd ProtonVPN WireGuard exit (no port-forwarding); egress verified ≠ home WAN |
 | Cloudflare | **ByParr** (FlareSolverr-compatible solver) shares Gluetun's netns → Prowlarr reaches it at `http://localhost:8191`; tag CF-gated indexers (e.g. 1337x) |
 | DNS | Gluetun's own resolver (DoT over the VPN) — **not** Technitium |

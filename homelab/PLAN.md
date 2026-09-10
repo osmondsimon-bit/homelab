@@ -41,11 +41,11 @@
 |--------|------|------|----|--------|
 | mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
 | tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — first member of the HA subnet-router pair, advertises YOUR_LAN_CIDR (ADR-003/005). CT 126 on oneill is the independent failover router. |
-| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running, `onboot=1`.** Media server with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). |
+| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running, `onboot=1`.** Jellyfin `10.11.11` with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Version 12.0 is deliberately deferred pending its first stabilization release and migration review. |
 | qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Running, `onboot=1`.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Running, `onboot=1`.** TV automation; tied to Apophis's USB-media bind mount. |
-| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Movie automation; tied to Apophis's USB-media bind mount. |
-| seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Running, `onboot=1`.** Seerr `v3.4.1` verified live and healthy 2026-09-10; request/indexer stack has no media bind mount. |
+| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Radarr `6.3.0.10514` verified live 2026-09-10; tied to Apophis's USB-media bind mount. A pre-update encrypted PBS image provides rollback. |
+| seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Running, `onboot=1`.** Seerr `v3.4.1` and Prowlarr `2.5.2.5491-ls159` verified live 2026-09-10; request/indexer stack has no media bind mount. A pre-Prowlarr ZFS snapshot provides rollback. |
 | home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — returned from Carter to Apophis on 2026-07-28 after the RAM incident. `pvesr` job `200-0` targets Carter; enabled with `FailCount 0`, `State OK`, and last sync `2026-07-28 17:15:01` verified from Apophis. Manual replica bootability was proven 2026-06-25. |
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
@@ -175,6 +175,11 @@ Architecture decided: ADR-018 5-tier model (revised 2026-06-25 — `ansible-vaul
 ## Open tasks & decisions (carry-over)
 
 Living backlog to pick up next session.
+
+- [ ] **2026-10-01 — Reassess Jellyfin 12.** Check whether 12.1 (or a clearly stabilized 12.0.x)
+  is available and whether the reported 10.11→12 SQLite migration failures are resolved. Before
+  upgrading, remove/review plugins, take a full `/var/lib/jellyfin` backup, and prove rollback;
+  do not let an ordinary apt run cross this major-version boundary unattended.
 
 ### 🔎 End-of-session critic review — open questions (2026-06-19)
 

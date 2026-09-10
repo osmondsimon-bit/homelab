@@ -382,6 +382,9 @@ radarr_cores: 1
 radarr_disk_gb: 8
 radarr_ip: YOUR_RADARR_IP/24
 radarr_port: 7878
+radarr_version: "6.3.0.10514"
+radarr_url: "https://github.com/Radarr/Radarr/releases/download/v6.3.0.10514/Radarr.master.6.3.0.10514.linux-core-x64.tar.gz"
+radarr_sha256: "41d6455c037ff267c5ad5a0f0de4502cebe8f89ec3d051da97851933d48a4047"
 
 # Jellyseerr = Docker VM (VMID 125, Ubuntu 24.04 — like Vaultwarden)
 jellyseerr_vmid: 125
@@ -400,7 +403,7 @@ seerr_image: "ghcr.io/seerr-team/seerr:v3.4.1"             # PIN — Renovate pr
 # renovate: datasource=docker depName=qmcgaw/gluetun currentValue=latest
 gluetun_image: "qmcgaw/gluetun@sha256:d180743987bb24da1d749a1d7f3a78026e64ba2d09d2e08cc34b0acee7f7321b"   # PINNED by digest — Renovate proposes; operator deploys deliberately
 # renovate: datasource=docker depName=lscr.io/linuxserver/prowlarr currentValue=latest
-prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:3950b5e48cf4ba9dab78fe14038dd7f062e66b7b4ab368b02c94a13f6a3dae9f"   # PINNED by digest — Renovate proposes; operator deploys deliberately
+prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:c7502a75b021d964481c129c84590b9cbc40f83aadd4e553f173871bc0deaa3c"   # Prowlarr 2.5.2.5491-ls159; PINNED by digest
 # renovate: datasource=docker depName=ghcr.io/thephaseless/byparr currentValue=latest
 byparr_image: "ghcr.io/thephaseless/byparr@sha256:01a46a2865d9a6db5eb8ead04ec0dd33b8fbe233e8565ae70b50d4cc0af4cfb0"   # PINNED by digest — Renovate proposes; operator deploys deliberately
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.

@@ -86,25 +86,32 @@
         '
       changed_when: true
 
-    - name: Check whether Radarr is already installed
-      ansible.builtin.command: "pct exec {{ radarr_ctid }} -- test -x /opt/Radarr/Radarr"
-      register: radarr_installed
+    - name: Read the managed Radarr version marker
+      ansible.builtin.command: "pct exec {{ radarr_ctid }} -- cat /opt/Radarr/.homelab-version"
+      register: radarr_installed_version
       changed_when: false
       failed_when: false
 
-    - name: Download + install Radarr (Servarr self-contained build) + service user
+    - name: Install the pinned Radarr self-contained build
       ansible.builtin.shell: |
         pct exec {{ radarr_ctid }} -- bash -c '
           set -e
-          cd /tmp
-          curl -fsSL "https://radarr.servarr.com/v1/update/master/updatefile?os=linux&runtime=netcore&arch=x64" -o radarr.tar.gz
-          tar -xzf radarr.tar.gz -C /opt
-          rm -f radarr.tar.gz
           id radarr >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin radarr
           mkdir -p /var/lib/radarr
+          rm -rf /tmp/radarr-stage /tmp/radarr.tar.gz
+          mkdir -p /tmp/radarr-stage
+          curl -fsSL "{{ radarr_url }}" -o /tmp/radarr.tar.gz
+          echo "{{ radarr_sha256 }}  /tmp/radarr.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/radarr.tar.gz -C /tmp/radarr-stage
+          systemctl stop radarr 2>/dev/null || true
+          rm -rf /opt/Radarr.previous
+          [ ! -d /opt/Radarr ] || mv /opt/Radarr /opt/Radarr.previous
+          mv /tmp/radarr-stage/Radarr /opt/Radarr
+          echo "{{ radarr_version }}" > /opt/Radarr/.homelab-version
           chown -R radarr:radarr /var/lib/radarr /opt/Radarr
+          rm -f /tmp/radarr.tar.gz
         '
-      when: radarr_installed.rc != 0
+      when: radarr_installed_version.stdout | trim != radarr_version
       changed_when: true
 
     - name: Put the radarr user in the media group + umask (shared-media write/hardlink)
