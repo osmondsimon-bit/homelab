@@ -11,7 +11,7 @@ wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Pr
 |---|---|
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 115 (unprivileged LXC, Debian 12) |
 | IP / port | `YOUR_GLANCE_IP` / `8080` (HTTP) — LAN + Tailscale only, **no auth** |
-| Engine | [Glance](https://github.com/glanceapp/glance) — single static Go binary, pinned (`glance_version`) |
+| Engine | [Glance](https://github.com/glanceapp/glance) `v0.8.6` — single static Go binary, verified live 2026-09-10 and pinned (`glance_version`) |
 | State | None — config is rendered from Ansible; nothing to back up |
 | Data source | Prometheus (CT 114) via `custom-api` widgets — host/guest resources, maintenance, alerts, and cached Media USB inventory; optional Jellyfin/Sonarr/Radarr GET APIs; GitHub Releases for declared-pin currency |
 | Layout | **Overview:** operational signals + host pulse + service launcher + maintenance/backups · **Media:** capacity, hardlink-aware largest consumers, service activity and launchers · **Infrastructure:** visual host and resource-ranked guest utilisation + fleet baseline |

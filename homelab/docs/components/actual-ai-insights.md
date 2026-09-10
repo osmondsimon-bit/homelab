@@ -1,8 +1,9 @@
 # Actual Budget category AI insights
 
 Manual category-only long-term and monthly narrative overlay for Actual Budget on VM 127. The
-implementation remains opt-in in the example inventory; the real deployment requires its four local
-secret files and the live acceptance checks below.
+implementation remains opt-in and was not running when verified on 2026-09-10; the VM retained older
+staged source while the updated dependency set remained code-only. A real deployment requires its four
+local secret files and the live acceptance checks below.
 
 | | |
 |---|---|

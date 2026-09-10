@@ -7,7 +7,7 @@ monitoring, encrypted PBS protection, portable export, and an isolated restore d
 |---|---|
 | Host / VMID | **carter** / VM 127 (Ubuntu 24.04) |
 | Shape | 1 vCPU / 2 GB RAM / 10 GB ZFS disk |
-| Packaging | pinned official `actualbudget/actual-server` Docker image |
+| Packaging | pinned official `actualbudget/actual-server:26.9.0` Docker image; verified live 2026-09-10 |
 | Data | `/opt/actual/data` on the VM, mounted at `/data` in the container |
 | Access | `https://actual.<tailnet>.ts.net` through Tailscale Serve; no LAN/public listener |
 | Authentication | Actual server password only; optional budget E2EE is required by this design |
