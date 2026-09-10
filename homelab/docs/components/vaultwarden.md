@@ -30,7 +30,7 @@ two plays — the selected cluster host creates the VM, then configures Docker +
 container over SSH). Carter remains the accepted rebuild target in the restored split placement:
 
 ```bash
-cd ~/homelab/ansible && ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
+cd ~/homelab/ansible && ansible-playbook playbooks/provision-vaultwarden.yml
 ```
 
 Prompts for a Tailscale auth key + the admin-panel token (neither is stored). First-run account

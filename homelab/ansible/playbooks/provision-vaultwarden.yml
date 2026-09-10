@@ -17,7 +17,7 @@
 # (key from cloud-init). The accepted split placement targets carter by default.
 #
 # Run from the mgmt-vm, inside homelab/ansible/ (targets carter):
-#   ansible-playbook playbooks/provision-vaultwarden.yml --limit carter
+#   ansible-playbook playbooks/provision-vaultwarden.yml
 # Prompts for an optional first-join Tailscale auth key + the admin-panel token (neither is stored).
 #
 # FIRST-RUN account bootstrap (signups default OFF): run once with signups ON to register the
@@ -27,8 +27,8 @@
 # Tailscale prerequisites (one-time, in the admin console): HTTPS + Serve enabled on the tailnet;
 # afterwards approve the node + disable key expiry + ACL it to operator devices.
 
-- name: Create the Vaultwarden VM on the selected cluster host (Ubuntu cloud image + cloud-init)
-  hosts: proxmox
+- name: Create the Vaultwarden VM on Carter (Ubuntu cloud image + cloud-init)
+  hosts: carter
   gather_facts: false
   vars:
     vw_cloud_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
