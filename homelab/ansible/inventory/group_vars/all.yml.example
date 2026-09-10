@@ -126,7 +126,7 @@ vaultwarden_ip: YOUR_VAULTWARDEN_IP/24                     # verify free; reserv
 vaultwarden_cpu: Skylake-Client-noTSX-IBRS                 # migratable across the Coffee-Lake pair (x86-64-v2-AES panics Debian cloud images)
 vaultwarden_startup: "order=2,up=10"
 # renovate: datasource=docker depName=vaultwarden/server
-vaultwarden_image: vaultwarden/server:1.36.0              # PINNED container tag — Renovate proposes; operator deploys deliberately
+vaultwarden_image: vaultwarden/server:1.37.2              # PINNED container tag — Renovate proposes; operator deploys deliberately
 vaultwarden_domain: https://vaultwarden.YOUR_TAILNET.ts.net # Tailscale Serve URL (tailnet-only) — Glance link-tile + Bitwarden server URL
 
 # --- Actual Budget VM (personal finance, Carter; ADR-023) --------------------
@@ -144,7 +144,7 @@ actual_cpu: Skylake-Client-noTSX-IBRS                     # live-migratable acro
 actual_startup: "order=5,up=10"
 actual_ts_authkey_file: "{{ lookup('env', 'HOME') }}/.tailscale-actual-authkey" # one-use join key; chmod 600, never commit, delete after join
 # renovate: datasource=docker depName=actualbudget/actual-server
-actual_image: actualbudget/actual-server:26.7.0           # PINNED stable release; operator deploys deliberately
+actual_image: actualbudget/actual-server:26.9.0           # PINNED stable release; operator deploys deliberately
 actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"
 
 # Optional category AI overlay at :8443/insights (ADR-024). Both the 24-month baseline and monthly
@@ -152,12 +152,12 @@ actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.
 actual_insights_enabled: false                            # opt in only after all four secret files exist
 actual_insights_operator_login: YOUR_TAILSCALE_LOGIN     # exact Tailscale-User-Login allowed by the overlay
 actual_insights_model: gpt-5.6-terra                     # balanced reasoning/cost; Responses API, store=false
-actual_insights_currency: AUD                             # explicit because Actual 26.7.0 does not export preferences
+actual_insights_currency: AUD                             # explicit because Actual does not export preferences through the API
 actual_insights_timezone: "{{ patching_timezone | default('Etc/UTC') }}" # completed-month boundary and UI default
 actual_insights_history_months: 24                       # local comparison window; never raw transactions
 actual_insights_exceptional_categories: []               # exact category names excluded from underlying run rate
 # renovate: datasource=docker depName=node
-actual_insights_node_image: node:24.18.0-bookworm-slim   # PINNED LTS build base for the companion image
+actual_insights_node_image: node:24.21.0-bookworm-slim   # PINNED LTS build base for the companion image
 finance_dashboard_enabled: false                        # preserve independent tailnet route :8444 on Actual reprovision
 actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"
 actual_insights_sync_id_file: "{{ lookup('env', 'HOME') }}/.actual-insights-sync-id"
@@ -239,7 +239,7 @@ glance_cores: 1
 glance_disk_gb: 4
 glance_ip: YOUR_GLANCE_IP/24                                # verify free; reserve in UniFi
 glance_port: 8080
-glance_version: v0.8.5                                      # PINNED (pre-1.0 renames config keys; bump deliberately)
+glance_version: v0.8.6                                      # PINNED (pre-1.0 renames config keys; bump deliberately)
 # Three-page operator dashboard rendered from templates/glance/glance.yml.j2 (ADR-014). Service-tile
 # URLs are built from existing IP vars; placement metadata keeps the launcher grouped by host.
 glance_prometheus_url: "http://YOUR_MONITORING_IP:9090"     # monitoring CT — custom-api widgets query Prometheus here
@@ -393,7 +393,7 @@ jellyseerr_ip: YOUR_JELLYSEERR_IP/24
 jellyseerr_cpu: Skylake-Client-noTSX-IBRS
 jellyseerr_port: 5055
 # renovate: datasource=docker depName=ghcr.io/seerr-team/seerr
-seerr_image: "ghcr.io/seerr-team/seerr:v3.3.0"             # PIN — Renovate proposes; operator deploys deliberately
+seerr_image: "ghcr.io/seerr-team/seerr:v3.4.1"             # PIN — Renovate proposes; operator deploys deliberately
 # Indexer VPN stack on VM 125 (Gluetun + Prowlarr behind it) — bypasses ISP blocks + consistent exit IP.
 # Prowlarr WebUI published on the VM IP :{{ prowlarr_port }}. (ByParr/FlareSolverr added behind the same
 # Gluetun later only if an indexer needs Cloudflare-solving.)

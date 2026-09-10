@@ -12,7 +12,7 @@ the indexer-VPN stack (Gluetun + Prowlarr + ByParr). Migrated in place from Jell
 | IP / UI | `YOUR_JELLYSEERR_IP` — `:5055` (LAN/Tailscale only; **LAN-direct**, *not* behind the VPN) |
 | Shape | 3 GB / 2 cores / 20 GB (RAM + disk sized for ByParr's headless browser) |
 | Co-tenants | `gluetun` + `prowlarr` + `byparr` (the indexer-VPN sidecars — see [prowlarr.md](prowlarr.md)) |
-| Image | `ghcr.io/seerr-team/seerr:v3.3.0` (pinned tag); UID 1000, `init: true`, container `no-new-privileges` |
+| Image | `ghcr.io/seerr-team/seerr:v3.4.1` (pinned tag); UID 1000, `init: true`, container `no-new-privileges` |
 | Backup | NONE routinely by design — small SQLite config, reproducible; the off-VM migration rollback archive is temporary |
 
 ## How it's managed

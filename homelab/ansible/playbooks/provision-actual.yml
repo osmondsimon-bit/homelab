@@ -261,7 +261,7 @@
               build:
                 context: ./insights
                 args:
-                  NODE_IMAGE: {{ actual_insights_node_image | default('node:24.18.0-bookworm-slim') }}
+                  NODE_IMAGE: {{ actual_insights_node_image | default('node:24.21.0-bookworm-slim') }}
               container_name: actual-insights
               restart: unless-stopped
               depends_on:

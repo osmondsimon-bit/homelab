@@ -10,7 +10,7 @@ secret files and the live acceptance checks below.
 | URL | `https://actual.<tailnet>.ts.net:8443/insights` |
 | Triggers | operator explicitly generates the 24-month baseline or a completed-month memo |
 | Schedule | none; no timer, cron, webhook, or background generation |
-| Actual access | official `@actual-app/api` `26.7.0`; category aggregate reads only |
+| Actual access | official `@actual-app/api` `26.9.0`; category aggregate reads only |
 | Model | OpenAI Responses API, default `gpt-5.6-terra`, low reasoning, `store: false`, no tools |
 | Model input | category/group labels and locally derived category aggregates/trends only |
 | Local state | `/opt/actual/insights-data/insights.sqlite` |

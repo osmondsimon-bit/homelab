@@ -1,5 +1,5 @@
 # Reproducible Node runtime for the Actual Budget monthly category-insights companion.
-ARG NODE_IMAGE=node:24.18.0-bookworm-slim
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim
 FROM ${NODE_IMAGE} AS build
 
 WORKDIR /build

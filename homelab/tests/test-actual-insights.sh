@@ -20,10 +20,14 @@ fail() {
 
 grep -Fq '@actual-app/api' "${app_dir}/package.json" \
   || fail 'the application must use the official Actual API package'
-grep -Fq '"@actual-app/api": "26.7.0"' "${app_dir}/package.json" \
+grep -Fq '"@actual-app/api": "26.9.0"' "${app_dir}/package.json" \
   || fail 'the Actual API package must match the pinned server release'
 grep -Fq '"openai":' "${app_dir}/package.json" \
   || fail 'the model client must use the official OpenAI SDK'
+grep -Fq '"openai": "7.13.0"' "${app_dir}/package.json" \
+  || fail 'the model client must use the approved OpenAI SDK release'
+grep -Fq 'actual_insights_node_image: node:24.21.0-bookworm-slim' "$example_vars" \
+  || fail 'the companion must use the approved Node 24 LTS image'
 grep -Fq 'gpt-5.6-terra' "$example_vars" \
   || fail 'the balanced insight model must be explicit and configurable'
 grep -Fq 'actual_insights_enabled: false' "$example_vars" \

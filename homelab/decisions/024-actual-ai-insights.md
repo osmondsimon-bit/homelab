@@ -74,7 +74,7 @@ discarding Actual IDs.
 
 ### Extraction
 
-- Pin `@actual-app/api` to `26.7.0`, matching the pinned Actual server release.
+- Pin `@actual-app/api` to `26.9.0`, matching the pinned Actual server release.
 - Permit only `init`, `downloadBudget`, `getBudgetMonths`, `getBudgetMonth`, and
   `shutdown` in the adapter.
 - Create a new API cache for each manual run on container tmpfs, then recursively destroy it in a
@@ -136,11 +136,11 @@ inside the existing encrypted PBS image and inherits VM 127's proven recovery pa
 
 ### Dependency handling
 
-The application pins all direct dependencies and commits its npm lockfile. Actual `26.7.0` does not
+The application pins all direct dependencies and commits its npm lockfile. Actual `26.9.0` does not
 export the currently documented `getPreferences` helper at its package top level, so the three-letter
-currency code is an explicit deployment value rather than a runtime query. The Actual `26.7.0`
-dependency tree originally resolved a vulnerable `adm-zip`; override it to patched `0.6.0`
-(`CVE-2026-39244`). Explicitly approve only the pinned `better-sqlite3@12.11.1` native install script
+currency code is an explicit deployment value rather than a runtime query. The earlier Actual
+dependency tree resolved a vulnerable `adm-zip`; the 26.9.0 tree no longer includes that dependency,
+so the temporary override has been removed. Explicitly approve only the pinned `better-sqlite3@12.11.1` native install script
 required by Actual's local engine. A production dependency audit must remain clean before deployment.
 
 ## Consequences
