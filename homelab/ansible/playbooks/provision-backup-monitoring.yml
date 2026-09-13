@@ -9,7 +9,8 @@
 # Run from the mgmt-vm, inside homelab/ansible/:
 #   ansible-playbook playbooks/provision-backup-monitoring.yml
 #
-# Vars (group_vars): pbs_datastore_dataset, habackup_dataset, backup_stale_max_age_seconds.
+# Vars (group_vars): pbs_datastore_dataset, habackup_dataset, backup_stale_max_age_seconds,
+# backup_freshness_ignored_pbs_groups.
 
 - name: Install backup-freshness textfile collector on the backup hub
   hosts: oneill
@@ -31,6 +32,7 @@
           HA_SHARE=/{{ habackup_dataset }}
           TEXTFILE_DIR=/var/lib/prometheus/node-exporter
           BACKUP_STALE_MAX_AGE={{ backup_stale_max_age_seconds }}
+          PBS_IGNORE_GROUPS={{ backup_freshness_ignored_pbs_groups | default([]) | join(' ') }}
 
     - name: Install the backup-freshness systemd service
       ansible.builtin.copy:

@@ -14,6 +14,7 @@ PBS_DATASTORE="${PBS_DATASTORE:-/rpool/data/pbs-datastore}"
 HA_SHARE="${HA_SHARE:-/rpool/data/ha-backup-share}"
 TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/prometheus/node-exporter}"
 MAX_AGE="${BACKUP_STALE_MAX_AGE:-129600}"   # 36h default
+PBS_IGNORE_GROUPS="${PBS_IGNORE_GROUPS:-}"   # space-separated type/id groups, e.g. ct/124
 
 out="${TEXTFILE_DIR}/homelab_backups.prom"
 tmp="$(mktemp "${out}.XXXXXX")"
@@ -35,6 +36,10 @@ emit_group() {  # type group newest_epoch count
   emit "homelab_backup_max_age_seconds{type=\"${type}\",group=\"${group}\"} ${MAX_AGE}"
 }
 
+pbs_group_is_ignored() {  # group
+  [[ " ${PBS_IGNORE_GROUPS} " == *" $1 "* ]]
+}
+
 # --- PBS: <datastore>/{vm,ct}/<id>/<ISO8601>Z/ ; newest child dir = last backup ---
 if [[ -d "$PBS_DATASTORE" ]]; then
   for kind in vm ct; do
@@ -42,6 +47,7 @@ if [[ -d "$PBS_DATASTORE" ]]; then
     for grpdir in "${PBS_DATASTORE}/${kind}"/*/; do
       [[ -d "$grpdir" ]] || continue
       id="$(basename "$grpdir")"
+      pbs_group_is_ignored "${kind}/${id}" && continue
       newest=""; count=0
       for snap in "$grpdir"*/; do
         [[ -d "$snap" ]] || continue

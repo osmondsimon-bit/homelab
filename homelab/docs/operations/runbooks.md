@@ -1587,7 +1587,9 @@ top-to-bottom; most monitoring is automatic, so the list is short.
       `backup-freshness.sh` → `BackupStale`/`BackupAbsent` + Glance "Backup State" +
       the Grafana "Backups & Recoverability" dashboard cover it for free. A new *kind*
       of target (new datastore/share) → teach the script that path, then re-run
-      `provision-backup-monitoring.yml`.
+      `provision-backup-monitoring.yml`. Retained one-off rollback images are not recurring
+      backup targets; list their `type/id` group in `backup_freshness_ignored_pbs_groups` so they
+      do not create permanent stale alerts.
 
 **5. Continuity — prove it**
 - [ ] Run a restore/reprovision drill; record the RTO in the Restore drills table above.

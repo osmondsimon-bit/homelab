@@ -44,7 +44,7 @@
 | jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running, `onboot=1`.** Jellyfin `10.11.11` with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Version 12.0 is deliberately deferred pending its first stabilization release and migration review. |
 | qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Running, `onboot=1`.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Running, `onboot=1`.** TV automation; tied to Apophis's USB-media bind mount. |
-| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Radarr `6.3.0.10514` verified live 2026-09-10; tied to Apophis's USB-media bind mount. A pre-update encrypted PBS image provides rollback. |
+| radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Radarr `6.3.0.10514` verified live 2026-09-10; tied to Apophis's USB-media bind mount. A pre-update encrypted PBS image provides rollback and is excluded from recurring-backup freshness monitoring. |
 | seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Running, `onboot=1`.** Seerr `v3.4.1` and Prowlarr `2.5.2.5491-ls159` verified live 2026-09-10; request/indexer stack has no media bind mount. A pre-Prowlarr ZFS snapshot provides rollback. |
 | home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — returned from Carter to Apophis on 2026-07-28 after the RAM incident. `pvesr` job `200-0` targets Carter; enabled with `FailCount 0`, `State OK`, and last sync `2026-07-28 17:15:01` verified from Apophis. Manual replica bootability was proven 2026-06-25. |
 

@@ -12,7 +12,7 @@ Native Servarr install (no Docker). LAN + Tailscale only.
 | Packaging | checksum-pinned native Servarr `6.3.0.10514` build in `/opt/Radarr`, systemd unit, user `radarr`; verified live 2026-09-10 |
 | Media | the whole USB-SSD media root bind-mounted (`/mnt/usb-media` → `/media`) so downloads + library are **one filesystem** (hardlinks) |
 | Ownership | `radarr` joins the shared **media group** (in-CT gid 1000 → host 101000) + `UMask=0002` so imports hardlink and stay group-writable |
-| Backup | **NONE by design** — config is small + reproducible; media isn't imaged |
+| Backup | **NONE routinely by design** — config is small + reproducible; media isn't imaged. The retained pre-update PBS rollback image is explicitly excluded from recurring-backup freshness monitoring. |
 
 ## How it's managed
 
