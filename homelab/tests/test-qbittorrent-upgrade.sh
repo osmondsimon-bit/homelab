@@ -47,6 +47,8 @@ require_text "$provision_playbook" 'ExecStartPre=/usr/local/bin/qbittorrent-vpn-
   'qBittorrent must fail closed when the VPN endpoint does not answer after boot'
 require_text "$provision_playbook" 'qbittorrent-vpn-health.timer' \
   'provisioning must monitor for a tunnel that dies after qBittorrent starts'
+require_text "$provision_playbook" 'Reconcile services that may have remained stopped after an earlier failed recovery.' \
+  'a healthy VPN check must restart qBittorrent after a delayed tunnel recovery'
 require_text "$upgrade_playbook" 'qbittorrent_upgrade_confirm | bool' \
   'the major distribution upgrade must require explicit confirmation'
 require_text "$upgrade_playbook" 'qbittorrent_upgrade_dataset: rpool/data/subvol-121-disk-0' \

@@ -269,7 +269,13 @@
             #!/usr/bin/env bash
             # Fail closed and attempt one controlled recovery when the Proton tunnel dies.
             set -u
+            restore_dependents() {
+              systemctl start natpmp-renew.timer
+              systemctl start qbittorrent
+            }
             if /usr/local/bin/qbittorrent-vpn-ready.sh 1; then
+              # Reconcile services that may have remained stopped after an earlier failed recovery.
+              restore_dependents
               exit 0
             fi
             echo "WireGuard unhealthy; stopping qBittorrent and attempting recovery" >&2
@@ -277,8 +283,7 @@
             systemctl stop natpmp-renew.timer natpmp-renew.service || true
             systemctl restart wg-quick@wg0
             if /usr/local/bin/qbittorrent-vpn-ready.sh 12; then
-              systemctl start natpmp-renew.timer
-              systemctl start qbittorrent
+              restore_dependents
               echo "WireGuard recovery succeeded"
               exit 0
             fi
