@@ -9,9 +9,11 @@ Usage:
 Requires: python3-yaml (apt install python3-yaml), d2 (https://d2lang.com) in PATH.
 """
 
-import argparse, json, os, subprocess, sys, tempfile
+import argparse, json, os, re, subprocess, sys, tempfile
 from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -59,6 +61,8 @@ def load_data(data_dir: str) -> dict:
         else:
             print(f"  warning: {path} not found", file=sys.stderr)
             data[key] = {}
+    purchases = d / "rack/purchases.yaml"
+    data["purchases"] = yaml.safe_load(purchases.read_text()) or {} if purchases.exists() else {}
     return data
 
 
@@ -201,7 +205,7 @@ header{background:#1e293b;color:#f8fafc;padding:14px 24px;
        display:flex;justify-content:space-between;align-items:center}
 header h1{font-size:17px;font-weight:600;letter-spacing:-.3px}
 header .ts{font-size:11px;color:#94a3b8}
-nav{background:#fff;border-bottom:1px solid var(--border);padding:0 20px;display:flex}
+nav{background:#fff;border-bottom:1px solid var(--border);padding:0 20px;display:flex;overflow-x:auto}
 nav a{padding:11px 14px;text-decoration:none;color:var(--muted);font-size:13px;
       font-weight:500;border-bottom:2px solid transparent;white-space:nowrap}
 nav a:hover,nav a.active{color:#3b82f6;border-bottom-color:#3b82f6}
@@ -354,6 +358,15 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px}
 .rack-legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
 .rack-legend .dot-res{background:#f59e0b;border:1.5px dashed #fff}
 .rack-legend .dot-spare{background:#0b1220;border:1px dashed #475569}
+.purchase-intro{color:var(--muted);line-height:1.5;margin-bottom:10px}
+.purchase-table{overflow-x:auto}
+.purchase-table table{min-width:620px}
+.purchase-table input{width:18px;height:18px;accent-color:#16a34a;cursor:pointer}
+.purchase-table label{cursor:pointer;font-weight:600}
+.purchase-quantity{white-space:nowrap}
+.purchase-notes{color:var(--muted);line-height:1.5;max-width:650px}
+.purchase-link{display:block;margin-top:4px}
+.purchase-included{font-size:11px;color:var(--muted)}
 """
 
 JS = """
@@ -364,8 +377,34 @@ function show(id){
   document.querySelector('nav a[data-id="'+id+'"]').classList.add('active');
   history.replaceState(null,'','#'+id);
 }
+function initPurchases(){
+  const boxes=Array.from(document.querySelectorAll('[data-purchase-id]'));
+  const progress=document.getElementById('purchase-progress');
+  const notice=document.getElementById('purchase-storage-note');
+  if(!progress)return;
+  function updateProgress(){
+    const required=boxes.filter(b=>b.dataset.required==='true');
+    progress.textContent=required.filter(b=>b.checked).length+' of '+required.length+' phase-1 items ready';
+  }
+  function storageUnavailable(){
+    notice.textContent='Checkmarks cannot be saved in this browser. Refreshing will restore the original checklist.';
+  }
+  boxes.forEach(box=>{
+    const key='homelab.infra.purchases.v1.'+box.dataset.purchaseId;
+    try{
+      const saved=localStorage.getItem(key);
+      if(saved==='true'||saved==='false')box.checked=saved==='true';
+    }catch{storageUnavailable();}
+    box.addEventListener('change',()=>{
+      try{localStorage.setItem(key,String(box.checked));}catch{storageUnavailable();}
+      updateProgress();
+    });
+  });
+  updateProgress();
+}
 window.addEventListener('DOMContentLoaded',()=>{
   show(location.hash.replace('#','')||'overview');
+  initPurchases();
 });
 """
 
@@ -1008,6 +1047,66 @@ def rack_section_html(data: dict) -> str:
     )
 
 
+def purchases_section_html(data: dict) -> str:
+    """Render private purchase records with stable IDs for browser completion state."""
+    plan = data.get("purchases", {}).get("purchase_list", {})
+    pp_a, pp_b = _pp_port_map(data)
+    occupied = len(pp_a) + len(pp_b)
+    switch = data.get("switch_ports", {})
+    capacity = sum(b.get("count", 0) for b in switch.get("port_bands", []))
+    quantities = {
+        "occupied_panels": occupied,
+        "spare_panels": 48 - occupied,
+        "spare_rj45": capacity - len(_sw_port_map(data)),
+    }
+    cards = []
+    seen = set()
+    for group in plan.get("groups", []):
+        kind = group.get("kind", "required")
+        if kind not in ("required", "optional", "owned", "included", "future"):
+            raise ValueError(f"Unknown purchase group kind: {kind}")
+        rows = []
+        for item in group.get("items", []):
+            item_id = item["id"]
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", item_id) or item_id in seen:
+                raise ValueError("Purchase IDs must be unique, stable lowercase slugs")
+            seen.add(item_id)
+            name = escape(str(item["name"]))
+            notes = escape(str(item.get("notes", "")))
+            quantity = item.get("quantity", "")
+            if item.get("quantity_from"):
+                quantity = quantities[item["quantity_from"]]
+            url = str(item.get("url", ""))
+            if urlsplit(url).scheme in ("http", "https") and urlsplit(url).netloc:
+                notes += (f'<a class="purchase-link" href="{escape(url, quote=True)}" '
+                          'target="_blank" rel="noopener noreferrer">Product details</a>')
+            if kind == "included":
+                control = '<span class="purchase-included">Included</span>'
+                label = name
+            else:
+                required = "true" if kind == "required" else "false"
+                checked = " checked" if kind == "owned" or item.get("owned") is True else ""
+                control = (f'<input type="checkbox" id="purchase-{item_id}" '
+                           f'data-required="{required}" data-purchase-id="{item_id}"{checked}>')
+                label = f'<label for="purchase-{item_id}">{name}</label>'
+            rows.append(f'<tr><td>{control}</td><td>{label}</td>'
+                        f'<td class="purchase-quantity">{escape(str(quantity))}</td>'
+                        f'<td class="purchase-notes">{notes}</td></tr>')
+        cards.append('<div class="card">'
+                     f'<h2>{escape(str(group.get("title", "Purchases")))}</h2>'
+                     '<div class="purchase-table"><table><thead><tr>'
+                     '<th>Ready</th><th>Item</th><th>Quantity</th><th>Notes</th>'
+                     f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></div>')
+    if not cards:
+        cards.append('<div class="card"><p>No purchase items recorded yet.</p></div>')
+    return ('<div class="card">'
+            f'<h2>{escape(str(plan.get("title", "Purchase checklist")))}</h2>'
+            f'<p class="purchase-intro">{escape(str(plan.get("notes", "")))}</p>'
+            '<p class="purchase-intro" id="purchase-storage-note">Checkmarks are saved in this browser. '
+            'Use the same portal address to retain them; they are not shared across devices.</p>'
+            '<p><strong id="purchase-progress"></strong></p></div>' + "".join(cards))
+
+
 def generate_html(data: dict, net_svg: str, ts: str) -> str:
     ports     = get_ports(data)
     tbds      = find_tbds(data)
@@ -1044,6 +1143,7 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
   <a data-id="ports"     onclick="show('ports');return false"     href="#ports">Port Schedule</a>
   <a data-id="network"   onclick="show('network');return false"   href="#network">Network</a>
   <a data-id="rack"      onclick="show('rack');return false"      href="#rack">Rack</a>
+  <a data-id="purchases" onclick="show('purchases');return false" href="#purchases">Purchases</a>
   <a data-id="lighting"  onclick="show('lighting');return false"  href="#lighting">Lighting</a>
   <a data-id="switch"    onclick="show('switch');return false"    href="#switch">Switch</a>
   <a data-id="construction" onclick="show('construction');return false" href="#construction">Construction</a>
@@ -1105,6 +1205,10 @@ def generate_html(data: dict, net_svg: str, ts: str) -> str:
 
 <section id="rack">
   {rack_section_html(data)}
+</section>
+
+<section id="purchases">
+  {purchases_section_html(data)}
 </section>
 
 <section id="lighting">

@@ -1,7 +1,7 @@
 # Infra Portal (CT 116)
 
 Static-site visualisation of `physical_infra/` design data — port schedule, network
-topology, rack layout, lighting schedule, HA-05 construction gates, and TBD tracker. Generated on the mgmt-vm,
+topology, rack layout, purchase checklist, lighting schedule, HA-05 construction gates, and TBD tracker. Generated on the mgmt-vm,
 served from a lightweight nginx LXC on oneill.
 
 **ADR:** [020-infra-portal.md](../../decisions/020-infra-portal.md)  
@@ -59,6 +59,31 @@ The generated static site is fully reproducible:
 **The source data (`physical_infra/`) IS backed up** via the mgmt-vm PBS daily image
 (ADR-012) — it lives under `~/homelab/` on the mgmt-vm filesystem, which PBS images.
 Losing `physical_infra/` would require a mgmt-vm restore, not a CT 116 rebuild.
+
+## Purchase checklist
+
+The **Purchases** tab reads the local-only `physical_infra/rack/purchases.yaml` source.
+It separates phase-1 purchases, optional accessories, existing equipment, rack-bundle
+inclusions, and future equipment. An item's checkbox means its full quantity is ready;
+only phase-1 rows count towards the progress total. Owned rows start checked and can
+be corrected in the browser. Included accessories are informational rather than separate purchases.
+
+Each group has a `title`, `kind` (`required`, `optional`, `owned`, `included`, or `future`),
+and `items`. Items have a unique stable lowercase `id`, `name`, `quantity`, optional
+`notes`, and optional HTTP(S) product `url`. A `quantity_from` value of
+`occupied_panels`, `spare_panels`, or `spare_rj45` derives the quantity from the current
+two-panel/switch schedule instead of a fixed `quantity`.
+
+Checkmarks are stored only in this browser, under the portal's origin. They survive
+refreshes and regeneration while item IDs and the portal address stay the same. They
+do not sync across devices, update YAML, or enter PBS backups. Clearing browser site
+data resets them; a blocked-storage message appears if the browser cannot save them.
+Keep item IDs stable when changing names or quantities, and recheck completed items
+when their required quantities change.
+
+Run `python3 homelab/tests/test-infra-portal-purchases.py` from the repository root to
+check source loading, rendering, schedule-derived quantities, and browser persistence.
+The tests require the existing Python/PyYAML runtime plus Node.js; production adds no dependency.
 
 ## Restore drill
 
