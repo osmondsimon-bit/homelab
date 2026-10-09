@@ -1663,6 +1663,27 @@ USB/UAS/xHCI or repeat lock evidence appears.
 
 ---
 
+## Selective media cleanup
+
+Remove only titles explicitly authorised by the operator. Keep the title inventory and deletion
+receipt local; do not publish personal library contents in this repository.
+
+1. Match exact Sonarr/Radarr records, Seerr requests, torrent hashes, and library/download paths.
+   Record retained titles and baseline their file inode, size, and modification time. Verify the
+   media mount and reject symlinks or paths outside it.
+2. Remove matching requests and automation records so existing requests cannot download the titles
+   again. Use import-list exclusions when appropriate. When removing files with an exact filesystem
+   manifest, delete automation records with `deleteFiles=false` first.
+3. Remove only matching torrents, if any, before deleting their data. Preserve unrelated torrents.
+   Delete the selected library files and leftover downloads: hardlinked download copies otherwise
+   retain the same media bytes. Estimate reclaimed space from unique inodes whose last links were
+   removed, rather than summing both copies.
+4. Verify retained files and records are unchanged, and matching files/queues are absent. Refresh
+   Jellyfin and confirm its catalogue reflects the cleanup. Avoid an ad-hoc USB `df` poll; see the
+   capacity-collector incident above. The existing media backup decision provides no rollback claim.
+
+---
+
 ## qBittorrent + WireGuard killswitch (CT 121) — ADR-021, Phase 6b
 
 Provisioned by `provision-qbittorrent.yml`. All egress is forced through a ProtonVPN
