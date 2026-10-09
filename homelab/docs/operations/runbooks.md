@@ -1116,8 +1116,8 @@ available as bootable ISO `m1uj979usa.iso`; use the checksum shown by Lenovo at 
 **`03/12/2026`**, and machine type/model **`30CES0DW00`**. The DMI firmware date precedes Lenovo's
 public package date and is not a mismatch. This confirms the intended image is installed on the
 correct model, but the version alone does not prove operational behavior. The operator confirmed on
-2026-07-19 that the recorded settings survived the update; only the controlled warm-reboot test
-remains pending.
+2026-07-19 that the recorded settings survived the update. The controlled Carter warm-reboot test
+passed during the [2026-10-09 maintenance window](maintenance-2026-10-09.md); Apophis remains pending.
 
 Record these values again immediately before flashing and restore them if the update resets setup:
 

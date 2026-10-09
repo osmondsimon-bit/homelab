@@ -7,6 +7,7 @@ DHCP and hands this out as the resolver (ADR-011).
 |---|---|
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 111 (unprivileged LXC, Debian 12) |
 | IP | `YOUR_TECHNITIUM_IP` (static, set in the CT config — reserve/exclude in UniFi) |
+| Software | Technitium DNS `15.6`; both resolvers verified 2026-10-09 after sequential updates and DNS/blocking probes |
 | Ports | `53` DNS, `5380` web console (LAN-only HTTP) |
 | Serves | **home VLAN only** (IoT/guest use the gateway for DNS-by-VLAN-role; camera + management excluded — no internet) |
 | Upstreams | DoH forwarders — Cloudflare, Quad9 (`forwarderProtocol: Https`) |

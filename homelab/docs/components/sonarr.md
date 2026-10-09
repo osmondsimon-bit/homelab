@@ -9,7 +9,7 @@ Servarr install (no Docker). LAN + Tailscale only.
 | Host / CTID | **apophis** / CT 123 (unprivileged Debian 12 LXC, `nesting=1`) |
 | IP / UI | `YOUR_SONARR_IP` — WebUI on `:8989` |
 | Shape | 1 GB / 1 core / 8 GB rootfs |
-| Packaging | native Servarr self-contained build in `/opt/Sonarr`, systemd unit, user `sonarr` |
+| Packaging | native Servarr `4.0.20.3014` self-contained build in `/opt/Sonarr` (verified live 2026-10-09), systemd unit, user `sonarr` |
 | Media | the whole USB-SSD media root bind-mounted (`/mnt/usb-media` → `/media`) so downloads + library are **one filesystem** (hardlinks) |
 | Ownership | `sonarr` joins the shared **media group** (in-CT gid 1000 → host 101000) + `UMask=0002` so imports hardlink and stay group-writable |
 | Backup | **NONE by design** — config is small + reproducible; media isn't imaged |

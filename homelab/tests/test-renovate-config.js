@@ -19,6 +19,7 @@ const expected = [
   "ghcr.io/seerr-team/seerr",
   "ghcr.io/thephaseless/byparr",
   "lscr.io/linuxserver/prowlarr",
+  "node",
   "qmcgaw/gluetun",
   "vaultwarden/server",
 ].sort();
@@ -27,4 +28,4 @@ if (JSON.stringify(dependencies) !== JSON.stringify(expected)) {
   throw new Error(`Renovate image detection mismatch: ${JSON.stringify(dependencies)}`);
 }
 
-console.log("PASS: Renovate detects all six pinned Docker images");
+console.log("PASS: Renovate detects all seven pinned Docker images");
