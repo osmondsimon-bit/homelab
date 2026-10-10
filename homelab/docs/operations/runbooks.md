@@ -735,6 +735,23 @@ live `all.yml`, and re-run the owning provision play. Renovate never automerges 
 repository-side `renovate.json` is ready; proposal PRs begin only after the Renovate GitHub App is
 enabled for this repository.
 
+### Docker VM image cleanup
+
+After application updates, review `sudo docker system df`, `sudo docker image ls --no-trunc`,
+and `df -h /` inside the Docker VM. Old tagged images remain on disk after container replacement;
+with Docker's containerd image store, their data can live under `/var/lib/containerd` rather than
+`/var/lib/docker`.
+
+Before deletion, obtain operator approval for an exact image list. Compare candidate image IDs
+with `sudo docker inspect --format '{{.Image}}' $(sudo docker ps -aq)` so stopped containers are
+also protected. Keep images needed for the agreed rollback, then remove only approved unused IDs
+with `sudo docker image rm <IMAGE_ID> ...`, without force. Preserve application bind mounts,
+volumes, and Proxmox snapshots; avoid a broad system prune.
+
+Check free space, container health, and application HTTP endpoints afterward. Wait for the next
+Prometheus scrape/rule evaluation and confirm `NodeFilesystemSpaceLow` clears in both Prometheus
+and Alertmanager. Review image retention during each deliberate application-update window.
+
 ### Maintenance visibility — deploy or refresh
 
 The collector is read-only. It can count packages and compare kernels but cannot upgrade or reboot:

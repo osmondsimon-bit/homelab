@@ -43,6 +43,26 @@ The media-version regression and Renovate image-detection checks passed; the pub
 
 The native Claude `/security-review` command could not run because its CLI was unauthenticated. One bounded independent reviewer instead reviewed the public configuration/test diff and rollback record, finding no material introduced security issue. The reviewer had no host, credential, ignored-inventory, or private-repository access and relied on the coordinator's runtime/provenance evidence.
 
+## Storage-alert follow-up — 2026-10-10
+
+`NodeFilesystemSpaceLow` remained firing for VM 125's root filesystem after maintenance. Fresh
+Prometheus samples and guest `df` agreed: the filesystem was 98% used with about 560 MiB available.
+Docker reported about 10 GB of reclaimable images; its containerd image store occupied about
+15 GiB. The media USB capacity warning was clear.
+
+With explicit operator approval, removed six images unused by every existing container: Seerr
+3.3.0, Jellyseerr 2.1.0, and the superseded `latest` images for ByParr, FlareSolverr, Gluetun,
+and Prowlarr. Candidate IDs were rechecked immediately before deletion and removed without force.
+All four container image identities and Seerr 3.4.1's rollback image were retained. Application
+data, volumes, and VM snapshots were outside the cleanup.
+
+The cleanup reclaimed about 8 GiB: root usage fell to 53%, with 8.7 GiB available. All four
+containers remained running; Seerr, Gluetun, and ByParr remained healthy, and Seerr's status endpoint
+and Prowlarr's ping endpoint returned HTTP 200. Fresh Prometheus metrics showed 47% available
+capacity, and both Prometheus and Alertmanager subsequently reported no active storage warnings.
+The [Docker VM image cleanup procedure](runbooks.md#docker-vm-image-cleanup) now includes image
+retention review after deliberate application updates.
+
 ## Remaining work and boundaries
 
 - Apophis reboot is operator work from the independent console/recovery path. Its new kernel is installed. The early runbook summary and detailed recovery procedure conflict about when to lower Carter's expected votes. Resolve that wording with the operator before this separate reboot; no quorum override was performed during this window.

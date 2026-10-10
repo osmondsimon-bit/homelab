@@ -30,6 +30,8 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 
 ## Health / recovery
 - **Health:** `http://<ip>:5055/api/v1/status` (200).
+- **Storage upkeep:** review retained Docker images after application updates using the
+  [Docker VM image cleanup procedure](../operations/runbooks.md#docker-vm-image-cleanup).
 - **Recovery:** reproducible → re-run `provision-jellyseerr.yml` (needs `jellyseerr_ip` + `prowlarr_vpn_wg_config` in gitignored `all.yml`). Redo the Jellyfin sign-in; re-add Sonarr/Radarr using their **new auto-generated API keys** (Settings → General in each app after reprovision); re-add the ByParr FlareSolverr proxy in Prowlarr (`http://localhost:8191`). Any registered-site indexer credentials must be re-entered from Vaultwarden.
 - **Migration rollback:** stop Seerr, restore the pre-migration config archive and old Jellyseerr compose definition together, then redeploy. Never run Jellyseerr against the migrated Seerr database.
 
