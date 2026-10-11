@@ -5,7 +5,7 @@ and remaining validation. Current infrastructure facts remain in [PLAN.md](../..
 
 ## Outcome and scope
 
-**Findings remain open.** The safe audit covered the public repository at `6dc6ed5`, all three
+**Baseline findings below describe the initial audit; remediation status is recorded at the end.** The safe audit covered the public repository at `6dc6ed5`, all three
 Proxmox hosts, all 14 running LXCs, four running Linux VMs, monitoring, backup freshness, and
 read-only UniFi configuration. Home Assistant was covered through its monitoring integration,
 existing provisioning/recovery documentation, and VM state; its internal appliance configuration
@@ -147,3 +147,22 @@ runbook exercises merely to reproduce this report.
 Address S02–S05 first in focused, reviewed changes; clear S01/S07 before enabling the companion;
 resolve S12 with the operator. Network hardening and active failure tests require the separate
 decisions and maintenance safeguards above. No finding is marked remediated by this audit.
+
+## Remediation follow-up — 2026-10-11
+
+The operator subsequently requested S01–S05 remediation and selected verified LAN-local TLS for HA.
+
+| Finding | Current remediation evidence |
+| --- | --- |
+| S01 | **Dependency fix verified.** Handlebars 4.7.10 is pinned by override/lockfile with unchanged MIT licence. The benign compiler regression failed against 4.7.9 and passes against the clean patched install; all 43 app tests pass and npm reports zero advisories. Local dependencies were synchronized without lifecycle scripts. Insights remains disabled; actual-server compatibility and S07 are separate prerequisites. |
+| S02 | **Provisioning prevention fixed.** PVE token minting and Technitium first-login/default-rejection/configuration tasks suppress output. A verbose local Ansible fixture verifies six secret-result paths without real credentials. No production tokens were minted or rotated; historical operator-log review remains an operator task. |
+| S03 | **Strict trust enabled and access verified.** Ansible requires verified known-host entries and `StrictHostKeyChecking=yes`; read-only Ansible access still succeeds on all three Proxmox hosts. Rebuild/guest enrollment uses independently confirmed fingerprints. |
+| S04 | **Live focused fix verified.** qBittorrent requires/binds to nftables and checks loaded default-drop policies before tunnel readiness. Firewall-start failure now propagates. The reviewed focused rollout used per-unit activity checks and systemd daemon-reload, with the torrent PID/start timestamp unchanged and all three services active. Failure behavior was exercised in local fixtures; a disruptive live negative test still needs its maintenance window. |
+| S05 | **Prepared; live migration pending HA administration.** HTTPS-only provisioning, authenticated certificate preflight, scoped migration, trust/config rollback, TLS availability/30-day expiry alerts and source-restricted HAOS proxy setup are implemented and tested. Four loopback TLS tests verify success and fail-closed identity/trust/token-permission handling. The existing monitoring credential reads Core metadata but is rejected for addon administration; guest-agent execution is unavailable. The HA-side endpoint, backup scope and live HTTPS scrape therefore remain unverified. Follow the [operator runbook](runbooks.md#home-assistant-metrics--verified-lan-tls); do not mark this finding closed yet. |
+
+Eight security-provisioning checks pass, including real verbose Ansible callbacks, firewall failure
+fixtures and generated TLS scrape preservation. All 35 playbooks pass isolated syntax checking.
+The existing repository regressions remain 22/25 with the same three previously documented stale
+assertions; the new checks introduce no additional failures. The independent security review found
+and corrected aggregate `systemctl is-active` semantics before live rollout, then passed the gate.
+No HA restart, TLS proxy installation, metrics migration, or disruptive VPN loss test was performed.

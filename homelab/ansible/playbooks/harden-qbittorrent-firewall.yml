@@ -1,0 +1,108 @@
+---
+# Apply only the killswitch dependency/readiness fix; never restart the VPN or torrents.
+- name: Require the loaded qBittorrent firewall without interrupting active services
+  hosts: apophis
+  gather_facts: false
+  vars:
+    qb_provisioning: "{{ lookup('file', playbook_dir + '/provision-qbittorrent.yml') | from_yaml }}"
+    qb_ready_task: "{{ qb_provisioning[0].tasks | selectattr('name', 'equalto', 'Install WireGuard readiness and recovery checks') | first }}"
+    qb_ready_script: "{{ (qb_ready_task.loop | selectattr('path', 'equalto', '/usr/local/bin/qbittorrent-vpn-ready.sh') | first).content }}"
+  tasks:
+    - name: Require healthy services and loaded default-drop chains before changing dependencies
+      ansible.builtin.shell: |
+        pct exec {{ qbittorrent_ctid }} -- bash -c '
+          set -euo pipefail
+          for unit in nftables wg-quick@wg0 qbittorrent; do
+            systemctl is-active --quiet "$unit"
+          done
+          for chain in input forward output; do
+            nft list chain inet killswitch "$chain" | grep -Eq "policy drop;"
+          done
+        '
+      changed_when: false
+
+    - name: Record the torrent process identity
+      ansible.builtin.command: >-
+        pct exec {{ qbittorrent_ctid }} -- systemctl show qbittorrent
+        --property=MainPID --property=ExecMainStartTimestampMonotonic
+      register: qb_process_before
+      changed_when: false
+
+    - name: Stage the two public configuration files
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: qb-firewall-
+      register: qb_stage
+
+    - name: Create a private guest staging directory
+      ansible.builtin.command: "pct exec {{ qbittorrent_ctid }} -- mktemp -d /tmp/qb-firewall-XXXXXX"
+      register: qb_ct_stage
+      changed_when: true
+
+    - name: Install and verify the focused fix
+      block:
+        - name: Stage the canonical readiness script
+          ansible.builtin.copy:
+            content: "{{ qb_ready_script }}"
+            dest: "{{ qb_stage.path }}/vpn-ready.sh"
+            mode: "0644"
+
+        - name: Stage the firewall dependency drop-in
+          ansible.builtin.copy:
+            dest: "{{ qb_stage.path }}/killswitch.conf"
+            mode: "0644"
+            content: |
+              # Managed by harden-qbittorrent-firewall.yml.
+              [Unit]
+              After=nftables.service
+              Requires=nftables.service
+              BindsTo=nftables.service
+
+        - name: Push the staged files into the guest
+          ansible.builtin.command:
+            argv: [pct, push, "{{ qbittorrent_ctid }}", "{{ qb_stage.path }}/{{ item }}", "{{ qb_ct_stage.stdout }}/{{ item }}"]
+          loop: [vpn-ready.sh, killswitch.conf]
+          changed_when: true
+
+        - name: Validate and atomically install the files then reload dependency metadata
+          ansible.builtin.shell: |
+            pct exec {{ qbittorrent_ctid }} -- bash -c '
+              set -euo pipefail
+              bash -n {{ qb_ct_stage.stdout }}/vpn-ready.sh
+              bash {{ qb_ct_stage.stdout }}/vpn-ready.sh 1
+              mkdir -p /etc/systemd/system/qbittorrent.service.d
+              install -m 0755 {{ qb_ct_stage.stdout }}/vpn-ready.sh /usr/local/bin/qbittorrent-vpn-ready.sh.new
+              mv /usr/local/bin/qbittorrent-vpn-ready.sh.new /usr/local/bin/qbittorrent-vpn-ready.sh
+              install -m 0644 {{ qb_ct_stage.stdout }}/killswitch.conf /etc/systemd/system/qbittorrent.service.d/20-killswitch.conf.new
+              mv /etc/systemd/system/qbittorrent.service.d/20-killswitch.conf.new /etc/systemd/system/qbittorrent.service.d/20-killswitch.conf
+              systemctl daemon-reload
+              systemctl show qbittorrent --property=Requires --value | grep -qw nftables.service
+              systemctl show qbittorrent --property=BindsTo --value | grep -qw nftables.service
+              for unit in nftables wg-quick@wg0 qbittorrent; do
+                systemctl is-active --quiet "$unit"
+              done
+            '
+          changed_when: true
+
+        - name: Check the torrent process was not restarted
+          ansible.builtin.command: >-
+            pct exec {{ qbittorrent_ctid }} -- systemctl show qbittorrent
+            --property=MainPID --property=ExecMainStartTimestampMonotonic
+          register: qb_process_after
+          changed_when: false
+
+        - name: Require the active process identity to remain unchanged
+          ansible.builtin.assert:
+            that: qb_process_before.stdout == qb_process_after.stdout
+            quiet: true
+            fail_msg: "Torrent process identity changed during dependency hardening; investigate before continuing."
+      always:
+        - name: Remove host-side staging files
+          ansible.builtin.file:
+            path: "{{ qb_stage.path }}"
+            state: absent
+
+        - name: Remove guest-side staging files
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ qbittorrent_ctid }}", --, rm, -rf, "{{ qb_ct_stage.stdout }}"]
+          changed_when: false

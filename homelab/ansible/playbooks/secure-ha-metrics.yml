@@ -1,0 +1,241 @@
+---
+# Migrate only the existing HA scrape after operator bootstrap and verified TLS preflight.
+- name: Move HA metrics to authenticated, verified LAN TLS
+  hosts: oneill
+  gather_facts: false
+  vars:
+    ha_metrics_ct_ca: /etc/prometheus/ha-metrics-ca.pem
+  tasks:
+    - name: Require operator-provisioned local TLS inputs
+      ansible.builtin.assert:
+        that:
+          - ha_metrics_ca_file is defined
+          - ha_metrics_server_name is defined
+          - ha_metrics_server_name is match('^[A-Za-z0-9.-]+$')
+          - ha_metrics_port | default(8443) | int > 0
+          - ha_metrics_port | default(8443) | int < 65536
+        quiet: true
+        fail_msg: "Complete HA LAN TLS bootstrap and set its public trust certificate, identity and port first."
+
+    - name: Read the public trust certificate on the controller
+      ansible.builtin.slurp:
+        src: "{{ ha_metrics_ca_file }}"
+      delegate_to: localhost
+      become: false
+      register: ha_metrics_public_ca
+      no_log: true
+
+    - name: Reject a private key supplied as a trust certificate
+      ansible.builtin.assert:
+        that:
+          - "'-----BEGIN CERTIFICATE-----' in (ha_metrics_public_ca.content | b64decode)"
+          - "'PRIVATE KEY' not in (ha_metrics_public_ca.content | b64decode)"
+        quiet: true
+      no_log: true
+
+    - name: Create a private guest staging directory
+      ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- mktemp -d /tmp/ha-metrics-XXXXXX"
+      register: ha_metrics_stage
+      changed_when: true
+
+    - name: Prepare and validate the secure scrape
+      block:
+        - name: Stage the public certificate inside the guest
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ monitoring_ctid }}", --, tee, "{{ ha_metrics_stage.stdout }}/ca.pem"]
+            stdin: "{{ ha_metrics_public_ca.content | b64decode }}"
+          no_log: true
+          changed_when: true
+
+        - name: Stage the preflight helper inside the guest
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ monitoring_ctid }}", --, tee, "{{ ha_metrics_stage.stdout }}/check.py"]
+            stdin: "{{ lookup('file', playbook_dir + '/../files/monitoring/ha-metrics-tls-check.py') }}"
+          changed_when: true
+
+        - name: Verify TLS identity before sending the existing protected token
+          ansible.builtin.command:
+            argv:
+              - pct
+              - exec
+              - "{{ monitoring_ctid }}"
+              - --
+              - python3
+              - "{{ ha_metrics_stage.stdout }}/check.py"
+              - --address
+              - "{{ ha_ip | regex_replace('/.*$', '') }}"
+              - --port
+              - "{{ ha_metrics_port | default(8443) }}"
+              - --server-name
+              - "{{ ha_metrics_server_name }}"
+              - --ca-file
+              - "{{ ha_metrics_stage.stdout }}/ca.pem"
+          no_log: true
+          changed_when: false
+
+        - name: Read the current scrape configuration
+          ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- cat /etc/prometheus/prometheus.yml"
+          register: ha_metrics_live
+          no_log: true
+          changed_when: false
+
+        - name: Parse the current scrape configuration
+          ansible.builtin.set_fact:
+            ha_metrics_config: "{{ ha_metrics_live.stdout | from_yaml }}"
+          no_log: true
+
+        - name: Require exactly one known HA scrape
+          ansible.builtin.assert:
+            that:
+              - ha_metrics_config.scrape_configs | selectattr('job_name', 'equalto', 'home-assistant') | list | length == 1
+            quiet: true
+
+        - name: Preserve the HA scrape filters and existing instance identity
+          ansible.builtin.set_fact:
+            ha_metrics_job: "{{ ha_metrics_config.scrape_configs | selectattr('job_name', 'equalto', 'home-assistant') | first }}"
+          no_log: true
+
+        - name: Require the supported single static HA target
+          ansible.builtin.assert:
+            that:
+              - ha_metrics_job.static_configs | length == 1
+              - ha_metrics_job.static_configs[0].targets | length == 1
+            quiet: true
+
+        - name: Build the TLS job with its original dashboard identity
+          ansible.builtin.set_fact:
+            ha_metrics_tls_job: >-
+              {{ ha_metrics_job | combine({
+                'scheme': 'https',
+                'tls_config': {'ca_file': ha_metrics_ct_ca, 'server_name': ha_metrics_server_name, 'insecure_skip_verify': false},
+                'static_configs': [ha_metrics_job.static_configs[0] | combine({
+                  'targets': [(ha_ip | regex_replace('/.*$', '')) ~ ':' ~ (ha_metrics_port | default(8443) | string)],
+                  'labels': (ha_metrics_job.static_configs[0].labels | default({})) | combine({
+                    'instance': (ha_metrics_job.static_configs[0].labels | default({})).get('instance', ha_metrics_job.static_configs[0].targets[0])
+                  })
+                })]
+              }) }}
+          no_log: true
+
+        - name: Build the candidate while preserving unrelated scrape jobs
+          ansible.builtin.set_fact:
+            ha_metrics_candidate: "{{ ha_metrics_config | combine({'scrape_configs': (ha_metrics_config.scrape_configs | rejectattr('job_name', 'equalto', 'home-assistant') | list) + [ha_metrics_tls_job]}) }}"
+          no_log: true
+
+        - name: Read the current blackbox probe configuration
+          ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- cat /etc/prometheus/blackbox.yml"
+          register: ha_metrics_blackbox_live
+          no_log: true
+          changed_when: false
+
+        - name: Add a verified TLS probe that sends no bearer credential
+          ansible.builtin.set_fact:
+            ha_metrics_blackbox_candidate: >-
+              {{ (ha_metrics_blackbox_live.stdout | from_yaml) | combine({
+                'modules': ((ha_metrics_blackbox_live.stdout | from_yaml).modules | default({})) | combine({
+                  'ha_metrics_tls': {'prober': 'http', 'timeout': '5s', 'http': {
+                    'preferred_ip_protocol': 'ip4', 'valid_status_codes': [401],
+                    'tls_config': {'ca_file': ha_metrics_ct_ca, 'server_name': ha_metrics_server_name, 'insecure_skip_verify': false}
+                  }}
+                })
+              }) }}
+            ha_metrics_probe_job:
+              job_name: blackbox-ha-metrics-tls
+              metrics_path: /probe
+              params: {module: [ha_metrics_tls]}
+              static_configs:
+                - targets: ["https://{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+              relabel_configs:
+                - {source_labels: [__address__], target_label: __param_target}
+                - {source_labels: [__param_target], target_label: instance}
+                - {target_label: __address__, replacement: "localhost:9115"}
+          no_log: true
+
+        - name: Register the TLS probe without duplicating it on reruns
+          ansible.builtin.set_fact:
+            ha_metrics_candidate: "{{ ha_metrics_candidate | combine({'scrape_configs': (ha_metrics_candidate.scrape_configs | rejectattr('job_name', 'equalto', 'blackbox-ha-metrics-tls') | list) + [ha_metrics_probe_job]}) }}"
+          no_log: true
+
+        - name: Stage the candidate configuration
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ monitoring_ctid }}", --, tee, "{{ ha_metrics_stage.stdout }}/prometheus.yml"]
+            stdin: "{{ ha_metrics_candidate | to_nice_yaml(indent=2) }}"
+          no_log: true
+          changed_when: true
+
+        - name: Stage the probe configuration and expiry alerts
+          ansible.builtin.command:
+            argv: [pct, exec, "{{ monitoring_ctid }}", --, tee, "{{ ha_metrics_stage.stdout }}/{{ item.name }}"]
+            stdin: "{{ item.content }}"
+          loop:
+            - name: blackbox.yml
+              content: "{{ ha_metrics_blackbox_candidate | to_nice_yaml(indent=2) }}"
+            - name: rules.yml
+              content: "{{ lookup('file', playbook_dir + '/../files/monitoring/ha-metrics-tls-rules.yml') }}"
+          no_log: true
+          changed_when: true
+
+        - name: Create protected rollback storage before replacing existing TLS/probe files
+          ansible.builtin.shell: |
+            pct exec {{ monitoring_ctid }} -- bash -c '
+              set -euo pipefail
+              install -d -m 0700 /root/ha-metrics-rollback
+              rollback=$(mktemp -d /root/ha-metrics-rollback/run-XXXXXX)
+              for file in /etc/prometheus/prometheus.yml /etc/prometheus/blackbox.yml /etc/prometheus/ha-metrics-ca.pem /etc/prometheus/rules/ha-metrics-tls.yml; do
+                if [[ -f "$file" ]]; then
+                  install -m 0600 "$file" "$rollback/$(basename "$file")"
+                fi
+              done
+            '
+          changed_when: true
+
+        - name: Install the public trust certificate after authenticated preflight
+          ansible.builtin.command: >-
+            pct exec {{ monitoring_ctid }} -- install -o root -g root -m 0644
+            {{ ha_metrics_stage.stdout }}/ca.pem {{ ha_metrics_ct_ca }}
+          changed_when: true
+
+        - name: Validate the full candidate configuration
+          ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- promtool check config {{ ha_metrics_stage.stdout }}/prometheus.yml"
+          changed_when: false
+
+        - name: Validate the probe configuration and expiry alerts
+          ansible.builtin.command:
+            argv: "{{ item }}"
+          loop:
+            - [pct, exec, "{{ monitoring_ctid }}", --, prometheus-blackbox-exporter, "--config.file={{ ha_metrics_stage.stdout }}/blackbox.yml", --config.check]
+            - [pct, exec, "{{ monitoring_ctid }}", --, promtool, check, rules, "{{ ha_metrics_stage.stdout }}/rules.yml"]
+          changed_when: false
+
+        - name: Promote the verified candidate, restart the probe exporter and reload Prometheus
+          ansible.builtin.shell: |
+            pct exec {{ monitoring_ctid }} -- bash -c '
+              set -euo pipefail
+              install -o root -g root -m 0644 {{ ha_metrics_stage.stdout }}/blackbox.yml /etc/prometheus/blackbox.yml.new
+              mv /etc/prometheus/blackbox.yml.new /etc/prometheus/blackbox.yml
+              systemctl restart prometheus-blackbox-exporter
+              install -o root -g root -m 0644 {{ ha_metrics_stage.stdout }}/rules.yml /etc/prometheus/rules/ha-metrics-tls.yml.new
+              mv /etc/prometheus/rules/ha-metrics-tls.yml.new /etc/prometheus/rules/ha-metrics-tls.yml
+              install -o root -g root -m 0644 {{ ha_metrics_stage.stdout }}/prometheus.yml /etc/prometheus/prometheus.yml.new
+              mv /etc/prometheus/prometheus.yml.new /etc/prometheus/prometheus.yml
+              systemctl reload prometheus
+            '
+          changed_when: true
+
+        - name: Wait for the secure HA target to be healthy
+          ansible.builtin.command: >-
+            pct exec {{ monitoring_ctid }} -- python3 -c
+            'import json,urllib.request; d=json.load(urllib.request.urlopen("http://127.0.0.1:9090/api/v1/targets",timeout=5)); t=[x for x in d["data"]["activeTargets"] if x["labels"].get("job")=="home-assistant"]; assert len(t)==1 and t[0]["health"]=="up" and t[0]["scrapeUrl"].startswith("https://"); q=json.load(urllib.request.urlopen("http://127.0.0.1:9090/api/v1/query?query=probe_success%7Bjob%3D%22blackbox-ha-metrics-tls%22%7D",timeout=5)); assert len(q["data"]["result"])==1 and q["data"]["result"][0]["value"][1]=="1"'
+          register: ha_metrics_health
+          until: ha_metrics_health.rc == 0
+          retries: 12
+          delay: 5
+          changed_when: false
+
+        - name: Remove successful migration staging files
+          ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- rm -rf {{ ha_metrics_stage.stdout }}"
+          changed_when: false
+      rescue:
+        - name: Preserve diagnostic staging without falling back to plaintext
+          ansible.builtin.fail:
+            msg: "HA TLS migration failed. Protected staging and any /root/ha-metrics-rollback files remain on the monitoring guest. Investigate using the runbook; never restore a plaintext bearer-token scrape."

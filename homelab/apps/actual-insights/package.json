@@ -11,6 +11,9 @@
     "@picocss/pico": "2.1.1",
     "openai": "7.13.0"
   },
+  "overrides": {
+    "handlebars": "4.7.10"
+  },
   "allowScripts": {
     "better-sqlite3@12.11.1": true
   },

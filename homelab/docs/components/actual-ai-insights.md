@@ -1,5 +1,12 @@
 # Actual Budget category AI insights
 
+The 2026-10-11 security remediation pins the existing transitive Handlebars dependency to 4.7.10
+with an npm override. Its MIT licence is unchanged. A benign compiler-marker regression and the
+clean-lockfile suite pass, and the dependency audit reports no advisories. The companion remains
+disabled; this does not establish compatibility with the newer deployed Actual server or resolve
+the separately recorded HTTP handler finding. Reassess the override when the upstream Actual API
+ships the patched dependency, and run the advisory check before enabling this service.
+
 Manual category-only long-term and monthly narrative overlay for Actual Budget on VM 127. The
 implementation remains opt-in and was not running when verified on 2026-09-10; the VM retained older
 staged source while the updated dependency set remained code-only. A real deployment requires its four

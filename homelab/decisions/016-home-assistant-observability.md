@@ -83,3 +83,15 @@ default; matching both means the cap survives that setting being present or abse
   keep-list alone still enforces the measurement-only TSDB (HA just does redundant
   work exporting metrics that are then dropped at scrape).
 - Builds on ADR-013 (monitoring stack); does not change scrape auth or topology.
+
+## Transport revision — 2026-10-11
+
+The operator selected verified LAN-local TLS to remove plaintext bearer-token transit identified
+by the [security audit](../docs/operations/security-audit-2026-10-11.md). Terminate TLS inside HAOS
+using the official NGINX SSL proxy and restrict its listener to the monitoring source. Route
+directly over the LAN; verify the dedicated certificate identity using explicit public trust.
+Keep the server private key within HAOS's encrypted recovery scope. Preserve the measurement
+filters and dashboard identity, and fail on invalid certificates without an HTTP fallback.
+This is an accepted transport decision; operator bootstrap and live migration are still pending.
+The [runbook](../docs/operations/runbooks.md#home-assistant-metrics--verified-lan-tls) owns setup,
+certificate expiry/rotation, backup selection and verification procedures.

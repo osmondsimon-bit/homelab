@@ -4,6 +4,109 @@ Common operational procedures for Simon's homelab. Keep entries short — what t
 
 ---
 
+## Home Assistant metrics — verified LAN TLS
+
+This is the operator bootstrap for S05 in the [2026-10-11 security audit](security-audit-2026-10-11.md).
+The operator selected LAN-local TLS. HA-side administration is required: the existing monitoring
+credential is rejected for addon administration, and VM 200 guest-agent execution is unavailable.
+The scrape must remain marked pending until the endpoint and live HTTPS metrics are verified.
+
+Use the official [NGINX Home Assistant SSL proxy](https://github.com/home-assistant/addons/tree/master/nginx_proxy)
+on HAOS. Its unencrypted backend hop stays inside the appliance's addon network; the monitoring-to-HA
+LAN hop uses verified TLS. No new guest, Cloudflare metrics route, or public forwarding is required.
+The addon normally proxies the full HA API/UI; restrict this listener to the monitoring source.
+
+1. Confirm the encrypted HA native backup is fresh. Through the existing HA admin UI, inspect
+   installed addons, existing certificate files and HTTP reverse-proxy settings. Preserve
+   Cloudflared's existing routes/trust. If HTTP settings need changing, obtain an attended restart
+   window before saving them; current HA versions restart Core when HTTP settings are saved.
+2. Install the official NGINX proxy addon if absent. If it is already used, review its current
+   consumers before changing ports or customizations. Do not overwrite an existing certificate,
+   key, proxy customization or listener. Map only container TCP 443 to host **8443**; leave TCP 80
+   and UDP/QUIC unmapped. Use `domain: ha-metrics.home.arpa`, `cloudflare: false`, and
+   `use_ssl_backend: false` for an existing plain HTTP Core backend. Check the actual Core backend
+   port instead of assuming an appliance-version default.
+3. Generate a dedicated self-signed server certificate **on HAOS** using an approved terminal/editor
+   with access to `/ssl`. Keep its private key on HAOS; never place it in Git, chat, Prometheus, or
+   a world-readable file. Check that the filenames below do not exist before running:
+
+   ```bash
+   set -euo pipefail
+   umask 077
+   test ! -e /ssl/ha-metrics.key && test ! -e /ssl/ha-metrics.crt
+   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 365 \
+     -subj '/CN=ha-metrics.home.arpa' \
+     -addext 'subjectAltName=DNS:ha-metrics.home.arpa' \
+     -addext 'basicConstraints=critical,CA:FALSE' \
+     -addext 'extendedKeyUsage=serverAuth' \
+     -keyout /ssl/ha-metrics.key -out /ssl/ha-metrics.crt
+   openssl x509 -in /ssl/ha-metrics.crt -noout -fingerprint -sha256 -enddate
+   ```
+
+   Set addon `certfile: ha-metrics.crt`, `keyfile: ha-metrics.key`, and empty HSTS for this dedicated
+   internal listener. Check its documentation/schema at installation time. The certificate SAN
+   verifies the stable identity even though Prometheus routes directly to the HA LAN address;
+   neither split DNS nor public DNS is needed.
+4. Restrict the proxy's default server using its documented `/share` customization mechanism:
+   set `customize.active: true`, `customize.default: nginx_proxy_default_metrics.conf`, and use a
+   previously unused servers include pattern. In `/share/nginx_proxy_default_metrics.conf` put
+   only the following, replacing the placeholder locally:
+
+   ```nginx
+   allow YOUR_MONITORING_IP;
+   deny all;
+   access_log off;
+   ```
+
+   HA's reverse-proxy settings must trust the actual addon source address or its necessary narrow
+   addon subnet. Retain existing trusted proxies; never trust the entire LAN or all sources. The
+   [official addon instructions](https://github.com/home-assistant/addons/blob/master/nginx_proxy/DOCS.md)
+   describe this prerequisite. Apply a required Core restart only in the approved window.
+5. Transfer **only the public certificate** to mgmt-vm at `~/.ha-metrics/server.crt` and compare its
+   SHA-256 fingerprint with the one read through the independent HA admin path. An unauthenticated
+   certificate downloaded from the new listener is not a trust bootstrap. Add the following to
+   the gitignored local Ansible configuration:
+
+   ```yaml
+   ha_metrics_port: 8443
+   ha_metrics_server_name: ha-metrics.home.arpa
+   ha_metrics_ca_file: "{{ lookup('env', 'HOME') }}/.ha-metrics/server.crt"
+   ```
+
+6. Start the addon and confirm that only the monitoring source reaches port 8443. The secure
+   preflight checks CA trust, SAN identity, expiry, private token-file permissions and authenticated
+   `/api/prometheus` output before configuration promotion:
+
+   ```bash
+   cd ~/homelab/ansible
+   ansible-playbook playbooks/secure-ha-metrics.yml
+   ```
+
+   This updates only HA transport plus its certificate probe/alerts, validates candidate configs
+   with native tools, restarts the blackbox exporter and reloads Prometheus. It preserves other
+   scrape jobs, HA metric filters and the existing HA `instance` identity. It never mints tokens or
+   restarts HA. Success requires the authenticated HTTPS target and the credential-free TLS probe
+   to become healthy. A wrong/untrusted certificate fails before the token is read/sent. There is
+   no HTTP fallback. Failure retains protected diagnostic staging inside the monitoring guest;
+   prior configuration, public trust and probe files are retained under the guest's protected
+   `/root/ha-metrics-rollback/` directory before replacement. Restore only known-good TLS/trust
+   artifacts if necessary; do not restore a plaintext bearer-token scrape. Review retained
+   diagnostic/rollback copies after acceptance rather than deleting them during failure recovery.
+7. Extend the encrypted partial HA backup to include the proxy addon, **SSL folder**, and **share
+   folder** customization alongside the existing HA/Zigbee/MQTT/Cloudflared selection. Verify these
+   selections in the new backup metadata and verify that a protected backup lands. Future restore
+   drills must recover the certificate/key and source restriction as well as HA configuration.
+   The server key remains in the encrypted HA recovery path; Prometheus trust is public and can
+   be recovered from the authenticated HA admin path. Do not assume the prior partial backup
+   automatically included SSL/share.
+8. The operator owns annual rotation; `HomeAssistantMetricsCertificateExpiring` warns 30 days
+   before expiry. Generate distinct new filenames on HAOS, keep old protected key/certificate for
+   rollback, and add the new public certificate to the existing trust bundle **before** switching
+   the listener. Verify the new identity and authenticated metrics, rerun the focused playbook,
+   then remove old public trust after acceptance and take a fresh encrypted backup. Retain the
+   last validated TLS configuration for rollback. If TLS cannot be restored, declare a monitoring
+   outage and repair it; do not bypass certificate validation or return to HTTP.
+
 ## Disaster recovery — scenario index (start here in an outage)
 
 **Pick what's broken, read the recovery model, jump to the steps.** This is a front

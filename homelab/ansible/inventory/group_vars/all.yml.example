@@ -224,6 +224,11 @@ monitoring_pve_nodes:
 unifi_controller_url: https://YOUR_GATEWAY_IP              # the UDM/gateway
 unifi_user: prometheus_user                                # UniFi read-only local user
 ha_ip: YOUR_HA_IP                                          # Home Assistant VM (scrape /api/prometheus)
+# Local HAOS TLS proxy; use the operator bootstrap in docs/operations/runbooks.md.
+# The certificate SAN must match server_name; route directly to ha_ip without DNS/Cloudflare.
+ha_metrics_port: 8443
+ha_metrics_server_name: ha-metrics.home.arpa
+ha_metrics_ca_file: "{{ lookup('env', 'HOME') }}/.ha-metrics/server.crt" # public trust certificate only; no key
 
 # --- Alerting: ntfy (ADR-013) — topic is PRIVATE, treat as a secret ----------
 ntfy_base_url: https://ntfy.sh

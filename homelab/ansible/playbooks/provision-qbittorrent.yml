@@ -186,6 +186,7 @@
     - name: Enable nftables (killswitch) + WireGuard, ordered so the killswitch comes first
       ansible.builtin.shell: |
         pct exec {{ qbittorrent_ctid }} -- bash -c '
+          set -euo pipefail
           systemctl enable nftables >/dev/null 2>&1
           systemctl restart nftables
           systemctl enable wg-quick@wg0 >/dev/null 2>&1
@@ -248,8 +249,14 @@
           mode: "0755"
           content: |
             #!/usr/bin/env bash
-            # Succeed only when wg0 has a recent real handshake and working tunnel DNS.
-            set -u
+            # Require the loaded killswitch before checking the real handshake and tunnel DNS.
+            set -uo pipefail
+            for chain in input forward output; do
+              if ! nft list chain inet killswitch "$chain" 2>/dev/null | grep -Eq 'policy drop;'; then
+                echo "qBittorrent killswitch is absent or lacks a default-drop policy" >&2
+                exit 1
+              fi
+            done
             attempts="${1:-12}"
             for ((attempt = 1; attempt <= attempts; attempt++)); do
               latest=$(wg show wg0 latest-handshakes 2>/dev/null | awk 'NR == 1 {print $2}')
@@ -321,7 +328,8 @@
           Description=qBittorrent-nox (torrents bound to wg0)
           After=network-online.target wg-quick@wg0.service nftables.service
           Wants=network-online.target
-          Requires=wg-quick@wg0.service
+          Requires=wg-quick@wg0.service nftables.service
+          BindsTo=nftables.service
           StartLimitIntervalSec=0
           [Service]
           Environment=HOME=/root

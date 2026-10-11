@@ -1,0 +1,20 @@
+# Warn about local HA TLS failures and certificate expiry before credentials become unavailable.
+groups:
+  - name: ha-metrics-tls
+    rules:
+      - alert: HomeAssistantMetricsTLSUnavailable
+        expr: probe_success{job="blackbox-ha-metrics-tls"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Home Assistant metrics TLS endpoint is unavailable or untrusted
+          description: Check the local proxy, certificate trust/identity and monitoring-source restriction. Do not fall back to HTTP.
+      - alert: HomeAssistantMetricsCertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-ha-metrics-tls"} - time() < 30 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Home Assistant metrics certificate expires within 30 days
+          description: Rotate the HAOS certificate and public Prometheus trust bundle using the verified LAN TLS runbook.

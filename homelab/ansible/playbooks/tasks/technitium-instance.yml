@@ -88,6 +88,7 @@
     pct exec {{ instance.ctid }} --
     curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
   register: tech_login
+  no_log: true
   changed_when: false
   when: dns_present.rc != 0
 
@@ -111,6 +112,7 @@
     pct exec {{ instance.ctid }} --
     curl -fsS "http://127.0.0.1:5380/api/user/login?user=admin&pass=admin"
   register: tech_defcheck
+  no_log: true
   changed_when: false
   failed_when: (tech_defcheck.stdout | from_json).status == "ok"
   when: dns_present.rc != 0
@@ -135,6 +137,7 @@
     pct exec {{ instance.ctid }} --
     curl -fsS "http://127.0.0.1:5380/api/settings/set?token={{ (tech_cfg_login.stdout | from_json).token }}&forwarders={{ technitium_forwarders | join(',') | urlencode }}&forwarderProtocol={{ technitium_forwarder_protocol }}&enableBlocking=true&blockingType={{ technitium_blocking_type }}&blockListUrls={{ technitium_blocklist_urls | join(',') | urlencode }}&blockListUpdateIntervalHours={{ technitium_blocklist_update_hours }}"
   register: tech_settings
+  no_log: true
   changed_when: true
   failed_when: (tech_settings.stdout | from_json).status != "ok"
 
@@ -145,6 +148,7 @@
     pct exec {{ instance.ctid }} --
     curl -fsS "http://127.0.0.1:5380/api/settings/forceUpdateBlockLists?token={{ (tech_cfg_login.stdout | from_json).token }}"
   register: tech_forceupdate
+  no_log: true
   changed_when: true
   failed_when: (tech_forceupdate.stdout | from_json).status != "ok"
 
@@ -153,6 +157,7 @@
     pct exec {{ instance.ctid }} --
     curl -fsS "http://127.0.0.1:5380/api/settings/get?token={{ (tech_cfg_login.stdout | from_json).token }}"
   register: tech_verify
+  no_log: true
   changed_when: false
   failed_when: >
     (tech_verify.stdout | from_json).response.enableBlocking != true

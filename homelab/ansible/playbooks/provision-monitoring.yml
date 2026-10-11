@@ -17,6 +17,33 @@
   hosts: localhost
   gather_facts: true
   tasks:
+    - name: Require verified local TLS inputs for the HA scrape before provisioning
+      ansible.builtin.assert:
+        that:
+          - ha_metrics_server_name is defined
+          - ha_metrics_ca_file is defined
+          - ha_metrics_port | default(8443) | int > 0
+          - ha_metrics_port | default(8443) | int < 65536
+        quiet: true
+        fail_msg: "Configure and verify the HA LAN TLS endpoint first; see the monitoring runbook."
+      when: ha_ip is defined
+
+    - name: Read the controller's public HA trust certificate before provisioning
+      ansible.builtin.slurp:
+        src: "{{ ha_metrics_ca_file }}"
+      register: ha_metrics_public_ca
+      no_log: true
+      when: ha_ip is defined
+
+    - name: Reject secret keys in the public HA trust input
+      ansible.builtin.assert:
+        that:
+          - "'-----BEGIN CERTIFICATE-----' in (ha_metrics_public_ca.content | b64decode)"
+          - "'PRIVATE KEY' not in (ha_metrics_public_ca.content | b64decode)"
+        quiet: true
+      no_log: true
+      when: ha_ip is defined
+
     - name: Require a routable IPv4 address on the control node
       ansible.builtin.assert:
         that:
@@ -38,6 +65,7 @@
         pveum user token add root@pam monitoring --privsep 1 --output-format json
         pveum acl modify / --roles PVEAuditor --tokens 'root@pam!monitoring' >/dev/null 2>&1
       register: pve_tok
+      no_log: true
       changed_when: true
       when: (monitoring_pve_nodes | selectattr('name', 'equalto', inventory_hostname) | first).token_from is not defined
 
@@ -291,6 +319,18 @@
       vars:
         blackbox_yml: |
           modules:
+          {% if ha_ip is defined %}
+            ha_metrics_tls:
+              prober: http
+              timeout: 5s
+              http:
+                preferred_ip_protocol: ip4
+                valid_status_codes: [401]
+                tls_config:
+                  ca_file: /etc/prometheus/ha-metrics-ca.pem
+                  server_name: {{ ha_metrics_server_name | to_json }}
+                  insecure_skip_verify: false
+          {% endif %}
             http_2xx:
               prober: http
               timeout: 5s
@@ -304,6 +344,26 @@
       changed_when: true
 
     # --- Home Assistant token (Prometheus reads it via credentials_file) ---
+    - name: Stage the public HA metrics trust certificate on the host
+      ansible.builtin.copy:
+        content: "{{ hostvars['localhost'].ha_metrics_public_ca.content | b64decode }}"
+        dest: /tmp/ha-metrics-trust.pem
+        mode: "0644"
+      no_log: true
+      when: ha_ip is defined
+
+    - name: Install the public HA metrics trust certificate in the monitoring guest
+      ansible.builtin.command:
+        argv: [pct, push, "{{ monitoring_ctid }}", /tmp/ha-metrics-trust.pem, /etc/prometheus/ha-metrics-ca.pem, --perms, "0644"]
+      changed_when: true
+      when: ha_ip is defined
+
+    - name: Remove the host-side public certificate staging file
+      ansible.builtin.file:
+        path: /tmp/ha-metrics-trust.pem
+        state: absent
+      when: ha_ip is defined
+
     - name: Write the HA token file (when a token is given)
       ansible.builtin.shell: >
         echo '{{ ha_token | b64encode }}' | base64 -d |
@@ -359,13 +419,27 @@
                 - targets: ["localhost:9130"]
           {% endif %}
           {% if ha_ip is defined %}
+            - job_name: blackbox-ha-metrics-tls
+              metrics_path: /probe
+              params: { module: ["ha_metrics_tls"] }
+              static_configs:
+                - targets: ["https://{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+              relabel_configs:
+                - { source_labels: [__address__], target_label: __param_target }
+                - { source_labels: [__param_target], target_label: instance }
+                - { target_label: __address__, replacement: "localhost:9115" }
             - job_name: home-assistant
-              scheme: http
+              scheme: https
               metrics_path: /api/prometheus
               authorization:
                 credentials_file: /etc/prometheus/ha_token
+              tls_config:
+                ca_file: /etc/prometheus/ha-metrics-ca.pem
+                server_name: {{ ha_metrics_server_name | to_json }}
+                insecure_skip_verify: false
               static_configs:
-                - targets: ["{{ ha_ip }}:8123"]
+                - targets: ["{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}"]
+                  labels: { instance: "{{ ha_ip | regex_replace('/.*$', '') }}:8123" }
               # Measurements-only keep-list (ADR-016). HA's metrics TSDB stores ONLY
               # numeric physical quantities + climate temps; state/event metrics
               # (hass_state_change_*, hass_entity_available, switches/lights/binary/
@@ -603,13 +677,20 @@
         pct exec {{ monitoring_ctid }} -- bash -c 'mkdir -p /etc/prometheus/rules && cat > /etc/prometheus/rules/recording.yml'
       changed_when: true
 
+    - name: Drop the HA metrics certificate expiry rules into the CT
+      ansible.builtin.command:
+        argv: [pct, exec, "{{ monitoring_ctid }}", --, tee, /etc/prometheus/rules/ha-metrics-tls.yml]
+        stdin: "{{ lookup('file', playbook_dir + '/../files/monitoring/ha-metrics-tls-rules.yml') }}"
+      when: ha_ip is defined
+      changed_when: true
+
     - name: Validate Prometheus, blackbox, rules, and Alertmanager before restarting
       ansible.builtin.shell: |
         pct exec {{ monitoring_ctid }} -- bash -c '
           set -e
           promtool check config /etc/prometheus/prometheus.yml
           prometheus-blackbox-exporter --config.file=/etc/prometheus/blackbox.yml --config.check
-          promtool check rules /etc/prometheus/rules/homelab.yml /etc/prometheus/rules/recording.yml
+          promtool check rules /etc/prometheus/rules/*.yml
           amtool check-config /etc/prometheus/alertmanager.yml
         '
       changed_when: false

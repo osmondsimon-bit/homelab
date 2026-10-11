@@ -28,6 +28,27 @@ creds, PVE audit token, ntfy topic) are `vars_prompt`/`group_vars`, never commit
 Login to Grafana as `admin`; the password is only set when you type a non-blank value at the
 prompt (blank = keep current). Reset: `pct exec 114 -- grafana-cli admin reset-admin-password '…'`.
 
+PVE token creation and all Technitium token-producing/consuming configuration tasks suppress
+Ansible output even under verbose execution. Existing tokens are not recreated by the focused
+security deployment. Historical operator-log review and any indicated rotation remain separate.
+
+The HA metrics transport is being migrated to verified LAN TLS: HAOS's official NGINX proxy,
+restricted to the monitoring source on TCP 8443, keeps its private key on HAOS; Prometheus receives
+only the public trust certificate and verifies `ha-metrics.home.arpa`. The
+`secure-ha-metrics.yml` playbook verifies TLS and authenticated metrics before promotion, preserves
+the existing metric filters/dashboard instance identity, and reloads only Prometheus. Fresh
+provisioning requires the secure endpoint inputs and has no HTTP fallback. The proxy is a HA API/UI
+proxy, not a dedicated metrics exporter; the source restriction limits its admission. Operator
+bootstrap, certificate rotation/expiry checks and backup scope are in
+[the runbook](../operations/runbooks.md#home-assistant-metrics--verified-lan-tls).
+Live migration remains pending until those HA-side steps and the secure scrape are verified.
+
+The secure migration also restarts the blackbox probe exporter to add a credential-free TLS probe;
+the probe expects HA's unauthenticated metrics response to be HTTP 401. Its expiry metric drives
+`HomeAssistantMetricsCertificateExpiring` at 30 days, while
+`HomeAssistantMetricsTLSUnavailable` covers invalid/expired certificates and proxy failures. No
+metrics bearer token is sent by that probe.
+
 Physical-host telemetry and monthly ZFS scrub/trim scheduling are deployed separately by
 `ansible/playbooks/install-node-exporter.yml`; then `deploy-monitoring-rules.yml` stages,
 `promtool`-validates, and atomically loads the matching failure-only rules, recording rules, and

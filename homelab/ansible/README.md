@@ -20,7 +20,11 @@ cp inventory/group_vars/all.yml.example inventory/group_vars/all.yml
 # 3. Create an SSH key if you don't have one
 ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -C "mgmt-vm"
 
-# 4. Authorise the mgmt-vm on the Proxmox host (asks for apophis root password once)
+# 4. Compare the host-key fingerprint with the independent Proxmox console first:
+#    on that console: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+#    then enrol the matching key interactively (never accept an unverified key).
+ssh -o StrictHostKeyChecking=ask root@YOUR_PROXMOX_IP true
+# Authorise the mgmt-vm (asks for apophis root password once).
 ssh-copy-id root@YOUR_PROXMOX_IP
 
 # 5. Verify connectivity (run from inside homelab/ansible so ansible.cfg is picked up)
@@ -30,11 +34,17 @@ ansible proxmox -m ping        # expect: apophis | SUCCESS => "ping": "pong"
 No Proxmox API token or per-container SSH keys are needed — lifecycle is driven via
 `pct` over the single root SSH connection. See ADR-005 for why.
 
+Automation requires known, verified host keys and fails on unknown or changed identities.
+After a rebuild, compare the new fingerprint through the independent console before replacing
+only that host's known-host entry. Do not bypass verification with `StrictHostKeyChecking=no`,
+`accept-new`, or an unverified `ssh-keyscan` result. Apply the same enrollment procedure to guest
+VMs addressed directly by playbooks.
+
 ## Layout
 
 ```
 ansible/
-  ansible.cfg                  # inventory path, host-key prompt off, pipelining
+  ansible.cfg                  # inventory path, verified host keys required, pipelining
   inventory/
     hosts.ini.example          # template — copy to hosts.ini (gitignored) + fill in
     hosts.ini                  # YOUR real inventory (gitignored, not published)
@@ -63,6 +73,8 @@ ansible-playbook playbooks/<name>.yml
 | `provision-monitoring.yml` | Monitoring LXC on oneill — Prometheus + Grafana + Alertmanager + exporters (mints read-only PVE tokens; prompts Grafana pw, blank=keep; ADR-013). Run **without** `--limit` (play 1 hits both hosts) |
 | `provision-glance.yml` | Glance dashboard LXC on oneill — front-door launchpad, pinned Go binary (ADR-014). Run with `--limit oneill` |
 | `provision-qbittorrent.yml` | qBittorrent 5 on a Debian 13 LXC behind native WireGuard + nftables; fresh rebuilds use the service-specific pinned template override (ADR-021) |
+| `harden-qbittorrent-firewall.yml` | Installs the canonical loaded-firewall readiness check and nftables dependency drop-in; requires healthy services/drop policies, reloads systemd metadata without restarting VPN/torrents, and verifies the active torrent PID/start timestamp is unchanged |
+| `secure-ha-metrics.yml` | After operator HAOS LAN TLS bootstrap, verifies certificate identity and authenticated metrics before migrating the HA scrape to HTTPS; preserves filters/instance identity, adds certificate-expiry probes/alerts, restarts only the blackbox exporter and reloads Prometheus. See the monitoring runbook; no plaintext fallback |
 | `upgrade-qbittorrent-debian13.yml` | One-time, confirmation-gated CT 121 migration from Debian 12 to 13. Creates a ZFS rollback snapshot, follows Debian's minimal/full upgrade sequence, then proves qBittorrent 5, VPN routing, killswitch failure behavior, and Web UI health |
 | `provision-actual.yml` | Actual Budget VM 127 on Carter — pinned official container, loopback-only app port, Tailscale Serve HTTPS, persistent data, and encrypted PBS enrolment (ADR-023). Optionally builds the manual category-only 24-month baseline and monthly AI overlay at `:8443/insights` after its four controller secret files are staged (ADR-024); disabled by default. Reads a one-use tagged key from protected `actual_ts_authkey_file` for the initial join; reruns do not require the file |
 | `provision-secondary-mgmt.yml` | Independent cold management VM 128 on Carter — fresh Ubuntu control node with local-only inventory, a distinct automation key, PVE connectivity proof, `onboot=0`, and protection enabled after it returns to a powered-off state |

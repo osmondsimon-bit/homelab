@@ -49,6 +49,12 @@ security control, not the in-container user. The `lxc.*` tun-passthrough lines u
   considered healthy without a recent peer handshake and working tunnel DNS. Each successful check
   also reconciles qBittorrent and the NAT-PMP timer, including when the tunnel recovered only after
   an earlier recovery attempt had timed out.
+- **Firewall prerequisite:** readiness also requires loaded default-drop input, forward and output
+  chains. The torrent unit requires and binds to `nftables.service`; losing that service stops
+  torrents. Provisioning fails immediately if firewall startup fails. The focused
+  `harden-qbittorrent-firewall.yml` applies this dependency/readiness correction without restarting
+  the VPN or torrent process, and checks the process identity afterward. Real tunnel-loss and
+  firewall-restart exercises still require a confirmed maintenance window.
 - **External alarm:** Prometheus probes the Web UI independently. If it remains unavailable for
   five minutes, `QbittorrentUnavailable` routes through Alertmanager to ntfy. `GuestDown` separately
   covers the whole CT stopping; successful probes and brief recovery cycles do not notify.
