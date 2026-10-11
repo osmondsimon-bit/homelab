@@ -44,8 +44,10 @@ bootstrap, certificate rotation/expiry checks and backup scope are in
 [the runbook](../operations/runbooks.md#home-assistant-metrics--verified-lan-tls).
 Live authenticated scraping and the native TLS probe are healthy; the monitoring source receives
 HTTP 401 anonymously and 200 with its protected token, while another LAN source receives 403.
-The certificate expires in October 2027. Encrypted backup inclusion of the proxy addon and
-SSL/share files still needs operator confirmation; recovery of these new artifacts is unverified.
+The certificate expires in October 2027. On 2026-10-11 the operator confirmed the new backup
+contents and encryption; a fresh protected archive containing the proxy addon and SSL/share
+folders was independently verified on the backup share. Restore of these additions remains
+unverified; include them in the next isolated HA-native restore drill.
 
 The secure migration also restarts the blackbox probe exporter to add a credential-free TLS probe;
 the probe expects HTTP 200 from HA's public login page (`/`), avoiding failed-authentication

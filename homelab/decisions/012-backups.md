@@ -35,6 +35,12 @@ Constraints:
 **local cross-host only for now** — off-site (cloud) is deferred (see Consequences).
 
 ### Layer 1 — Home Assistant: native *partial* backup → share on oneill (primary for HA)
+
+The metrics TLS setup extends this partial scope with the NGINX SSL proxy addon and SSL/share
+folders (2026-10-11). Encrypted archive scope and landing are verified; the next isolated
+HA-native restore drill must also recover these additions. See the
+[metrics TLS runbook](../docs/operations/runbooks.md#home-assistant-metrics--verified-lan-tls).
+
 - Use HA's **Supervisor backup** (native scheduler, or `hassio.backup_partial` via the Core
   API) to take **partial** backups of what's irreplaceable: HA core config, the
   **Zigbee2MQTT add-on + data**, and other add-on configs. **Exclude media.**

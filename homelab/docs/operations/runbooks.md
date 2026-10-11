@@ -9,8 +9,10 @@ Common operational procedures for Simon's homelab. Keep entries short — what t
 This is the operator bootstrap for S05 in the [2026-10-11 security audit](security-audit-2026-10-11.md).
 The operator selected LAN-local TLS. HA-side administration is required: the existing monitoring
 credential is rejected for addon administration, and VM 200 guest-agent execution is unavailable.
-The endpoint and live HTTPS scrape were verified on 2026-10-11. Backup scope for the new
-SSL/share files and addon still needs operator confirmation; see step 7.
+The endpoint and live HTTPS scrape were verified on 2026-10-11. The operator confirmed the
+expanded automatic-backup selection and encryption; a fresh protected archive containing the
+proxy addon and SSL/share folders was verified on the backup share. Restore of these additions
+remains pending the next isolated HA-native drill; see step 7.
 
 Use the official [NGINX Home Assistant SSL proxy](https://github.com/home-assistant/addons/tree/master/nginx_proxy)
 on HAOS. Its unencrypted backend hop stays inside the appliance's addon network; the monitoring-to-HA

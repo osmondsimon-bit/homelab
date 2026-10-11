@@ -94,6 +94,7 @@ Keep the server private key within HAOS's encrypted recovery scope. Preserve the
 filters and dashboard identity, and fail on invalid certificates without an HTTP fallback.
 Operator bootstrap and live HTTPS migration were verified on 2026-10-11. Scrape/probe URLs use
 the certificate name through a monitoring-only LAN hosts alias, matching both TLS and HTTP
-virtual-host identity. Backup inclusion of the new SSL/share files and proxy addon remains pending.
+virtual-host identity. Backup inclusion of the new SSL/share files and proxy addon, encryption
+and landing were verified on 2026-10-11; restoring these additions remains untested.
 The [runbook](../docs/operations/runbooks.md#home-assistant-metrics--verified-lan-tls) owns setup,
 certificate expiry/rotation, backup selection and verification procedures.
