@@ -1,12 +1,12 @@
 # Homelab Plan
 
-Latest maintenance: [2026-10-09 record](docs/operations/maintenance-2026-10-09.md). Apophis packages are updated; its reboot remains explicitly deferred.
+Latest maintenance: [2026-10-09 record](docs/operations/maintenance-2026-10-09.md). Apophis's reboot was explicitly deferred during that window; the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) subsequently verified the current kernel on all three hosts. Security findings and active validation remain open in that record.
 
 ## Current infrastructure
 
 ### apophis (Proxmox host)
 - Intel i7-8700T, **32 GB RAM** — restored to 32 GB on 2026-07-28 after the original Lenovo 16 GB SO-DIMM failed on 2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
-- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.21, running kernel `7.0.14-20-pve`; `7.0.14-23-pve` installed during maintenance on 2026-10-09, with reboot explicitly deferred. **Cluster member** (2-node `homelab` with carter; ADR-009)
+- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve` verified read-only during the 2026-10-11 security audit. The reboot was deferred during maintenance on 2026-10-09; its subsequent timing/provenance was not audited. **Cluster member** (2-node `homelab` with carter; ADR-009)
 - **ZFS corruption recovery completed 2026-07-23:** VM 100 was restored from the validated July 21
   PBS image; VM 118's corrupt Apophis replica was fully recreated from Carter. The installed 16 GB
   DIMM passed two MemTest86 passes and the NVMe passed an extended self-test. A recovery scrub
@@ -194,6 +194,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 - [ ] **UniFi stale object cleanup** — WireGuard Client network (ADR-003 superseded) + vestigial untagged Default net (0 clients, already firewalled off) are known dead objects. Delete them via UniFi UI before they confuse Phase 4 network design.
 
 **Security (confirmed gaps, not hypothetical):**
+- [ ] **Address the 2026-10-11 security audit findings and remaining active test set** — priorities, configuration evidence, live checks and test failures are recorded in [the audit](docs/operations/security-audit-2026-10-11.md). No remediation was deployed during the audit; disruptive validation requires a confirmed maintenance window.
 - [ ] **[P1] Resolve private config backup secret handling.** ADR-007 intended `homelab-private` to hold non-credential recovery config, but `backup-local-config.sh` copies gitignored `group_vars/all.yml`, which now contains VPN and service API credentials and is tracked in the private repository's Git history. The private repo is therefore **credential-bearing in practice**; private visibility is access control, not encryption. Choose and record a durable model: (a) split credentials from recoverable non-secret config and exclude them from this backup; (b) encrypt secret-bearing backup material before Git; or (c) explicitly accept plaintext credential-bearing Git storage with documented GitHub/clone protections and residual risk. Completion requires updating ADR-007, ADR-018, the backup script and restore procedure; deciding whether history must be rewritten; and rotating affected credentials if plaintext history is removed or considered exposed. Until then, `/home/simon` is the only working/deployment tree and `/home/simon/homelab-private/homelab` is a restore snapshot only.
 - [ ] **Tighten Home→IoT and Home→Camera firewall policies** — two over-broad `Secure→Unsecure (ANY)` ALLOW rules confirmed via v2 firewall review 2026-06-19. Both should be scoped to `HA-IP → coordinator-IP:port` and `HA-IP → camera-IPs`. Can the UniFi API push policy changes, or is this UI-only? Answer that question first, then action.
 - [x] **SSH access audit — ✅ DONE 2026-06-25** (`harden-ssh.yml`: key-only root on apophis/carter/oneill, stale pre-4b RSA key removed from the cluster-shared `authorized_keys`). See "Phase 5 — Secrets track", step 1.
