@@ -89,7 +89,9 @@ The addon normally proxies the full HA API/UI; restrict this listener to the mon
    with native tools, restarts the blackbox exporter and reloads Prometheus. It preserves other
    scrape jobs, HA metric filters and the existing HA `instance` identity. It never mints tokens or
    restarts HA. Success requires the authenticated HTTPS target and the credential-free TLS probe
-   to become healthy. A wrong/untrusted certificate fails before the token is read/sent. There is
+   to become healthy. The TLS probe requests the public login page (`/`) and expects HTTP 200;
+   keep it off `/api/prometheus`, where anonymous HTTP 401 creates HA authentication warnings.
+   The actual metrics scrape stays authenticated. A wrong/untrusted certificate fails before the token is read/sent. There is
    no HTTP fallback. Failure retains protected diagnostic staging inside the monitoring guest;
    prior configuration, public trust and probe files are retained under the guest's protected
    `/root/ha-metrics-rollback/` directory before replacement. Restore only known-good TLS/trust

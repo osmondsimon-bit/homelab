@@ -111,13 +111,16 @@ class SecurityProvisioningTests(unittest.TestCase):
         self.assertIn("server_name:", ha)
         self.assertIn("ca_file:", ha)
         self.assertIn('targets: ["{{ ha_metrics_server_name }}:', ha)
+        probe = template.split("- job_name: blackbox-ha-metrics-tls", 1)[1].split("- job_name: home-assistant", 1)[0]
+        self.assertIn('targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/"]', probe)
         self.assertNotIn('targets: ["{{ ha_ip }}:8123"]', ha)
 
     def test_tls_migration_preserves_scrape_filters_and_dashboard_identity(self):
         names = {"Build the TLS job with its original dashboard identity",
-                 "Build the candidate while preserving unrelated scrape jobs"}
+                 "Build the candidate while preserving unrelated scrape jobs",
+                 "Add a verified TLS probe that sends no bearer credential"}
         selected = [task for task in tasks(ANSIBLE / "playbooks/secure-ha-metrics.yml") if task["name"] in names]
-        self.assertEqual(len(selected), 2)
+        self.assertEqual(len(selected), 3)
         original = {"job_name": "home-assistant", "scheme": "http", "metrics_path": "/api/prometheus",
                     "authorization": {"credentials_file": "/protected/token"},
                     "metric_relabel_configs": [{"action": "keep", "regex": "fixture_measurement"}],
@@ -132,6 +135,10 @@ class SecurityProvisioningTests(unittest.TestCase):
             "ha_metrics_tls_job.authorization == ha_metrics_job.authorization",
             "ha_metrics_tls_job.metric_relabel_configs == ha_metrics_job.metric_relabel_configs",
             "ha_metrics_candidate.scrape_configs[0] == other_job",
+            "ha_metrics_probe_job.static_configs[0].targets == ['https://ha-metrics.home.arpa:8443/']",
+            "ha_metrics_blackbox_candidate.modules.ha_metrics_tls.http.valid_status_codes == [200]",
+            "'authorization' not in ha_metrics_blackbox_candidate.modules.ha_metrics_tls.http",
+            "'basic_auth' not in ha_metrics_blackbox_candidate.modules.ha_metrics_tls.http",
         ], "quiet": True}}
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
@@ -139,6 +146,7 @@ class SecurityProvisioningTests(unittest.TestCase):
             play.write_text(yaml.safe_dump([{"hosts": "localhost", "connection": "local", "gather_facts": False,
                 "vars": {"ha_ip": "127.0.0.1", "ha_metrics_port": 8443, "ha_metrics_server_name": "ha-metrics.home.arpa",
                          "ha_metrics_ct_ca": "/protected/ca.pem", "ha_metrics_job": original, "other_job": other,
+                         "ha_metrics_blackbox_live": {"stdout": "modules: {}"},
                          "ha_metrics_config": {"scrape_configs": [original, other]}}, "tasks": selected + [checks]}]))
             cfg = tmp / "ansible.cfg"
             cfg.write_text("[defaults]\nstdout_callback=default\n")

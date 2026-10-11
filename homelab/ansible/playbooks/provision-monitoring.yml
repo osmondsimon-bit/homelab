@@ -330,7 +330,7 @@
               timeout: 5s
               http:
                 preferred_ip_protocol: ip4
-                valid_status_codes: [401]
+                valid_status_codes: [200]
                 tls_config:
                   ca_file: /etc/prometheus/ha-metrics-ca.pem
                   server_name: {{ ha_metrics_server_name | to_json }}
@@ -428,7 +428,7 @@
               metrics_path: /probe
               params: { module: ["ha_metrics_tls"] }
               static_configs:
-                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/"]
               relabel_configs:
                 - { source_labels: [__address__], target_label: __param_target }
                 - { source_labels: [__param_target], target_label: instance }

@@ -48,7 +48,9 @@ The certificate expires in October 2027. Encrypted backup inclusion of the proxy
 SSL/share files still needs operator confirmation; recovery of these new artifacts is unverified.
 
 The secure migration also restarts the blackbox probe exporter to add a credential-free TLS probe;
-the probe expects HA's unauthenticated metrics response to be HTTP 401. Its expiry metric drives
+the probe expects HTTP 200 from HA's public login page (`/`), avoiding failed-authentication
+notifications from anonymous metrics requests. The authenticated metrics scrape is checked
+separately. Its expiry metric drives
 `HomeAssistantMetricsCertificateExpiring` at 30 days, while
 `HomeAssistantMetricsTLSUnavailable` covers invalid/expired certificates and proxy failures. No
 metrics bearer token is sent by that probe.

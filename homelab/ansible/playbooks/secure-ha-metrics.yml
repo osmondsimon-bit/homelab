@@ -137,7 +137,7 @@
               {{ (ha_metrics_blackbox_live.stdout | from_yaml) | combine({
                 'modules': ((ha_metrics_blackbox_live.stdout | from_yaml).modules | default({})) | combine({
                   'ha_metrics_tls': {'prober': 'http', 'timeout': '5s', 'http': {
-                    'preferred_ip_protocol': 'ip4', 'valid_status_codes': [401],
+                    'preferred_ip_protocol': 'ip4', 'valid_status_codes': [200],
                     'tls_config': {'ca_file': ha_metrics_ct_ca, 'server_name': ha_metrics_server_name, 'insecure_skip_verify': false}
                   }}
                 })
@@ -147,7 +147,7 @@
               metrics_path: /probe
               params: {module: [ha_metrics_tls]}
               static_configs:
-                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/"]
               relabel_configs:
                 - {source_labels: [__address__], target_label: __param_target}
                 - {source_labels: [__param_target], target_label: instance}
