@@ -1,0 +1,17 @@
+---
+# Resolve the certificate identity locally without changing shared DNS or other aliases.
+- name: Configure the monitoring guest's LAN-only HA TLS alias
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ monitoring_ctid }}"
+      - --
+      - python3
+      - -c
+      - "{{ lookup('file', playbook_dir + '/../files/monitoring/ha-metrics-hosts.py') }}"
+      - "{{ ha_ip | regex_replace('/.*$', '') }}"
+      - "{{ ha_metrics_server_name }}"
+  register: ha_metrics_hosts
+  changed_when: ha_metrics_hosts.stdout == 'changed'
+  no_log: true

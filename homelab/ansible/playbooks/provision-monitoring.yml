@@ -21,6 +21,7 @@
       ansible.builtin.assert:
         that:
           - ha_metrics_server_name is defined
+          - ha_metrics_server_name is match('^[A-Za-z0-9.-]+$')
           - ha_metrics_ca_file is defined
           - ha_metrics_port | default(8443) | int > 0
           - ha_metrics_port | default(8443) | int < 65536
@@ -194,6 +195,10 @@
         '
       when: graf_present.rc != 0
       changed_when: true
+
+    - name: Resolve the HA TLS identity on the LAN
+      ansible.builtin.include_tasks: tasks/ha-metrics-hosts.yml
+      when: ha_ip is defined
 
     - name: Ensure the TSDB mount is owned by the prometheus user
       ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- chown -R prometheus:prometheus {{ monitoring_tsdb_mount }}"
@@ -423,7 +428,7 @@
               metrics_path: /probe
               params: { module: ["ha_metrics_tls"] }
               static_configs:
-                - targets: ["https://{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
               relabel_configs:
                 - { source_labels: [__address__], target_label: __param_target }
                 - { source_labels: [__param_target], target_label: instance }
@@ -438,7 +443,7 @@
                 server_name: {{ ha_metrics_server_name | to_json }}
                 insecure_skip_verify: false
               static_configs:
-                - targets: ["{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}"]
+                - targets: ["{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}"]
                   labels: { instance: "{{ ha_ip | regex_replace('/.*$', '') }}:8123" }
               # Measurements-only keep-list (ADR-016). HA's metrics TSDB stores ONLY
               # numeric physical quantities + climate temps; state/event metrics

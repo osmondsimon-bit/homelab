@@ -2,10 +2,12 @@
 """Exercise secret-output suppression, SSH trust and VPN startup failure locally."""
 import configparser
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -13,6 +15,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE = ROOT / "homelab/ansible"
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location("ha_metrics_hosts", ANSIBLE / "files/monitoring/ha-metrics-hosts.py")
+hosts_helper = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(hosts_helper)
 
 
 def tasks(path):
@@ -27,6 +33,29 @@ def tasks(path):
 
 
 class SecurityProvisioningTests(unittest.TestCase):
+    def test_local_tls_alias_preserves_other_hosts_and_updates_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "hosts"
+            original = "127.0.0.1 localhost\n# --- BEGIN PVE ---\n127.0.1.1 fixture\n# --- END PVE ---\n"
+            path.write_text(original)
+            path.chmod(0o640)
+            self.assertTrue(hosts_helper.update_hosts(path, "127.0.0.2", "ha-metrics.home.arpa"))
+            self.assertFalse(hosts_helper.update_hosts(path, "127.0.0.2", "ha-metrics.home.arpa"))
+            self.assertTrue(hosts_helper.update_hosts(path, "127.0.0.3", "ha-metrics.home.arpa"))
+            self.assertTrue(path.read_text().startswith(original))
+            self.assertEqual(path.read_text().count(hosts_helper.MARKER), 1)
+            self.assertNotIn("127.0.0.2", path.read_text())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+
+    def test_local_tls_alias_rejects_conflicts_without_changing_hosts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "hosts"
+            original = "127.0.0.1 localhost\n127.0.0.2 ha-metrics.home.arpa existing\n"
+            path.write_text(original)
+            with self.assertRaises(ValueError):
+                hosts_helper.update_hosts(path, "127.0.0.3", "ha-metrics.home.arpa")
+            self.assertEqual(path.read_text(), original)
+
     def test_verbose_ansible_never_prints_provisioning_tokens(self):
         selected = []
         for task in tasks(ANSIBLE / "playbooks/provision-monitoring.yml"):
@@ -81,6 +110,7 @@ class SecurityProvisioningTests(unittest.TestCase):
         self.assertIn("insecure_skip_verify: false", ha)
         self.assertIn("server_name:", ha)
         self.assertIn("ca_file:", ha)
+        self.assertIn('targets: ["{{ ha_metrics_server_name }}:', ha)
         self.assertNotIn('targets: ["{{ ha_ip }}:8123"]', ha)
 
     def test_tls_migration_preserves_scrape_filters_and_dashboard_identity(self):
@@ -96,7 +126,7 @@ class SecurityProvisioningTests(unittest.TestCase):
         checks = {"name": "Verify generated security and preservation behavior", "ansible.builtin.assert": {"that": [
             "ha_metrics_tls_job.scheme == 'https'",
             "ha_metrics_tls_job.tls_config.insecure_skip_verify == false",
-            "ha_metrics_tls_job.static_configs[0].targets == ['127.0.0.1:8443']",
+            "ha_metrics_tls_job.static_configs[0].targets == ['ha-metrics.home.arpa:8443']",
             "ha_metrics_tls_job.static_configs[0].labels.instance == '127.0.0.1:8123'",
             "ha_metrics_tls_job.static_configs[0].labels.fixture == 'retained'",
             "ha_metrics_tls_job.authorization == ha_metrics_job.authorization",

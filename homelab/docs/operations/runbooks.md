@@ -9,7 +9,8 @@ Common operational procedures for Simon's homelab. Keep entries short — what t
 This is the operator bootstrap for S05 in the [2026-10-11 security audit](security-audit-2026-10-11.md).
 The operator selected LAN-local TLS. HA-side administration is required: the existing monitoring
 credential is rejected for addon administration, and VM 200 guest-agent execution is unavailable.
-The scrape must remain marked pending until the endpoint and live HTTPS metrics are verified.
+The endpoint and live HTTPS scrape were verified on 2026-10-11. Backup scope for the new
+SSL/share files and addon still needs operator confirmation; see step 7.
 
 Use the official [NGINX Home Assistant SSL proxy](https://github.com/home-assistant/addons/tree/master/nginx_proxy)
 on HAOS. Its unencrypted backend hop stays inside the appliance's addon network; the monitoring-to-HA
@@ -45,8 +46,10 @@ The addon normally proxies the full HA API/UI; restrict this listener to the mon
 
    Set addon `certfile: ha-metrics.crt`, `keyfile: ha-metrics.key`, and empty HSTS for this dedicated
    internal listener. Check its documentation/schema at installation time. The certificate SAN
-   verifies the stable identity even though Prometheus routes directly to the HA LAN address;
-   neither split DNS nor public DNS is needed.
+   verifies the stable identity. Both scrape and probe URLs use that DNS name so their HTTP Host
+   header matches the addon virtual host. Ansible manages a monitoring-only `/etc/hosts` alias to
+   the HA LAN address; neither shared DNS nor public DNS is needed. The alias stays outside
+   Proxmox's managed hosts section and conflicting unmanaged aliases stop the playbook.
 4. Restrict the proxy's default server using its documented `/share` customization mechanism:
    set `customize.active: true`, `customize.default: nginx_proxy_default_metrics.conf`, and use a
    previously unused servers include pattern. In `/share/nginx_proxy_default_metrics.conf` put

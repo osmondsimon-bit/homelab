@@ -92,6 +92,8 @@ using the official NGINX SSL proxy and restrict its listener to the monitoring s
 directly over the LAN; verify the dedicated certificate identity using explicit public trust.
 Keep the server private key within HAOS's encrypted recovery scope. Preserve the measurement
 filters and dashboard identity, and fail on invalid certificates without an HTTP fallback.
-This is an accepted transport decision; operator bootstrap and live migration are still pending.
+Operator bootstrap and live HTTPS migration were verified on 2026-10-11. Scrape/probe URLs use
+the certificate name through a monitoring-only LAN hosts alias, matching both TLS and HTTP
+virtual-host identity. Backup inclusion of the new SSL/share files and proxy addon remains pending.
 The [runbook](../docs/operations/runbooks.md#home-assistant-metrics--verified-lan-tls) owns setup,
 certificate expiry/rotation, backup selection and verification procedures.

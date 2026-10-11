@@ -33,6 +33,9 @@
         quiet: true
       no_log: true
 
+    - name: Resolve the HA TLS identity on the LAN
+      ansible.builtin.include_tasks: tasks/ha-metrics-hosts.yml
+
     - name: Create a private guest staging directory
       ansible.builtin.command: "pct exec {{ monitoring_ctid }} -- mktemp -d /tmp/ha-metrics-XXXXXX"
       register: ha_metrics_stage
@@ -109,7 +112,7 @@
                 'scheme': 'https',
                 'tls_config': {'ca_file': ha_metrics_ct_ca, 'server_name': ha_metrics_server_name, 'insecure_skip_verify': false},
                 'static_configs': [ha_metrics_job.static_configs[0] | combine({
-                  'targets': [(ha_ip | regex_replace('/.*$', '')) ~ ':' ~ (ha_metrics_port | default(8443) | string)],
+                  'targets': [ha_metrics_server_name ~ ':' ~ (ha_metrics_port | default(8443) | string)],
                   'labels': (ha_metrics_job.static_configs[0].labels | default({})) | combine({
                     'instance': (ha_metrics_job.static_configs[0].labels | default({})).get('instance', ha_metrics_job.static_configs[0].targets[0])
                   })
@@ -144,7 +147,7 @@
               metrics_path: /probe
               params: {module: [ha_metrics_tls]}
               static_configs:
-                - targets: ["https://{{ ha_ip | regex_replace('/.*$', '') }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
+                - targets: ["https://{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}/api/prometheus"]
               relabel_configs:
                 - {source_labels: [__address__], target_label: __param_target}
                 - {source_labels: [__param_target], target_label: instance}

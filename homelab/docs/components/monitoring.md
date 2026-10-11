@@ -32,16 +32,20 @@ PVE token creation and all Technitium token-producing/consuming configuration ta
 Ansible output even under verbose execution. Existing tokens are not recreated by the focused
 security deployment. Historical operator-log review and any indicated rotation remain separate.
 
-The HA metrics transport is being migrated to verified LAN TLS: HAOS's official NGINX proxy,
+The HA metrics transport uses verified LAN TLS (live verification 2026-10-11): HAOS's official NGINX proxy,
 restricted to the monitoring source on TCP 8443, keeps its private key on HAOS; Prometheus receives
-only the public trust certificate and verifies `ha-metrics.home.arpa`. The
+only the public trust certificate and verifies `ha-metrics.home.arpa`. Scrape/probe URLs use that
+name, resolved by a monitoring-only managed `/etc/hosts` entry to the HA LAN address. The
 `secure-ha-metrics.yml` playbook verifies TLS and authenticated metrics before promotion, preserves
 the existing metric filters/dashboard instance identity, and reloads only Prometheus. Fresh
 provisioning requires the secure endpoint inputs and has no HTTP fallback. The proxy is a HA API/UI
 proxy, not a dedicated metrics exporter; the source restriction limits its admission. Operator
 bootstrap, certificate rotation/expiry checks and backup scope are in
 [the runbook](../operations/runbooks.md#home-assistant-metrics--verified-lan-tls).
-Live migration remains pending until those HA-side steps and the secure scrape are verified.
+Live authenticated scraping and the native TLS probe are healthy; the monitoring source receives
+HTTP 401 anonymously and 200 with its protected token, while another LAN source receives 403.
+The certificate expires in October 2027. Encrypted backup inclusion of the proxy addon and
+SSL/share files still needs operator confirmation; recovery of these new artifacts is unverified.
 
 The secure migration also restarts the blackbox probe exporter to add a credential-free TLS probe;
 the probe expects HA's unauthenticated metrics response to be HTTP 401. Its expiry metric drives
