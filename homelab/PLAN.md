@@ -1,6 +1,6 @@
 # Homelab Plan
 
-Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.md). Routine package updates are complete; all three hosts await kernel activation through deliberate reboots, and HA Core's patch awaits its restart window. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
+Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.md). Routine package updates and the approved Oneill/Carter reboots are complete. Apophis still awaits kernel activation through an out-of-band reboot, and HA Core's patch awaits its restart window. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
 
 ## Current infrastructure
 
@@ -52,7 +52,7 @@ Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.m
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
-- IP: YOUR_NUC_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve`; newest kernel `7.0.14-24-pve` installed during maintenance on 2026-10-18, with deliberate reboot pending. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
+- IP: YOUR_NUC_IP — Proxmox VE 9.2.21, running newest installed kernel `7.0.14-24-pve`, verified after the approved maintenance reboot on 2026-10-18. All seven guests and essential services recovered; the reboot-required metric is clear. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
 - Firmware baseline (inventoried 2026-07-14): AMI BIOS `TWL_P0_AK_10_0108_AMI.15W` (2025-01-17), UEFI, Secure Boot disabled/platform Setup Mode. The purchase record identifies the machine as the KAMRUI Essenx E2 N150/16 GB/512 GB variant, but DMI contains only `Default string`; do not flash a BIOS unless KAMRUI confirms it is for this exact E2/N150 variant and firmware family. Settings and recovery behavior are recorded in the runbook.
 - The low-power "simple services" node, offloading apophis (ADR-009 hardware roadmap)
 
@@ -68,7 +68,7 @@ Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.m
 
 ### carter (ThinkStation P330 Tiny type 30CE, Proxmox host — cluster member)
 - Intel i5-8500 (6c/6t, Coffee Lake — matched to apophis for live migration), **32 GB RAM**, ~256 GB SSD (**ZFS-on-root**, `rpool`)
-- IP: YOUR_CARTER_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve`; newest kernel `7.0.14-24-pve` installed during maintenance on 2026-10-18, with deliberate reboot pending. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
+- IP: YOUR_CARTER_IP — Proxmox VE 9.2.21, running newest installed kernel `7.0.14-24-pve`, verified after the approved warm reboot on 2026-10-18. Quorum and normal guests recovered; both split-direction replication jobs passed fresh runs, cold VMs 128/201 remain stopped, and the reboot-required metric is clear. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
 - Firmware updated and confirmed live 2026-07-19: BIOS `M1UKT79A`, DMI release date `2026-03-12`, machine type/model `30CES0DW00`. This is Lenovo's current model-compatible recommended release (package published 2026-03-30). The operator confirmed the recorded BIOS settings survived the update; controlled warm-reboot validation passed during maintenance on 2026-10-09.
 - Role: primary home for Vaultwarden + 2nd DNS resolver + Actual Budget + cold independent management. VM 118 replicates Carter→Apophis; Carter is the replica target for Apophis-owned VM 200. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
 
