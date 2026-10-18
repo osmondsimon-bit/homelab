@@ -139,7 +139,7 @@ recovery stays non-circular.
 | **Vaultwarden** (VM 118) dies | restart on Carter; if Carter is lost, recover its Apophis replica; ultimate fallback is the PBS image | ✅ PBS restore 2026-06-26 | [Restore a guest from PBS](#restore-a-guest-from-pbs) · [Capacity-aware failover](#capacity-aware-manual-failover-vm-118-when-carter-is-truly-dead--adr-009) |
 | **Actual Budget** (VM 127) dies | playbook rebuilds VM+container; finance **data** comes from its Carter→oneill PBS image or portable Actual ZIP | ✅ PBS restore 2026-07-15 | [Actual Budget component](../components/actual-budget.md) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
 | **Minecraft Bedrock** (CT 129) dies | restart/reprovision the LXC; recover the family world from its dedicated stop-mode PBS image | ✅ isolated restore 2026-08-28 | [Minecraft component](../components/minecraft-bedrock.md) · [Minecraft operations](#minecraft-bedrock--ct-129) · [Restore a guest from PBS](#restore-a-guest-from-pbs) |
-| **Jellyfin** (CT 120) dies | reproducible from code → re-run `provision-jellyfin.yml`, redo wizard + re-add `/media/library`; **media persists on the USB SSD**, config not imaged (cheap to recreate) | n/a — not imaged by design | [jellyfin.md](../components/jellyfin.md) |
+| **Jellyfin** (CT 120) dies | reproducible from code → re-run `provision-jellyfin.yml`, redo wizard + re-add `/media/library`; **media persists on the USB SSD**, config not routinely imaged (cheap to recreate). For an upgrade regression, use the retained whole-state checkpoint | no booted migration restore trial; operator waived it | [jellyfin.md](../components/jellyfin.md) · [Upgrade rollback](#jellyfin-major-upgrades-and-rollback) |
 | **qBittorrent** (CT 121) dies | reproducible → re-run `provision-qbittorrent.yml` (needs WG config + IP in gitignored `all.yml`); downloads persist on the USB SSD; killswitch must pass leak-test after | n/a — not imaged by design | [qbittorrent.md](../components/qbittorrent.md) · [leak-test](#qbittorrent--wireguard-killswitch-ct-121--adr-021-phase-6b) |
 | **Sonarr** (CT 123) dies | reproducible → re-run `provision-sonarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/tv`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored series) is lost** — re-add manually or from a Sonarr backup export. | n/a — not imaged by design | [sonarr.md](../components/sonarr.md) |
 | **Radarr** (CT 124) dies | reproducible → re-run `provision-radarr.yml --limit apophis`; re-add qBittorrent download client + root folder (`/media/library/movies`) in web UI; indexers re-sync from Prowlarr. **Wanted-list (monitored movies) is lost** — re-add manually or from a Radarr backup export. | n/a — not imaged by design | [radarr.md](../components/radarr.md) |
@@ -175,6 +175,46 @@ archive back to VM 125, and extract it under `/opt/jellyseerr`; its included `do
 restores the old Jellyseerr image and service name together with the matching pre-migration
 database. Start that Compose project and verify Jellyfin login plus all four requests. Never point
 Jellyseerr 2.1.0 at the migrated Seerr database.
+
+### Jellyfin major upgrades and rollback
+
+Major upgrades require an attended window: first start can rewrite the database, so package
+downgrade alone is not rollback. Review upstream migration notes, plugins and username case
+collisions; check SQLite integrity, active playback/tasks, exact apt changes, rootfs capacity,
+the USB mount, and the host's ≥3 GiB available-memory guardrail. Cache the reviewed packages
+through the signed apt repository before interrupting service.
+
+Stop CT 120 before taking a rootfs ZFS snapshot and full local `vzdump` image. Its USB bind mounts
+are excluded from the image; empty mount directories are expected. Keep the dump directory mode
+`0700` and artifacts `0600`. Run `vzdump` with its normal `022` temporary-file umask inside that
+private directory: a globally restrictive `077` mask prevents the mapped container user from
+reading Proxmox's temporary configuration directory. Verify image decompression, required
+database/config files and media-content exclusion. Also archive all of `/var/lib/jellyfin`,
+`/etc/jellyfin`, service defaults and drop-ins with numeric ownership, ACLs and xattrs; compare
+that archive against the stopped filesystem. Host-side application archives retain the LXC's
+mapped ownership and are intended for host-side restoration to its rootfs.
+
+Normally prove old-version restoration and the migration in an isolated guest before changing
+production. If the operator explicitly waives that trial, record the exception and do not claim
+booted rollback proof. Take a fresh stopped snapshot/application archive immediately before
+installation. Prevent service autostart while installing the exact reviewed package versions,
+then start Jellyfin and allow migrations to finish. Verify accounts, password hashes, libraries,
+SQLite integrity/foreign keys, encoding settings, hardware encoding as the service user and
+Seerr connectivity. Confirm all configured media paths are present before running the required
+full library scan; check its successful completion and request client playback acceptance.
+
+The [2026-10-18 maintenance record](maintenance-jellyfin-2026-10-18.md) owns the retained artifact
+locations, including the final pre-install snapshot and matching `120.conf`. With rollback
+authorised, stop CT 120 and preserve the failed state separately, then roll back the rootfs to that snapshot
+and start the CT. This restores old packages and their matching database/configuration together.
+Check the retained CT configuration if host-side settings have changed. Review any newer snapshots
+first; do not add a recursive destruction flag to force rollback past them. Verify the old
+version, accounts, catalogue and encoding after recovery. The full image is the alternative
+whole-rootfs recovery source; USB media is outside both recovery paths.
+
+Retain rollback artifacts until the operator accepts the upgrade and separately authorises
+cleanup. These same-host maintenance copies do not protect against host loss and do not change
+the recurring-backup decision.
 
 ---
 

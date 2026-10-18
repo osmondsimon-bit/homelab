@@ -86,8 +86,9 @@ scope and the accepted manual quorum model are unchanged.
   independent-console/recovery procedure in the runbook. Oneill and Carter's reboots are complete.
 - HA Core is live at `2026.10.1`, with `2026.10.2` offered. Apply it after a fresh native backup and
   approval for its restart. HAOS `18.3` and Supervisor `2026.10.2` are current.
-- Jellyfin's major migration, pinned application-image updates and Minecraft protocol/client
-  acceptance remain separate deliberate work.
+- Jellyfin was deferred during this fleet window; its subsequently approved migration is complete
+  in the [separate Jellyfin record](maintenance-jellyfin-2026-10-18.md). Pinned application-image
+  updates and Minecraft protocol/client acceptance remain separate deliberate work.
 - Existing OpenIPMI/unsupported guest boot-unit failures and the separate finance-dashboard's
   unhealthy state remain unchanged. VM 127 has about 1.38 GiB free after its reviewed 74 MiB package
   download; image/data cleanup remains separately scoped.

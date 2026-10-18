@@ -13,7 +13,7 @@ no inbound from the internet** (ADR-003).
 | Storage | media bind-mounted from the USB SSD — `/mnt/usb-media/library` → `/media/library`, `/mnt/usb-media/downloads` → `/media/downloads` (ext4, by-id, `nofail`) |
 | Service config | on the CT **rootfs** (internal SSD), `/var/lib/jellyfin` — deliberately **not** on the USB disk |
 | Transcode temp | default path `/var/cache/jellyfin/transcodes` (on rootfs). **Throttling + segment-deletion enabled** (`encoding.xml`) so a session can't fill the disk — see Health/operations |
-| Backup | **NONE by design** — media is replaceable; Jellyfin config is small + semi-reproducible. Not PBS-imaged (so invisible to `BackupAbsent`/`BackupStale`). |
+| Backup | **No recurring backup by design** — media is replaceable; Jellyfin config is small + semi-reproducible. Not PBS-imaged (so invisible to `BackupAbsent`/`BackupStale`). One-off major-upgrade rollback artifacts are tracked in the [upgrade runbook](../operations/runbooks.md#jellyfin-major-upgrades-and-rollback). |
 
 ## Why an unprivileged LXC (not a VM)
 
@@ -56,10 +56,16 @@ otherwise duplicate the idmap and break boot.
 
 ## Recovery
 
-Reproducible from code — **no image backup**. To rebuild: re-run `provision-jellyfin.yml`, then redo
+Reproducible from code — **no recurring image backup**. To rebuild: re-run `provision-jellyfin.yml`, then redo
 the setup wizard and re-add the library at `/media/library`. The **media survives** on the USB SSD
 (independent of the CT); only Jellyfin's own config (accounts, watch state) is lost and is cheap to
 recreate. If the USB disk drops and reconnects, remount on apophis (`mount -a`) and restart the CT.
+
+For a major-version regression, use the retained matching package/database checkpoint described in
+the [upgrade runbook](../operations/runbooks.md#jellyfin-major-upgrades-and-rollback). A package
+downgrade alone cannot reverse database migrations. Current deployed versions belong in
+[PLAN.md](../../PLAN.md); the [2026-10-18 maintenance record](../operations/maintenance-jellyfin-2026-10-18.md)
+records the migration evidence and the operator's decision to skip the temporary restore trial.
 
 ## Related
 

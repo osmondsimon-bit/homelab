@@ -1,6 +1,6 @@
 # Homelab Plan
 
-Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.md). Routine package updates and the approved Oneill/Carter reboots are complete. Apophis still awaits kernel activation through an out-of-band reboot, and HA Core's patch awaits its restart window. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
+Latest maintenance: [Jellyfin upgrade, 2026-10-18](docs/operations/maintenance-jellyfin-2026-10-18.md), following the [fleet window](docs/operations/maintenance-2026-10-18.md). Routine package updates and the approved Oneill/Carter reboots are complete. Apophis still awaits kernel activation through an out-of-band reboot, and HA Core's patch awaits its restart window. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
 
 ## Current infrastructure
 
@@ -43,7 +43,7 @@ Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.m
 |--------|------|------|----|--------|
 | mgmt-vm | 100 | VM (Ubuntu Server) | YOUR_MGMT_VM_IP | Running — git, Claude Code, Terraform + Ansible control node |
 | tailscale | 110 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE_LAN_IP | Running — first member of the HA subnet-router pair, advertises YOUR_LAN_CIDR (ADR-003/005). CT 126 on oneill is the independent failover router. |
-| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running, `onboot=1`.** Jellyfin `10.11.11` with iGPU QuickSync; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Version 12 migration remains deliberately deferred pending migration review; the 2026-10-09 apt preview offered `12.2` and replacement of FFmpeg 7 with FFmpeg 8. |
+| jellyfin | 120 | LXC (Debian 12, unpriv) | YOUR_JELLYFIN_IP | **Running, `onboot=1`.** Jellyfin `12.2.0` verified live 2026-10-18 with FFmpeg 8 and proven VAAPI/QuickSync encoding; media on the 500 GB USB-C SSD (`/mnt/usb-media`, ext4, **not backed up**). Major migration completed with retained one-off rollback artifacts; see the [maintenance record](docs/operations/maintenance-jellyfin-2026-10-18.md). |
 | qbittorrent | 121 | LXC (Debian 13, unpriv) | YOUR_QBITTORRENT_IP | **Running, `onboot=1`.** qBittorrent 5 behind ProtonVPN WireGuard + nftables killswitch; leak-test passed 2026-07-21. |
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Running, `onboot=1`.** Sonarr `4.0.20.3014` verified live 2026-10-09; TV automation; tied to Apophis's USB-media bind mount. |
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Radarr `6.4.4.10685` verified live 2026-10-09; tied to Apophis's USB-media bind mount. A pre-update encrypted PBS image provides rollback and is excluded from recurring-backup freshness monitoring. |
@@ -178,10 +178,11 @@ Architecture decided: ADR-018 5-tier model (revised 2026-06-25 — `ansible-vaul
 
 Living backlog to pick up next session.
 
-- [ ] **2026-10-01 — Reassess Jellyfin 12.** Check whether 12.1 (or a clearly stabilized 12.0.x)
-  is available and whether the reported 10.11→12 SQLite migration failures are resolved. Before
-  upgrading, remove/review plugins, take a full `/var/lib/jellyfin` backup, and prove rollback;
-  do not let an ordinary apt run cross this major-version boundary unattended.
+- [x] **Jellyfin 12 migration — completed 2026-10-18.** Reviewed the upstream migration fixes and
+  upgraded from 10.11.11 after stopped backups and a ZFS rollback checkpoint. Database integrity,
+  accounts, catalogue, hardware encoding and the required full scan passed. The operator explicitly
+  waived the temporary test container; backup validation did not include a booted restore trial.
+  Evidence, retained artifacts and remaining client acceptance: [maintenance record](docs/operations/maintenance-jellyfin-2026-10-18.md).
 
 ### 🔎 End-of-session critic review — open questions (2026-06-19)
 
