@@ -1,12 +1,12 @@
 # Homelab Plan
 
-Latest maintenance: [2026-10-09 record](docs/operations/maintenance-2026-10-09.md). Apophis's reboot was explicitly deferred during that window; the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) subsequently verified the current kernel on all three hosts. Security findings and active validation remain open in that record.
+Latest maintenance: [2026-10-18 record](docs/operations/maintenance-2026-10-18.md). Routine package updates are complete; all three hosts await kernel activation through deliberate reboots, and HA Core's patch awaits its restart window. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
 
 ## Current infrastructure
 
 ### apophis (Proxmox host)
 - Intel i7-8700T, **32 GB RAM** — restored to 32 GB on 2026-07-28 after the original Lenovo 16 GB SO-DIMM failed on 2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
-- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve` verified read-only during the 2026-10-11 security audit. The reboot was deferred during maintenance on 2026-10-09; its subsequent timing/provenance was not audited. **Cluster member** (2-node `homelab` with carter; ADR-009)
+- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve`; newest kernel `7.0.14-24-pve` installed during maintenance on 2026-10-18, with deliberate out-of-band reboot pending. **Cluster member** (2-node `homelab` with carter; ADR-009)
 - **ZFS corruption recovery completed 2026-07-23:** VM 100 was restored from the validated July 21
   PBS image; VM 118's corrupt Apophis replica was fully recreated from Carter. The installed 16 GB
   DIMM passed two MemTest86 passes and the NVMe passed an extended self-test. A recovery scrub
@@ -48,11 +48,11 @@ Latest maintenance: [2026-10-09 record](docs/operations/maintenance-2026-10-09.m
 | sonarr | 123 | LXC (Debian 12, unpriv) | YOUR_SONARR_IP | **Running, `onboot=1`.** Sonarr `4.0.20.3014` verified live 2026-10-09; TV automation; tied to Apophis's USB-media bind mount. |
 | radarr | 124 | LXC (Debian 12, unpriv) | YOUR_RADARR_IP | **Running, `onboot=1`.** Radarr `6.4.4.10685` verified live 2026-10-09; tied to Apophis's USB-media bind mount. A pre-update encrypted PBS image provides rollback and is excluded from recurring-backup freshness monitoring. |
 | seerr (+ prowlarr, byparr, gluetun) | 125 | VM (Ubuntu 24.04, Docker) | YOUR_JELLYSEERR_IP | **Running, `onboot=1`.** Seerr `v3.5.0` and Prowlarr `2.6.5.5623-ls163` verified live 2026-10-09; request/indexer stack has no media bind mount. A pre-Prowlarr ZFS snapshot provides rollback. |
-| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — HA Core `2026.10.0` verified live 2026-10-09; returned from Carter to Apophis on 2026-07-28 after the RAM incident. `pvesr` job `200-0` targets Carter; enabled with `FailCount 0`, `State OK`, and last sync `2026-07-28 17:15:01` verified from Apophis. Manual replica bootability was proven 2026-06-25. |
+| home-assistant | 200 | VM (HAOS) | YOUR_HA_IP | Running — HA Core `2026.10.1` verified live 2026-10-18; `2026.10.2` offered, pending backup and an approved restart window. Returned from Carter to Apophis on 2026-07-28 after the RAM incident. `pvesr` job `200-0` targets Carter; enabled with `FailCount 0`, `State OK`, verified from Apophis on 2026-10-18. Manual replica bootability was proven 2026-06-25. |
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
-- IP: YOUR_NUC_IP — Proxmox VE 9.2.21, kernel `7.0.14-23-pve`, verified after maintenance and reboot on 2026-10-09. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
+- IP: YOUR_NUC_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve`; newest kernel `7.0.14-24-pve` installed during maintenance on 2026-10-18, with deliberate reboot pending. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
 - Firmware baseline (inventoried 2026-07-14): AMI BIOS `TWL_P0_AK_10_0108_AMI.15W` (2025-01-17), UEFI, Secure Boot disabled/platform Setup Mode. The purchase record identifies the machine as the KAMRUI Essenx E2 N150/16 GB/512 GB variant, but DMI contains only `Default string`; do not flash a BIOS unless KAMRUI confirms it is for this exact E2/N150 variant and firmware family. Settings and recovery behavior are recorded in the runbook.
 - The low-power "simple services" node, offloading apophis (ADR-009 hardware roadmap)
 
@@ -61,14 +61,14 @@ Latest maintenance: [2026-10-09 record](docs/operations/maintenance-2026-10-09.m
 | technitium | 111 | LXC (Debian 12, unpriv) | YOUR_TECHNITIUM_IP | Running — Technitium `15.6` verified live 2026-10-09; DNS-only resolver, OISD blocklist + DoH forwarders (ADR-011). **Live on the home VLAN** (same subnet). IoT/guest use the gateway (Auto) for DNS — isolated VLANs can't reach a main-LAN resolver + appliances break on blocklists (DNS-by-VLAN-role); camera/management have no internet. |
 | pbs | 112 | LXC (Debian 12, unpriv) | YOUR_PBS_IP | Running — Proxmox Backup Server, backup hub (ADR-012). Datastore on `rpool/data/pbs-datastore`. |
 | ha-backup-share | 113 | LXC (Debian 12, unpriv) | YOUR_HA_BACKUP_SHARE_IP | Running — Samba/CIFS share for HAOS native backups (ADR-012). |
-| monitoring | 114 | LXC (Debian 12, unpriv) | YOUR_MONITORING_IP | Running — Prometheus + Grafana + Alertmanager → ntfy, node/pve/UniFi/HA exporters, apophis dead-man's-switch (ADR-013). |
+| monitoring | 114 | LXC (Debian 12, unpriv) | YOUR_MONITORING_IP | Running — Prometheus + Grafana `13.2.4` (verified live 2026-10-18) + Alertmanager → ntfy, node/pve/UniFi/HA exporters, apophis dead-man's-switch (ADR-013). |
 | glance | 115 | LXC (Debian 12, unpriv) | YOUR_GLANCE_IP | Running — front-door dashboard, native Go binary `v0.8.6` verified live 2026-09-10, links to Grafana (ADR-014). On a fixed static-band IP (an earlier pick collided with a desktop's DHCP lease — see backlog). |
 | infra-portal | 116 | LXC (Debian 12, unpriv) | YOUR_PORTAL_IP | Provisioned — static-site visualisation of `physical_infra/` (port schedule, network topology, rack, lighting, TBD tracker). Generated by mgmt-vm + rsynced via portal-deploy SSH user (ADR-020). |
 | tailscale2 | 126 | LXC (Debian 12, unpriv) | YOUR_TAILSCALE2_LAN_IP | Running — second Tailscale subnet router; advertises YOUR_LAN_CIDR and automatically takes over if CT 110/apophis is unavailable. |
 
 ### carter (ThinkStation P330 Tiny type 30CE, Proxmox host — cluster member)
 - Intel i5-8500 (6c/6t, Coffee Lake — matched to apophis for live migration), **32 GB RAM**, ~256 GB SSD (**ZFS-on-root**, `rpool`)
-- IP: YOUR_CARTER_IP — Proxmox VE 9.2.21, kernel `7.0.14-23-pve`, verified after maintenance and warm reboot on 2026-10-09. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
+- IP: YOUR_CARTER_IP — Proxmox VE 9.2.21, running kernel `7.0.14-23-pve`; newest kernel `7.0.14-24-pve` installed during maintenance on 2026-10-18, with deliberate reboot pending. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
 - Firmware updated and confirmed live 2026-07-19: BIOS `M1UKT79A`, DMI release date `2026-03-12`, machine type/model `30CES0DW00`. This is Lenovo's current model-compatible recommended release (package published 2026-03-30). The operator confirmed the recorded BIOS settings survived the update; controlled warm-reboot validation passed during maintenance on 2026-10-09.
 - Role: primary home for Vaultwarden + 2nd DNS resolver + Actual Budget + cold independent management. VM 118 replicates Carter→Apophis; Carter is the replica target for Apophis-owned VM 200. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
 
