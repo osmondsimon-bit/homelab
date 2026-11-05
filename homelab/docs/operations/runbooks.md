@@ -879,6 +879,14 @@ The maintenance collector runs three minutes after boot. If an OS VM does not ne
 its dashboard state immediately with `sudo systemctl start homelab-maintenance.service`.
 
 **HAOS (200):** HA UI → partial backup (ADR-012) → Settings → Updates.
+
+For an approved VM restart, if `qm reboot 200` times out, invoke HA's
+`hassio.host_shutdown` action from an authenticated operator session. Wait for `qm status 200`
+to report `stopped`, then run `qm start 200` on Apophis. Verify HA readiness, its existing Core
+version, and authenticated monitoring after startup. This graceful shutdown/start path was
+verified during the [2026-11-06 maintenance window](maintenance-2026-11-06.md); retain a fresh
+native partial backup before the window.
+
 **Docker images (pinned):** Renovate proposes tag/digest changes against the committed
 `all.yml.example`; review the upstream release notes, copy the accepted value into the gitignored
 live `all.yml`, and re-run the owning provision play. Renovate never automerges or deploys. The

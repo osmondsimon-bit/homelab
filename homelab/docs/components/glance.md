@@ -70,6 +70,8 @@ the Sonarr/Radarr queues already expose the managed-download state needed here.
 > collapse to one subdued no-action message. Requests use GitHub's required API headers and a
 > 12-hour cache; if any release check fails, the widget shows one compact unavailable message.
 > Container version proposals still arrive through Renovate and are deployed manually.
+> Update Review reads rendered inventory values. After deploying new application pins, rerun
+> `provision-glance.yml --limit oneill` to refresh their configured-version labels.
 > The top `Core telemetry` status deliberately covers Prometheus-backed signals only; native Glance
 > service checks remain visible in the Service Directory and are not implied by that headline.
 > Vaultwarden, Actual, and the Finance Dashboard remain tailnet-only. Their launch links derive from
