@@ -1,7 +1,8 @@
 # Maintenance record — 2026-11-08
 
-Purpose: record the requested monthly apt package updates, rollback checkpoints, service checks
-and outstanding kernel activation. Current deployment facts belong in [PLAN.md](../../PLAN.md).
+Purpose: record the requested monthly apt package updates, rollback checkpoints, approved VM
+restarts and independent management-VM recovery verification. Current deployment facts belong in
+[PLAN.md](../../PLAN.md).
 
 ## Scope and safeguards
 
@@ -39,7 +40,7 @@ on changed targets at `/var/log/homelab-maintenance-20261108-apt.log`.
 
 Reviewed primary vendor notes: [Corosync 3.2.0](https://github.com/corosync/corosync/releases/tag/v3.2.0).
 
-## Final verification
+## Package-pass verification
 
 All 21 apt targets passed `dpkg --audit` and post-update simulation with zero eligible pending
 packages. Refreshed Prometheus metrics independently report zero pending packages and zero pending
@@ -57,13 +58,46 @@ Prowlarr passed HTTP checks; Gluetun's egress differed from ordinary VM egress. 
 and killswitch checks passed. Management SSH/exporter services remained active. Application image
 identities and container running states were unchanged on the three Docker VMs.
 
-## Remaining work
+## Approved service VM restarts
 
-Ubuntu VMs 100/118/125/127 still run their previous kernels and require deliberate restarts to
-activate the installed kernel packages. Their four reboot flags are expected; package installation
-does not activate a new running kernel. Restart service VMs separately and verify recovery between
-them. The management VM restart ends the control session and must be handled as a final, separately
-approved step with independent verification. No Proxmox host reboot is required.
+The operator subsequently approved rebooting all four Ubuntu VMs. Fresh preflight confirmed both
+routers, backup freshness, healthy pools, cluster quorum and no pending configuration on the four
+VMs. Package audits were clean and each new kernel was installed before restart.
+
+Vaultwarden VM 118, Actual VM 127 and Seerr VM 125 were gracefully rebooted separately, with
+recovery verified before advancing. Each returned with a new boot identity, its newest installed
+kernel active, no reboot-required file, clean package state and the existing failed-unit baseline.
+Application image identities and container running states were preserved. Vaultwarden and Actual
+passed their application checks with online Tailscale backends. Seerr/Prowlarr passed HTTP checks,
+and Gluetun's VPN egress differed from ordinary VM egress. Their maintenance collectors were
+refreshed immediately.
+
+Before the final control-node cycle, fresh telemetry reported 18/18 targets up, zero pending
+packages/security packages, no firing alerts, no stale backups and only VM 100's reboot flag.
+Both resolvers, both routers, authenticated PBS access and all three Glance pages passed again;
+both replication jobs remained successful with two-vote quorum.
+
+## Final management VM restart
+
+The management VM restart ends the control session, so VM 100 is deliberately last. After committing
+and syncing this record, arm the staged verifier on Apophis:
+`/root/homelab-maintenance-20261108-mgmt-reboot.py`. A short systemd timer delay lets the final
+report reach the operator before restart. The helper is fixed to VM 100, checks Apophis's unchanged
+boot identity, quorum, the retained rollback snapshot, no pending VM configuration, the expected
+installed kernel and a clean package audit. Its read-only preflight passed, and its recovery check
+correctly rejected the unchanged pre-reboot boot identity.
+
+The helper requests a graceful `qm reboot 100`, then independently requires a new guest boot
+identity, the expected kernel, no reboot flag, healthy SSH/exporter services, enrolled security
+timers, clean package state, no newly failed units and refreshed maintenance metrics. It never
+reboots Apophis and never attempts a forced reset if verification fails.
+
+The independent result is recorded on Apophis in the root-only
+`/var/log/homelab-maintenance-20261108-mgmt-reboot.log`. A final `VERIFIED` line is the evidence for
+this last restart. The current session's verification precedes that final control-node cycle;
+do not infer its completion from the timer being armed. No Proxmox host reboot is required.
+
+## Remaining boundaries
 
 Retain the rollback checkpoints pending operator acceptance. HA appliance updates, pinned
 application-version reviews, existing security-audit findings and restore/failure drills remain
