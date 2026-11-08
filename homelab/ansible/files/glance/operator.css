@@ -1,5 +1,17 @@
 /* Understated operator-dashboard styling for Glance (ADR-014). */
 
+.active-alerts .active-alert {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  border: 2px solid var(--color-negative);
+  border-radius: var(--border-radius);
+  overflow-wrap: anywhere;
+}
+
+.active-alerts .active-alert > div + div {
+  margin-top: 0.4rem;
+}
+
 .operator-summary .signal-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

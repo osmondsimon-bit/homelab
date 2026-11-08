@@ -14,8 +14,8 @@ Home Assistant VM** (not a separate guest), talking to a **network** Zigbee coor
 ## The failure mode (why this needs resilience)
 
 Z2MQTT **exits on startup if the coordinator is unreachable** (TCP to `:6638`). The dominant
-trigger is the **UniFi gateway rebooting** — the SLZB-06 hangs off the gateway's switch port, and
-HA reaches it cross-VLAN *through* that gateway, so a gateway reboot drops the link + routing for
+trigger is the **UniFi gateway rebooting** —
+HA reaches the IoT coordinator cross-VLAN *through* that gateway, so a gateway reboot drops routing for
 ~2 min. Z2MQTT then dies and **does not reliably restart itself**: the Supervisor's "start at boot"
 gives up after a couple of tries, and its anti-flap watchdog abandons a crash-storming add-on. Net
 result without intervention: Zigbee automations silently stop for hours (the 2026-06-21 outage).
@@ -87,9 +87,14 @@ version-controlled copy.
 - **`ZigbeeCoordinatorUnreachable`** — blackbox TCP probe of `YOUR_ZIGBEE_COORD_IP:6638`
   (`zigbee_coordinator_target`); HA-independent, catches the coordinator dropping. The reliable
   external alarm.
-- **`Zigbee2MQTTBridgeDown`** — alerts on the bridge connectivity sensor. ⚠️ Best-effort only: it
+- **`Zigbee2MQTTBridgeDown`** — alerts on the bridge connectivity sensor. Best-effort only: it
   shares the **stale-retained-`online` blind spot** above (can read healthy while the add-on is
-  down after a power loss), and is currently inert until HA's `prometheus:` filter exports the
-  `binary_sensor` domain. The self-heal automation (Supervisor state) is the primary protection.
+  down after a power loss). Live checks on 2026-11-08 confirmed this specific entity is exported
+  and the alert fires; the whole `binary_sensor` domain need not be enabled. The self-heal automation
+  (Supervisor state) is the primary protection.
+
+Both alerts appear with impact and recovery steps in Glance's **Active Alerts** panel and in urgent
+ntfy pushes. Check coordinator power/Ethernet first, then the add-on if its separate bridge alert
+remains. A resolved coordinator notification proves only that its TCP service is reachable.
 
 See `ansible/files/monitoring/alert-rules.yml` and [monitoring.md](monitoring.md).

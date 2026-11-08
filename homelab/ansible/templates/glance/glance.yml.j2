@@ -30,6 +30,30 @@ pages:
     width: wide
     head-widgets:
       - type: custom-api
+        title: Active Alerts
+        css-class: active-alerts
+        cache: 1m
+        url: << glance_prometheus_url >>/api/v1/alerts
+        template: |
+          {{ if or (ne .Response.StatusCode 200) (ne (.JSON.String "status") "success") }}
+            <div class="color-negative">Alert status unavailable. Open Prometheus to check monitoring.</div>
+          {{ else }}
+            {{ $firing := false }}
+            {{ range .JSON.Array "data.alerts" }}
+              {{ if eq (.String "state") "firing" }}
+                {{ $firing = true }}
+                <div class="active-alert" role="alert">
+                  <div class="color-negative size-h3">{{ .String "labels.severity" }} · {{ if .String "annotations.title" }}{{ .String "annotations.title" }}{{ else }}{{ .String "labels.alertname" }}{{ end }}</div>
+                  <div class="color-highlight">{{ .String "annotations.summary" }}</div>
+                  <div>{{ .String "annotations.description" }}</div>
+                </div>
+              {{ end }}
+            {{ end }}
+            {{ if not $firing }}<div class="color-positive">No firing alerts</div>{{ end }}
+          {{ end }}
+          <a href="<< glance_prometheus_url >>/alerts" class="color-primary">Open alert details</a>
+
+      - type: custom-api
         title: Operational Signals
         css-class: operator-summary
         cache: 1m

@@ -7,6 +7,12 @@ at-a-glance **summary**, *not* the deep time-series/debugging surface (that's Gr
 wall-tablet home UI (that's Home Assistant). Admin launchpad across all three Proxmox nodes
 (ADR-014).
 
+**Active Alerts** leads Overview with every firing Prometheus alert: severity, human-readable
+title, impact and recovery guidance. A red bordered card makes a coordinator/bridge outage visible
+even when the Home Assistant service check is green. Pending alerts remain in Prometheus's details
+page; an API failure displays an unavailable warning rather than a healthy state. The widget refreshes
+on Glance's one-minute cache cadence.
+
 | | |
 |---|---|
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 115 (unprivileged LXC, Debian 12) |

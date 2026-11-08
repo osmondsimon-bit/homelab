@@ -28,6 +28,19 @@ creds, PVE audit token, ntfy topic) are `vars_prompt`/`group_vars`, never commit
 Login to Grafana as `admin`; the password is only set when you type a non-blank value at the
 prompt (blank = keep current). Reset: `pct exec 114 -- grafana-cli admin reset-admin-password '…'`.
 
+Zigbee coordinator and bridge notifications use plain-language titles, describe the effect on
+devices/automations, and include recovery steps. Coordinator recovery and bridge recovery have
+separate messages: reachable TCP does not prove Zigbee2MQTT has recovered. The bridge supports
+optional `title`, `resolved_title` and `resolved_description` rule annotations; other alerts retain
+their existing titles. Firing messages include the description as well as the summary.
+Glance's **Active Alerts** panel presents the same guidance prominently on Overview.
+
+On 2026-11-08, retained ntfy history confirmed repeated urgent coordinator/bridge messages were
+accepted during a real outage. This proves server acceptance, not that a subscribed phone displayed
+or sounded them. The operator confirmed those messages were present in the app; phone/watch popup
+delivery remains unverified. If a push is missed, check the exact private topic subscription, app notification
+permission, priority filters and background-delivery settings. Never publish the topic in logs.
+
 PVE token creation and all Technitium token-producing/consuming configuration tasks suppress
 Ansible output even under verbose execution. Existing tokens are not recreated by the focused
 security deployment. Historical operator-log review and any indicated rotation remain separate.

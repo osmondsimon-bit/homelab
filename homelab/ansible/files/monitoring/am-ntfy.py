@@ -49,13 +49,17 @@ class Handler(BaseHTTPRequestHandler):
             inst = labels.get("instance", "")
             summary = ann.get("summary") or ann.get("description") or name
             if alert.get("status") == "resolved":
-                title = f"RESOLVED: {name}"
+                title = f"RESOLVED: {ann.get('resolved_title') or name}"
                 priority, tags = "default", "white_check_mark"
+                message = ann.get("resolved_description") or summary
             else:
-                title = f"{name} [{sev}]" if sev else name
+                heading = ann.get("title") or name
+                title = f"{heading} [{sev}]" if sev else heading
                 priority = "urgent" if sev == "critical" else "high"
                 tags = "rotating_light"
-            body = summary if not inst else f"{summary}\n{inst}"
+                description = ann.get("description")
+                message = f"{summary}\n\n{description}" if description and description != summary else summary
+            body = message if not inst else f"{message}\n{inst}"
             push(title, priority, tags, body)
         self.send_response(204)
         self.end_headers()
