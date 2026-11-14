@@ -23,7 +23,7 @@ from .preflight import RuntimeRejected, inspect_runtime
 from .remote import decode_wire, protected_json, run_bounded
 from .rpc import RpcWorker, WorkerRejected
 from .transport import BrokerClient, Telegram, TransportRejected
-from .worker_policy import verify_features
+from .worker_policy import RUNTIME_SECURITY_APPROVED, verify_features
 
 
 CODE = Path("/opt/codex-messaging")
@@ -239,6 +239,8 @@ def main(argv=None):
     parser.add_argument("command", choices=["gateway", "broker", "worker", "worker-login", "metrics", "preflight", "dispatcher", "maintenance"])
     arguments, remaining = parser.parse_known_args(argv)
     try:
+        if arguments.command in {"gateway", "worker", "worker-login"} and not RUNTIME_SECURITY_APPROVED:
+            raise RuntimeRejected("runtime_security_review_required")
         if arguments.command in {"dispatcher", "maintenance"}:
             if os.geteuid() != 0:
                 raise ConfigurationRejected("service_role")
@@ -261,7 +263,8 @@ def main(argv=None):
                     or any(json.loads(evidence[name]).get("skills") != [] for name in ("skills_listing", "executor_skills_listing"))
                     or any(evidence[name] != "skill package is not available from the requested authority" for name in ("orchestrator_read", "executor_read"))):
                 raise RuntimeRejected("worker_isolation")
-            print(json.dumps({**metadata, "dynamic_only_gate": "passed", "live_account_gate": "pending"}))
+            print(json.dumps({**metadata, "dynamic_only_gate": "passed", "live_account_gate": "pending",
+                              "runtime_security_gate": "passed" if RUNTIME_SECURITY_APPROVED else "blocked"}))
             return 0
         if remaining:
             raise ConfigurationRejected("command_arguments")

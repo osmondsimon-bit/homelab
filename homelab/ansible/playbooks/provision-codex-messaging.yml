@@ -43,6 +43,19 @@
         - /opt/codex-messaging
         - /var/lib/codex-messaging
         - /etc/codex-messaging
+        - /usr/local/libexec/codex-messaging-worker
+        - /etc/sudoers.d/codex-messaging
+        - /etc/systemd/system/codex-messaging-broker.service
+        - /etc/systemd/system/codex-messaging-gateway.service
+        - /etc/systemd/system/codex-messaging-metrics.service
+        - /etc/systemd/system/codex-messaging-metrics.timer
+        - /etc/systemd/system/codex-messaging.slice
+        - /run/codex-messaging
+        - /var/lib/prometheus/node-exporter/codex_messaging.prom
+        - /etc/codex-messaging/worker.json
+        - /etc/codex-messaging/gateway.json
+        - /etc/codex-messaging/broker.json
+        - /var/lib/codex-messaging/worker/.codex/config.toml
       register: messaging_reserved
 
     - name: Refuse unmanaged reserved directories
@@ -51,6 +64,16 @@
           - messaging_marker.stat.exists or not (messaging_reserved.results | selectattr('stat.exists') | list | length)
           - not messaging_marker.stat.exists or (messaging_marker.stat.isreg and messaging_marker.stat.uid == 0 and messaging_marker.stat.mode == '0600')
         quiet: true
+
+    - name: Refuse reserved-path links and unsafe ownership on managed reruns
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists or (not item.stat.islnk and item.stat.uid == 0 and (item.stat.isdir or item.stat.isreg) and item.stat.mode is match('^[0-7][0-7][0145][0145]$'))
+        quiet: true
+      loop: "{{ messaging_reserved.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: messaging_marker.stat.exists
 
     - name: Inspect pre-existing service identities
       ansible.builtin.command:
@@ -62,11 +85,134 @@
 
     - name: Refuse adopting unrelated accounts
       ansible.builtin.assert:
-        that: messaging_marker.stat.exists or item.rc != 0
+        that:
+          - item.rc in [0, 2]
+          - messaging_marker.stat.exists or item.rc != 0
+          - item.rc != 0 or (item.stdout.split(':') | length == 7 and item.stdout.split(':')[2] | int > 0)
         quiet: true
       loop: "{{ messaging_accounts.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    - name: Refuse duplicate existing service UIDs
+      ansible.builtin.assert:
+        that: messaging_accounts.results | selectattr('rc', 'equalto', 0) | map(attribute='stdout') | map('split', ':') | map(attribute=2) | unique | length == messaging_accounts.results | selectattr('rc', 'equalto', 0) | list | length
+        quiet: true
+
+    - name: Inspect existing service account group membership
+      ansible.builtin.command:
+        argv: [id, -Gn, "{{ item.item }}"]
+      loop: "{{ messaging_accounts.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc == 0
+      changed_when: false
+      register: messaging_account_groups
+
+    - name: Refuse privilege drift in existing service identities
+      ansible.builtin.assert:
+        that:
+          - item.stdout.split() | difference([item.item.item, 'codex-messaging-client'] if item.item.item == 'codex-telegram' else [item.item.item]) | length == 0
+        quiet: true
+      loop: "{{ messaging_account_groups.results }}"
+      loop_control:
+        label: "{{ item.item.item }}"
+      when: not item.skipped | default(false)
+
+    - name: Inspect service groups before creating or adopting them
+      ansible.builtin.command:
+        argv: [getent, group, "{{ item }}"]
+      loop: [codex-telegram, codex-worker, codex-ops, codex-messaging-client]
+      changed_when: false
+      failed_when: false
+      register: messaging_groups
+
+    - name: Refuse unowned groups and unexpected supplementary members
+      ansible.builtin.assert:
+        that:
+          - item.rc in [0, 2]
+          - messaging_marker.stat.exists or item.rc != 0
+          - item.rc != 0 or item.stdout.split(':') | length == 4
+          - item.rc != 0 or (item.stdout.split(':')[3].split(',') | reject('equalto', '') | difference(['codex-telegram'] if item.item == 'codex-messaging-client' else [item.item]) | length == 0)
+        quiet: true
+      loop: "{{ messaging_groups.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read public group metadata to reject reserved GID aliases
+      ansible.builtin.command:
+        argv: [getent, group]
+      changed_when: false
+      register: messaging_all_groups
+      no_log: true
+
+    - name: Refuse aliases sharing a private service GID
+      ansible.builtin.assert:
+        that:
+          - messaging_all_groups.stdout_lines | map('split', ':') | selectattr('2', 'equalto', item.stdout.split(':')[2]) | map('first') | list == [item.item]
+        quiet: true
+      loop: "{{ messaging_groups.results }}"
+      when: item.rc == 0
+      no_log: true
+
+    - name: Read public account metadata to check primary group membership
+      ansible.builtin.command:
+        argv: [getent, passwd]
+      changed_when: false
+      register: messaging_passwd
+      no_log: true
+
+    - name: Refuse unexpected primary members of private service groups
+      ansible.builtin.assert:
+        that:
+          - messaging_passwd.stdout_lines | map('split', ':') | selectattr('3', 'equalto', item.stdout.split(':')[2]) | map('first') | difference([] if item.item == 'codex-messaging-client' else [item.item]) | length == 0
+        quiet: true
+      loop: "{{ messaging_groups.results }}"
+      when: item.rc == 0
+      no_log: true
+
+    - name: Refuse shared UIDs and identity drift in an owned installation
+      ansible.builtin.assert:
+        that:
+          - messaging_passwd.stdout_lines | map('split', ':') | selectattr('2', 'equalto', item.stdout.split(':')[2]) | map('first') | list == [item.item]
+          - item.stdout.split(':')[3] == (messaging_groups.results | selectattr('item', 'equalto', item.item) | selectattr('rc', 'equalto', 0) | map(attribute='stdout') | first).split(':')[2]
+          - item.stdout.split(':')[6] == '/usr/sbin/nologin'
+          - item.stdout.split(':')[5] == '/var/lib/codex-messaging/' + ('operations' if item.item == 'codex-ops' else item.item | regex_replace('^codex-', ''))
+        quiet: true
+      loop: "{{ messaging_accounts.results }}"
+      when: item.rc == 0
+      no_log: true
+
+    - name: Inspect managed directories without following links on reruns
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+        follow: false
+      loop:
+        - {path: /opt/codex-messaging, owner: root, group: root, mode: '0755'}
+        - {path: /opt/codex-messaging/codex_messaging, owner: root, group: root, mode: '0755'}
+        - {path: /opt/codex-messaging/tests, owner: root, group: root, mode: '0755'}
+        - {path: /opt/codex-messaging/runtime, owner: root, group: root, mode: '0755'}
+        - {path: /opt/codex-messaging/runtime/bin, owner: root, group: root, mode: '0755'}
+        - {path: /opt/codex-messaging/runtime/codex-resources, owner: root, group: root, mode: '0755'}
+        - {path: /etc/codex-messaging, owner: root, group: root, mode: '0755'}
+        - {path: /var/lib/codex-messaging, owner: root, group: root, mode: '0755'}
+        - {path: /var/lib/codex-messaging/reference, owner: root, group: root, mode: '0755'}
+        - {path: /var/lib/codex-messaging/telegram, owner: codex-telegram, group: codex-telegram, mode: '0700'}
+        - {path: /var/lib/codex-messaging/operations, owner: codex-ops, group: codex-ops, mode: '0700'}
+        - {path: /var/lib/codex-messaging/worker, owner: root, group: codex-worker, mode: '1770'}
+        - {path: /var/lib/codex-messaging/worker/.codex, owner: root, group: codex-worker, mode: '1770'}
+      register: messaging_directories
+      when: messaging_marker.stat.exists
+
+    - name: Refuse directory ownership drift and symlinks before privileged writes
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists or (item.stat.isdir and not item.stat.islnk and item.stat.pw_name == item.item.owner and item.stat.gr_name == item.item.group and item.stat.mode == item.item.mode)
+        quiet: true
+      loop: "{{ messaging_directories.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+      when: messaging_marker.stat.exists
 
     - name: Stop an owned installation before replacing code or policy
       ansible.builtin.systemd_service:
@@ -80,7 +226,7 @@
     - name: Require existing Python, sudo and node-exporter prerequisites
       ansible.builtin.command:
         argv: [/usr/bin/test, -x, "{{ item }}"]
-      loop: [/usr/bin/python3, /usr/bin/sudo, /usr/sbin/visudo]
+      loop: [/usr/bin/python3, /usr/bin/sudo, /usr/sbin/visudo, /usr/bin/setpriv]
       changed_when: false
 
     - name: Create separate private service groups
@@ -239,6 +385,7 @@
         - codex-messaging-gateway.service
         - codex-messaging-metrics.service
         - codex-messaging-metrics.timer
+        - codex-messaging.slice
 
     - name: Leave commissioning services stopped and disabled
       ansible.builtin.systemd_service:

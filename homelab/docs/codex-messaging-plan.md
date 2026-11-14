@@ -2,9 +2,9 @@ Purpose: define the implementation scope and acceptance gates for a private Tele
 
 # Codex messaging implementation plan
 
-**Status:** Source implementation authorised by Simon on 2026-11-14. Keyless commissioning source
-is prepared and tested; account enrolment, deployment and operational-key enrolment still require their
-separate approval gates. The complete operational service is not deployed or declared ready.
+**Status:** Security hold following the expanded review on 2026-11-14. Source is prepared and tested,
+but the current runtime is not cleared for real use. Gateway, worker and device-login entry points
+fail closed pending a reviewed runtime revision. No deployment or enrollment has occurred.
 
 **Date:** 2026-11-13. **Evidence:** [primary-source research](codex-messaging-research.md).
 
@@ -12,7 +12,7 @@ separate approval gates. The complete operational service is not deployed or dec
 
 [Application source](../apps/codex-messaging/README.md), the disabled keyless
 [installation playbook](../ansible/playbooks/provision-codex-messaging.yml) and
-[component procedures](components/codex-messaging.md) are prepared. All 79 behavioral tests pass,
+[component procedures](components/codex-messaging.md) are prepared. All 86 behavioral tests pass,
 including the actual pinned runtime with dummy credentials and a local scripted model. No paid
 model calls, live account, real inventory, target or bot was used. Synthetic Ansible/unit/sudo
 validation and independent security/continuity review cover this source milestone only.
@@ -21,8 +21,8 @@ Review findings about stale approvals/turn completion, asynchronous diagnostic d
 group access and safe installation reruns were corrected. Rendered systemd units and sudo policy
 validate; the playbook syntax-check used synthetic inventory only. The rendered worker configuration
 passes effective-feature checks and strict app-server initialization against the pinned binary
-without a model turn. Security review clears the keyless source commit; continuity proceeds with
-the unproved installed-state restore drill explicitly retained as a live-service gate.
+without a model turn. The initial review covered the keyless source commit. The expanded review
+below adds a runtime security hold; installed-state restore remains an unproved live-service gate.
 
 The installed entry hard-codes an empty registry and disabled changes. It cannot enroll keys or
 turn operational through configuration. The remote journal, SSH dispatcher, service restart,
@@ -37,6 +37,42 @@ The worker rejects API accounts and unknown/exhausted allowances, plus positive/
 credit entitlements. Account-side zero-credit and disabled automatic top-up controls must be
 verified before real model use; a pre-turn quota check cannot guarantee shared account state stays
 unchanged during a turn. [OpenAI credit behavior](https://help.openai.com/en/articles/12642688-using-credits-for-flexible-usage-in-chatgpt-personal-plans).
+
+## Expanded security and infrastructure assessment — 2026-11-14
+
+The [dependency/security assessment](../apps/codex-messaging/security-review.md) scanned 1,162
+registry entries in the exact pinned Cargo.lock. It found 57 matching package/version entries,
+including aliases and maintenance notices, not 57 proven exploitable vulnerabilities. A normal TLS
+dependency matches a certificate-validation advisory; the pinned vendored bubblewrap source also
+matches a sandbox-setup traversal advisory. Disabled native tools reduce the latter route, but do
+not patch TLS. The lockfile is not the installed Linux SBOM, and remaining feature/call-path triage
+is required. The latest release inspected is a migration candidate, not a cleared replacement.
+
+`RUNTIME_SECURITY_APPROVED=False` now blocks gateway/worker/login before any account or token is
+read. There is no configuration/environment override. The dummy-only preflight remains usable and
+reports the separate runtime-security gate as blocked. Do not waive it or silently change the pin.
+Select a reviewed replacement or upstream backport, establish relevant Linux build paths, resolve
+material advisories and repeat protocol/isolation/billing checks before any real sign-in. Verify
+target OS vendor-security status separately; Cargo advisory scanning does not assess sudo, Python,
+OpenSSL/SQLite, systemd, OpenSSH or the running kernel.
+
+The [infrastructure review](../apps/codex-messaging/infrastructure-review.md) found namespace/adoption
+and resource-exhaustion risks. Source fixes reject conflicting paths/accounts/groups, shared UID/GID
+aliases, group/identity drift and component-directory links before privileged writes. A component
+slice caps aggregate CPU, RAM and tasks, with narrower service limits; the worker child sets
+no-new-privileges after the fixed sudo transition. Broker connections and undelivered replies are
+bounded, and gateway SQLite has a main-file size ceiling. These are containment limits, not measured
+capacity or an aggregate disk quota. Disk/WAL/cache/journal high-water protection, target package
+status, actual service containment and isolated restore remain start/enrollment gates.
+
+Further first-party fixes make approvals show the canonical service, all affected targets, exact
+package changes and separate reboot requirement. A plan too large or private-looking for chat has
+no approval button and pauses changes. Parallel model requests cannot replace an outstanding
+approval/question/diagnostic. New regressions cover these boundaries and blocked account entry.
+Verification includes all 86 tests (actual pinned runtime, dummy/local model only), eleven synthetic
+Ansible identity/path fixtures, rendered units/slice, sudo/shell validation and playbook syntax using
+synthetic inventory. No live account, host package/status, deployment or recovery claim follows from
+these checks. Nothing in the expanded review authorizes deployment or credentials.
 
 ## Outcome and agreed boundaries
 

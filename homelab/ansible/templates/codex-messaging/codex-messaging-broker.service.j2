@@ -4,6 +4,11 @@ Description=Codex keyless operations broker
 
 [Service]
 Type=simple
+Slice=codex-messaging.slice
+MemoryMax=128M
+TasksMax=32
+LimitNOFILE=256
+OOMPolicy=kill
 User=codex-ops
 Group=codex-messaging-client
 SupplementaryGroups=codex-ops

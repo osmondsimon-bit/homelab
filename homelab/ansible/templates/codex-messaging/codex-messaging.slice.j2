@@ -1,0 +1,12 @@
+# Purpose: cap aggregate messaging resource use on the management VM pending measured commissioning.
+[Unit]
+Description=Codex messaging aggregate resource ceiling
+
+[Slice]
+CPUQuota=100%
+MemoryHigh=768M
+MemoryMax=1G
+MemorySwapMax=0
+TasksMax=128
+CPUWeight=25
+IOWeight=25

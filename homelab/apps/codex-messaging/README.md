@@ -6,6 +6,13 @@ Purpose: describe the source-only Telegram commissioning package and its verific
 remaining gates are in [the implementation plan](../../docs/codex-messaging-plan.md), with operator
 procedures in [the component runbook](../../docs/components/codex-messaging.md).
 
+**Security hold:** the [expanded advisory assessment](security-review.md) found unresolved runtime
+advisories. `gateway`, `worker` and `worker-login` fail before credential access with
+`runtime_security_review_required`. No configuration flag bypasses this guard. The pinned build is
+retained for dummy-only fixtures; it is not an approved real-account runtime. The
+[infrastructure review](infrastructure-review.md) records source hardening and remaining capacity,
+aggregate-storage, OS patch and installed-containment gates. No binary pin was silently upgraded.
+
 Python 3.12 standard-library code provides outbound Telegram long polling, private user/chat
 authorization, durable intake/outbox, a local Codex app-server client and a separately owned
 operations broker. Every operational change requires a canonical plan and a single-use approval.

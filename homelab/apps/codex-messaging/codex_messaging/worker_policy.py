@@ -1,5 +1,9 @@
 """Define the worker's dynamic-tool-only surface without native environment authority."""
 
+# No runtime/configuration flag can waive unresolved advisory and provenance gates.
+# See ../security-review.md; changing this requires a reviewed replacement build and fresh tests.
+RUNTIME_SECURITY_APPROVED = False
+
 
 DISABLED_FEATURES = (
     "apps", "plugins", "remote_plugin", "hooks", "multi_agent", "goals",

@@ -7,6 +7,7 @@ import socket
 import socketserver
 import stat
 import struct
+import threading
 
 from .operations import PolicyError
 
@@ -56,15 +57,34 @@ class _Handler(socketserver.StreamRequestHandler):
             reply = {"ok": False, "error": error.code}
         except Exception:
             reply = {"ok": False, "error": "broker_unavailable"}
-        with self.request.makefile("wb") as output:
-            output.write(json.dumps(reply).encode() + b"\n")
-            output.flush()
+        try:
+            with self.request.makefile("wb") as output:
+                output.write(json.dumps(reply).encode() + b"\n")
+                output.flush()
+        except OSError:
+            pass
 
 
 class BrokerSocketServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     """The production caller fixes the socket, principal and grants from protected config."""
 
     daemon_threads = True
+
+    def process_request(self, request, client_address):
+        if not self._connections.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connections.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connections.release()
 
     def __init__(self, path, operations, *, allowed_uid, user_id, chat_id, allow_changes=False):
         if any(type(value) is not int or value < 0 for value in (allowed_uid, user_id, chat_id)) or min(user_id, chat_id) == 0:
@@ -80,5 +100,6 @@ class BrokerSocketServer(socketserver.ThreadingMixIn, socketserver.UnixStreamSer
         self.allowed_uid, self.user_id, self.chat_id = allowed_uid, user_id, chat_id
         self.operations = operations
         self.allow_changes = allow_changes is True
+        self._connections = threading.BoundedSemaphore(16)
         super().__init__(str(path), _Handler)
         os.chmod(path, 0o660)

@@ -42,3 +42,7 @@ make arbitrary input safe. Dedicated identities, recovery evidence and pinned-ru
 maintenance work. Unsupported repairs go to desktop review. The full operational service, publisher,
 host/VM reboot support and measured backup recovery remain incomplete; this draft is not evidence
 that deployment or credential enrollment has been approved.
+
+The [expanded security assessment](../apps/codex-messaging/security-review.md) found advisory
+matches in the initial runtime pin; real-account entry now fails closed. A reviewed replacement
+and repeated protocol/isolation checks are prerequisites to accepting the runtime decision.

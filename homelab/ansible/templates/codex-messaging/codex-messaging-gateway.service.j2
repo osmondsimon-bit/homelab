@@ -8,6 +8,11 @@ ConditionFileNotEmpty=/var/lib/codex-messaging/telegram/bot-token
 
 [Service]
 Type=simple
+Slice=codex-messaging.slice
+MemoryMax=768M
+TasksMax=96
+LimitNOFILE=256
+OOMPolicy=kill
 User=codex-telegram
 Group=codex-telegram
 SupplementaryGroups=codex-messaging-client

@@ -5,6 +5,12 @@ ConditionPathIsDirectory=/var/lib/prometheus/node-exporter
 
 [Service]
 Type=oneshot
+Slice=codex-messaging.slice
+MemoryMax=64M
+TasksMax=16
+LimitNOFILE=64
+TimeoutStartSec=15
+OOMPolicy=kill
 ExecStart=/usr/bin/python3 -I /opt/codex-messaging/entry.py metrics
 UMask=0077
 NoNewPrivileges=true

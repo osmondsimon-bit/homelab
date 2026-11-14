@@ -1,6 +1,8 @@
 """Verify the first commissioning stage cannot acquire operational authority."""
 
 import sys
+import contextlib
+import io
 import unittest
 from pathlib import Path
 
@@ -10,6 +12,16 @@ from codex_messaging.configuration import ConfigurationRejected, keyless_setting
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_unresolved_runtime_advisories_block_all_real_account_entry_points(self):
+        from codex_messaging.cli import main
+        for command in ("gateway", "worker", "worker-login"):
+            with self.subTest(command=command):
+                output = io.StringIO()
+                with contextlib.redirect_stderr(output):
+                    result = main([command])
+                self.assertEqual(result, 1)
+                self.assertEqual(output.getvalue().strip(), "runtime_security_review_required")
+
     def test_keyless_settings_reject_keys_endpoints_and_operational_mode(self):
         base = {"version": 1, "mode": "keyless", "user_id": 101, "chat_id": 101}
         self.assertEqual(keyless_settings(base)["mode"], "keyless")

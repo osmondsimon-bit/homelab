@@ -12,6 +12,9 @@ from .operations import PolicyError
 from .presentation import LOCAL_NOTICE, safe_text
 from .rpc import WorkerRejected
 
+MAX_OUTBOX = 128
+MAX_DATABASE_BYTES = 64 * 1024 * 1024
+
 class Coordinator:
     """Own the durable chat boundary, separately from model and operation authority."""
 
@@ -25,6 +28,14 @@ class Coordinator:
         os.chmod(database, 0o600)
         self.database.execute("PRAGMA journal_mode=WAL")
         self.database.execute("PRAGMA synchronous=FULL")
+        page_size = self.database.execute("PRAGMA page_size").fetchone()[0]
+        maximum_pages = MAX_DATABASE_BYTES // page_size
+        applied = self.database.execute(f"PRAGMA max_page_count={maximum_pages}").fetchone()[0]
+        if applied > maximum_pages:
+            self.database.close()
+            raise WorkerRejected("journal_capacity_review_required")
+        self.database.execute("PRAGMA wal_autocheckpoint=128")
+        self.database.execute("PRAGMA journal_size_limit=1048576")
         self.database.executescript("""
             CREATE TABLE IF NOT EXISTS inbox (id INTEGER PRIMARY KEY, created REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY, body TEXT NOT NULL);
@@ -40,7 +51,10 @@ class Coordinator:
         self.database.close()
 
     def outbox(self):
-        return [(identifier, json.loads(body)) for identifier, body in self.database.execute("SELECT id,body FROM outbox ORDER BY id")]
+        return [(identifier, json.loads(body)) for identifier, body in self.database.execute("SELECT id,body FROM outbox ORDER BY id LIMIT ?", (MAX_OUTBOX,))]
+
+    def _outbox_full(self):
+        return self.database.execute("SELECT COUNT(*) FROM outbox").fetchone()[0] >= MAX_OUTBOX
 
     def sent(self, identifier):
         with self.database:
@@ -57,6 +71,8 @@ class Coordinator:
         self.database.execute("INSERT OR REPLACE INTO state(key,value) VALUES(?,?)", (key, json.dumps(value)))
 
     def _reply(self, text, **extra):
+        if self._outbox_full():
+            return
         body = {"chat_id": self.chat_id, "text": safe_text(text), **extra}
         self.database.execute("INSERT INTO outbox(body) VALUES(?)", (json.dumps(body),))
 
@@ -164,6 +180,11 @@ class Coordinator:
                 or callback.get("message", {}).get("chat", {}).get("id") != self.chat_id
                 or callback.get("message", {}).get("chat", {}).get("type") != "private"):
             return
+        if self._outbox_full():
+            await self.broker.pause()
+            with self.database:
+                self._set("paused", True)
+            return
         pending = self._get("pending")
         if (not pending or pending.get("kind") != "approval" or pending.get("state") != "pending"
                 or callback.get("data") != "approve:" + pending["approval_id"]
@@ -209,6 +230,13 @@ class Coordinator:
                 return
         if "id" in event and (parameters.get("threadId"), parameters.get("turnId")) != (self._get("thread_id"), self._get("turn_id")):
             raise WorkerRejected("tool_request_mismatch")
+        if "id" in event and self._get("pending"):
+            if method == "item/tool/call":
+                await self.worker.tool_result(event, {"state": "rejected", "code": "tool_request_pending"}, success=False)
+                return
+            if method == "item/tool/requestUserInput":
+                await self.worker.question_result(event, {})
+                return
         if method == "item/tool/call":
             arguments = parameters.get("arguments")
             tool = parameters.get("tool")
@@ -237,12 +265,23 @@ class Coordinator:
                 plan = prepared["plan"]
                 impact = "; ".join(plan["snapshot"]["impact"])
                 verification = "; ".join(plan["snapshot"]["verification"])
+                scope = "".join(f"{name}: {value}\n" for name, value in plan.get("parameters", []))
+                affected = plan["snapshot"].get("affected_target_ids", [])
+                if affected:
+                    scope += "Also affects: " + ", ".join(affected) + "\n"
+                for package in plan["snapshot"].get("package_changes", []):
+                    scope += (f"{package['action']} {package['name']}: "
+                              f"{package['current'] or '(new)'} -> {package['candidate']}\n")
+                if plan["snapshot"].get("reboot_required"):
+                    scope += "Separate reboot review required; this plan does not reboot.\n"
                 prompt = (f"Approve {plan['operation'].replace('_', ' ')} on {plan['target_id']}?\n"
+                          + scope +
                           f"Impact: {impact}\nVerify: {verification}\nExpires in ten minutes.")
                 if safe_text(prompt) == LOCAL_NOTICE:
                     await self.broker.pause()
                     with self.database:
                         self._set("paused", True)
+                        self._reply("The complete approval plan needs local review. Changes are paused.")
                     raise PolicyError("presentation_requires_local_review")
                 pending = {"kind": "approval", "state": "pending", "event": event,
                            "approval_id": prepared["approval_id"], "plan_digest": prepared["plan_digest"],
@@ -312,6 +351,11 @@ class Coordinator:
             return
         if text.startswith("/"):
             await self._command(text.strip())
+            return
+        if self._outbox_full():
+            await self.broker.pause()
+            with self.database:
+                self._set("paused", True)
             return
         if safe_text(text) != text:
             with self.database:

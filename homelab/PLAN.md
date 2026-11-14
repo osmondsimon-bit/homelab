@@ -97,10 +97,13 @@ Offloading the simple services to oneill preserves its independent recovery role
 
 ## Provisioning & tooling
 
-- **Codex phone operations (2026-11-14): keyless source prepared, not deployed.** Telegram long
+- **Codex phone operations (2026-11-14): security hold; not deployed.** Telegram long
   polling is selected; the [implementation plan](docs/codex-messaging-plan.md) records the agreed
   boundaries and remaining gates. Source tests pass, including a dummy-auth pinned-runtime fixture.
-  The install creates only disabled services with no target/publication keys or OpenAI login.
+  Expanded advisory/infrastructure review found runtime dependency blockers and source risks;
+  fixes add account/group/path checks, resource bounds and complete approval scope. Gateway,
+  worker and login now fail closed until a reviewed runtime revision clears the security gate.
+  The proposed install creates only disabled services with no target/publication keys or OpenAI login.
   Deployment, account/bot enrollment, service isolation and recovery proof remain pending; the
   complete operational service is not ready.
 

@@ -3,6 +3,10 @@ Purpose: operate and commission the private Telegram-to-Codex service without gr
 # Codex messaging
 
 **State (2026-11-14): source only; no accounts, service, token, login or remote keys deployed.**
+**Security hold:** the [expanded assessment](../../apps/codex-messaging/security-review.md) found
+unresolved advisories in the pinned runtime. Gateway, worker and device-login commands now return
+`runtime_security_review_required` before reading credentials. A reviewed replacement/build-path
+assessment and repeated isolation tests must clear this gate before the sequence below can proceed.
 The [implementation plan](../codex-messaging-plan.md) owns scope, permissions and acceptance gates.
 [ADR-028](../../decisions/028-codex-messaging.md) records the proposed architecture;
 [research](../codex-messaging-research.md) compares transports. Telegram long polling needs outbound
@@ -33,12 +37,26 @@ The broker accepts only that coordinator's OS peer plus the configured user/chat
 registry is empty and cannot be enabled from Telegram or JSON. No SSH or publication identity is
 installed, and no target dispatcher is deployed.
 
-The four prepared units are gateway, broker, numeric metrics and its timer. All remain stopped and
+The three service units and metrics timer share a component slice. All remain stopped and
 disabled after installation. No current exporter, firewall or monitoring rules are changed. The
 metrics writer exports only fixed numeric fields to the existing node-exporter textfile directory;
 missing/stale health becomes unhealthy. Alert integration is an operational-enrollment gate.
 
+The proposed component slice caps the combined services and worker descendants at one CPU,
+1 GiB RAM, no swap and 128 tasks, with narrower role limits. The broker admits 16 connections and
+the outbox keeps at most 128 undelivered replies; a full queue pauses new work and approvals while
+preserving `/stop`. The gateway's main SQLite file is limited to 64 MiB. WAL/checkpoint and worker
+cache sizes still require an aggregate disk allowance/high-water stop and monitoring before start;
+these settings do not constitute a filesystem quota or prove that the management VM has headroom.
+The worker launcher applies no-new-privileges after sudo changes identity. All limits require
+measurement and failure-path testing under the actual unit. See the
+[infrastructure review](../../apps/codex-messaging/infrastructure-review.md).
+
 ## Commissioning sequence after installation authorization
+
+This sequence is on hold until the runtime security gate above is cleared. Also verify current
+target vendor package status for sudo, Python and its linked libraries, systemd, OpenSSH and the
+running kernel. A source audit or mocked-model test cannot attest those installed packages.
 
 1. Confirm Tailscale access, the intended management VM and fresh protected recovery state. Inspect
    the exact source revision, rendered units, sudo policy and binary hashes. Install with the

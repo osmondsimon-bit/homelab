@@ -139,12 +139,54 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.worker.results[0][1]["diagnostics"], [["service_active", "yes"]])
         self.assertNotIn("service_active", str(self.gateway.outbox()))
 
+    async def test_parallel_tool_requests_cannot_replace_an_outstanding_diagnostic(self):
+        async def diagnose(*args):
+            return {"job_id": "original-diagnostic", "state": "running", "operation": "diagnose", "diagnostics": []}
+        async def recoverable():
+            return []
+        async def reconcile(job_id):
+            self.assertEqual(job_id, "original-diagnostic")
+            return {"job_id": job_id, "state": "completed", "operation": "diagnose", "diagnostics": [["healthy", "yes"]]}
+        self.broker.diagnose, self.broker.reconcile = diagnose, reconcile
+        self.broker.recoverable_jobs = recoverable
+        await self.gateway.handle(self.message())
+        first = {"id": 900, "method": "item/tool/call", "params": {
+            "threadId": "fixture-thread", "turnId": "fixture-turn", "tool": "diagnose", "arguments": {"target": "guest"}}}
+        await self.gateway.worker_event(first)
+        await self.gateway.worker_event({**first, "id": 901})
+        self.assertEqual(self.worker.results, [(901, {"state": "rejected", "code": "tool_request_pending"}, False)])
+        await self.gateway.tick()
+        self.assertEqual(self.worker.results[-1][0], 900)
+
     async def test_control_commands_do_not_consume_model_usage(self):
         await self.gateway.handle(self.message(text="/pause"))
         await self.gateway.handle(self.message(identifier=2, text="/status"))
         await self.gateway.handle(self.message(identifier=3, text="/resume"))
         self.assertEqual(self.worker.requests, [])
         self.assertEqual(self.broker.commands, ["pause", "resume"])
+
+    async def test_undelivered_replies_are_bounded_and_backpressure_preserves_stop(self):
+        for identifier in range(1, 150):
+            await self.gateway.handle(self.message(identifier=identifier, text="/status"))
+        self.assertLessEqual(len(self.gateway.outbox()), 128)
+        await self.gateway.handle(self.message(identifier=150))
+        self.assertEqual(self.worker.requests, [])
+        await self.gateway.handle(self.message(identifier=151, text="/stop"))
+        self.assertEqual(self.broker.commands, ["pause", "stop"])
+        self.assertEqual(self.worker.requests, ["interrupt"])
+
+    async def test_a_full_reply_queue_cannot_authorise_a_pending_change(self):
+        await self.gateway.handle(self.message(text="/resume"))
+        await self.gateway.handle(self.message(identifier=2))
+        await self.gateway.worker_event({"id": 900, "method": "item/tool/call", "params": {
+            "threadId": "fixture-thread", "turnId": "fixture-turn", "tool": "propose_operation",
+            "arguments": {"target": "guest", "operation": "guest_reboot"}}})
+        for identifier in range(3, 140):
+            await self.gateway.handle(self.message(identifier=identifier, text="/status"))
+        await self.gateway.handle({"update_id": 140, "callback_query": {"from": {"id": 101},
+            "message": {"chat": {"id": 101, "type": "private"}}, "data": "approve:p" + "1" * 31}})
+        self.assertEqual(self.broker.approvals, [])
+        self.assertEqual(self.broker.commands[-1], "pause")
 
     async def test_model_proposal_cannot_dispatch_until_the_enrolled_user_approves(self):
         await self.gateway.handle(self.message(text="/resume"))
@@ -163,6 +205,52 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         await self.gateway.handle(callback)
         self.assertEqual(self.broker.approvals, ["p" + "1" * 31])
         self.assertEqual(self.worker.results[-1][0], 900)
+
+    async def test_approval_shows_the_canonical_service_and_affected_targets(self):
+        prepare = self.broker.prepare
+        async def specific_plan(*args):
+            prepared = await prepare(*args)
+            prepared["plan"]["parameters"] = [["unit", "reviewed.service"]]
+            prepared["plan"]["snapshot"]["affected_target_ids"] = ["dependent-guest"]
+            return prepared
+        self.broker.prepare = specific_plan
+        await self.gateway.handle(self.message(text="/resume"))
+        await self.gateway.handle(self.message(identifier=2))
+        await self.gateway.worker_event({"id": 900, "method": "item/tool/call", "params": {
+            "threadId": "fixture-thread", "turnId": "fixture-turn", "tool": "propose_operation",
+            "arguments": {"target": "guest", "operation": "service_restart", "unit": "requested.service"}}})
+        prompt = self.gateway.outbox()[-1][1]
+        self.assertIn("reviewed.service", prompt["text"])
+        self.assertIn("dependent-guest", prompt["text"])
+        self.assertNotIn("requested.service", prompt["text"])
+        self.assertIn("reply_markup", prompt)
+
+    async def test_package_approval_shows_exact_versions_and_cannot_truncate_large_plans(self):
+        prepare = self.broker.prepare
+        packages = [{"name": "reviewed-package", "current": "1.0", "candidate": "1.1", "action": "upgrade"}]
+        async def package_plan(*args):
+            prepared = await prepare(*args)
+            prepared["plan"]["snapshot"].update(package_changes=packages, reboot_required=True)
+            return prepared
+        self.broker.prepare = package_plan
+        await self.gateway.handle(self.message(text="/resume"))
+        await self.gateway.handle(self.message(identifier=2))
+        event = {"id": 900, "method": "item/tool/call", "params": {
+            "threadId": "fixture-thread", "turnId": "fixture-turn", "tool": "propose_operation",
+            "arguments": {"target": "guest", "operation": "os_maintenance"}}}
+        await self.gateway.worker_event(event)
+        prompt = self.gateway.outbox()[-1][1]
+        self.assertIn("upgrade reviewed-package: 1.0 -> 1.1", prompt["text"])
+        self.assertIn("Separate reboot review required", prompt["text"])
+        await self.gateway.handle(self.message(identifier=3, text="/stop"))
+        await self.gateway.handle(self.message(identifier=4, text="/resume"))
+        await self.gateway.handle(self.message(identifier=5))
+        packages *= 100
+        before = len(self.gateway.outbox())
+        await self.gateway.worker_event(event)
+        self.assertFalse(any("reply_markup" in body for identifier, body in self.gateway.outbox()[before:]))
+        self.assertFalse(self.worker.results[-1][2])
+        self.assertEqual(self.worker.results[-1][1]["code"], "presentation_requires_local_review")
 
     async def test_raw_model_diagnostics_are_not_copied_to_the_phone(self):
         await self.gateway.handle(self.message())
