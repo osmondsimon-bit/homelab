@@ -1,0 +1,24 @@
+# Purpose: export fixed numeric health fields without sharing token or database access.
+[Unit]
+Description=Codex messaging numeric health exporter
+ConditionPathIsDirectory=/var/lib/prometheus/node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/codex-messaging/entry.py metrics
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prometheus/node-exporter
+InaccessiblePaths=/var/lib/codex-messaging/worker /var/lib/codex-messaging/operations
+PrivateNetwork=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+StandardOutput=null
+StandardError=journal

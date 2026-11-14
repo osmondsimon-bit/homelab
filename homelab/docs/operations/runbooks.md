@@ -267,6 +267,13 @@ fully-isolated VLAN, not the Home VLAN — see Restore drills.)
 
 ## mgmt-vm
 
+### Codex phone access
+
+Telegram source is prepared but not deployed. Use the
+[Codex messaging component procedures](../components/codex-messaging.md) for the disabled keyless
+installation, enrollment gates, local controls, backup/restore and rollback. No phone operator
+currently has infrastructure authority; retain the existing desktop/Tailscale recovery path.
+
 ### Check mgmt-vm connectivity
 ```bash
 ping -c 3 YOUR_MGMT_VM_IP

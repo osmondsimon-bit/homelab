@@ -40,6 +40,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
+| Phone-driven Codex operations | Telegram long polling | Explicit keyless deployment and commissioning | [Source prepared](codex-messaging-plan.md); actual-account isolation, recovery, target enrollment and bounded publisher remain gated. Not live. |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |

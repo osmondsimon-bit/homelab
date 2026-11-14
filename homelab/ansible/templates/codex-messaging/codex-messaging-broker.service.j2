@@ -1,0 +1,36 @@
+# Purpose: serve a paused empty registry over a peer-authenticated local socket.
+[Unit]
+Description=Codex keyless operations broker
+
+[Service]
+Type=simple
+User=codex-ops
+Group=codex-messaging-client
+SupplementaryGroups=codex-ops
+ExecStart=/usr/bin/python3 -I /opt/codex-messaging/entry.py broker
+Environment=HOME=/var/lib/codex-messaging/operations LANG=C.UTF-8 PATH=/usr/bin:/bin
+RuntimeDirectory=codex-messaging/broker
+RuntimeDirectoryMode=0710
+UMask=0077
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/codex-messaging/operations
+InaccessiblePaths=/var/lib/codex-messaging/worker /var/lib/codex-messaging/telegram /etc/codex-messaging/gateway.json /etc/codex-messaging/worker.json
+PrivateNetwork=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+RestrictRealtime=true
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

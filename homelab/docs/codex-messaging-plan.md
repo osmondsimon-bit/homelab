@@ -2,10 +2,41 @@ Purpose: define the implementation scope and acceptance gates for a private Tele
 
 # Codex messaging implementation plan
 
-**Status:** Design selected after three interview rounds; ready for final review. Implementation,
-account enrolment and deployment are not authorised by this document.
+**Status:** Source implementation authorised by Simon on 2026-11-14. Keyless commissioning source
+is prepared and tested; account enrolment, deployment and operational-key enrolment still require their
+separate approval gates. The complete operational service is not deployed or declared ready.
 
 **Date:** 2026-11-13. **Evidence:** [primary-source research](codex-messaging-research.md).
+
+## Source milestone — 2026-11-14
+
+[Application source](../apps/codex-messaging/README.md), the disabled keyless
+[installation playbook](../ansible/playbooks/provision-codex-messaging.yml) and
+[component procedures](components/codex-messaging.md) are prepared. All 79 behavioral tests pass,
+including the actual pinned runtime with dummy credentials and a local scripted model. No paid
+model calls, live account, real inventory, target or bot was used. Synthetic Ansible/unit/sudo
+validation and independent security/continuity review cover this source milestone only.
+
+Review findings about stale approvals/turn completion, asynchronous diagnostic delivery, broker
+group access and safe installation reruns were corrected. Rendered systemd units and sudo policy
+validate; the playbook syntax-check used synthetic inventory only. The rendered worker configuration
+passes effective-feature checks and strict app-server initialization against the pinned binary
+without a model turn. Security review clears the keyless source commit; continuity proceeds with
+the unproved installed-state restore drill explicitly retained as a live-service gate.
+
+The installed entry hard-codes an empty registry and disabled changes. It cannot enroll keys or
+turn operational through configuration. The remote journal, SSH dispatcher, service restart,
+guarded apt and application-LXC reboot modules have fake-machine tests; they are not deployed.
+LXC reboot uses the reviewed graceful no-kill path under the PVE config lock; `pct reboot` is not
+permitted because its timeout path can force-stop. Exact installed vendor contracts need review
+before enrollment. Host/direct-VM reboot, DNS probes, standalone-node management ownership proof,
+immutable reference export, bounded publisher and operational-journal retention remain unavailable.
+This milestone does not satisfy the full operational acceptance list below.
+
+The worker rejects API accounts and unknown/exhausted allowances, plus positive/unlimited/unknown
+credit entitlements. Account-side zero-credit and disabled automatic top-up controls must be
+verified before real model use; a pre-turn quota check cannot guarantee shared account state stays
+unchanged during a turn. [OpenAI credit behavior](https://help.openai.com/en/articles/12642688-using-credits-for-flexible-usage-in-chatgpt-personal-plans).
 
 ## Outcome and agreed boundaries
 
@@ -86,6 +117,16 @@ plugins/MCP servers/hooks and provider overrides. If enforcement cannot be estab
 revise the design before installing keys or enabling operations. Do not upgrade silently, weaken
 the sandbox, share Simon's full identity or switch billing methods to get past this gate.
 
+Implementation evidence on 2026-11-14 found that an enabled native shell could read its synthetic
+process environment despite a /proc deny rule. Credential-file and network denials alone therefore
+did not pass the gate. The selected worker now has empty environment access, native features off,
+and no skill/capability roots. Against the actual pinned runtime and a local mock model, injected
+shell/image/agent calls are rejected, both skill catalogs are empty, forged skill reads fail, and
+typed dynamic-tool callbacks work. The first deployment stage is strictly keyless/paused with an
+empty operation registry; it cannot be enabled through /resume. Real-account feature/catalog
+validation and installed service confinement remain commissioning checks before any operational
+credential is introduced.
+
 ## Operation catalogue and execution boundary
 
 | Operation | Reviewed implementation |
@@ -136,7 +177,7 @@ Keep configuration under /etc/codex-messaging/, per-principal state under
 SQLite/WAL files, conversations and logs with appropriate owner-only access. Live completed-task
 transcripts/tool output expire after 30 days; credential-free outcome metadata after 90 days.
 Never purge active/uncertain jobs. Close task threads and clean expired inactive UUIDs through the
-pinned CLI's supported deletion command. Live deletion does not erase retained backups.
+pinned app-server's supported thread deletion method. Live deletion does not erase retained backups.
 Service logs contain operational metadata, not prompts, tokens or raw diagnostics.
 
 ## Conversation, approval and crash behaviour

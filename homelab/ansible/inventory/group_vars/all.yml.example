@@ -415,3 +415,10 @@ prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:f9151e5bc1025c6d0a63
 byparr_image: "ghcr.io/thephaseless/byparr@sha256:874f719518f617d03a60e03411fc5d090647e1a877041e81f8dc965927c7deb6"   # PINNED by digest — Renovate proposes; operator deploys deliberately
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
 prowlarr_vpn_wg_config: ""
+
+# Codex phone access: explicit, separately approved keyless installation only.
+# Keep real enrollment IDs in ignored local extra-vars; never put bot/auth tokens here.
+codex_messaging_install_keyless: false
+codex_messaging_user_id: 0
+codex_messaging_chat_id: 0
+codex_messaging_runtime_source: /YOUR_PINNED_CODEX_DISTRIBUTION

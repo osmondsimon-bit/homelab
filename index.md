@@ -89,6 +89,9 @@ private data, remotes, commits, or pushes, use `homelab/decisions/025-repository
 → `homelab/docs/operations/runbooks.md`
 
 ### "What does a specific service do / how is it configured?"
+
+→ [Codex phone access](homelab/docs/components/codex-messaging.md) — source-only keyless stage;
+[implementation plan](homelab/docs/codex-messaging-plan.md) owns commissioning gates.
 → `homelab/docs/components/<service>.md`
 
 ### "What capabilities are evaluated/deferred?"

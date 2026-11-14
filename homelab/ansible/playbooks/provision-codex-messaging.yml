@@ -1,0 +1,257 @@
+---
+# Install a disabled, keyless Telegram commissioning package; never enroll credentials or targets.
+- name: Stage Codex messaging on the existing management VM
+  hosts: mgmt
+  become: true
+  gather_facts: true
+  vars:
+    messaging_source: "{{ playbook_dir }}/../../apps/codex-messaging"
+    messaging_templates: "{{ playbook_dir }}/../templates/codex-messaging"
+    messaging_binary_sha256: 2e863156ed35ecc5253b1e2f907a9143077b9f7cb51942070c61996471ff6e04
+    messaging_bwrap_sha256: 77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c
+  pre_tasks:
+    - name: Require explicit commissioning inputs
+      ansible.builtin.assert:
+        that:
+          - codex_messaging_install_keyless | default(false) | bool
+          - codex_messaging_user_id | default(0) | type_debug == 'int'
+          - codex_messaging_chat_id | default(0) | type_debug == 'int'
+          - codex_messaging_user_id | default(0) | int > 0
+          - codex_messaging_chat_id | default(0) | int > 0
+          - codex_messaging_user_id | int < 9007199254740992
+          - codex_messaging_chat_id | int < 9007199254740992
+          - codex_messaging_runtime_source is defined
+          - codex_messaging_runtime_source is match('^/')
+          - ansible_distribution == 'Ubuntu'
+          - ansible_architecture == 'x86_64'
+          - ansible_python.version.major == 3
+          - ansible_python.version.minor >= 12
+        fail_msg: Stage locally verified Telegram IDs and the pinned runtime path; this playbook installs keyless source only.
+        quiet: true
+
+    - name: Inspect the owned-installation marker
+      ansible.builtin.stat:
+        path: /etc/codex-messaging/managed-keyless-v1
+        follow: false
+      register: messaging_marker
+
+    - name: Check reserved paths before adopting an existing installation
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /opt/codex-messaging
+        - /var/lib/codex-messaging
+        - /etc/codex-messaging
+      register: messaging_reserved
+
+    - name: Refuse unmanaged reserved directories
+      ansible.builtin.assert:
+        that:
+          - messaging_marker.stat.exists or not (messaging_reserved.results | selectattr('stat.exists') | list | length)
+          - not messaging_marker.stat.exists or (messaging_marker.stat.isreg and messaging_marker.stat.uid == 0 and messaging_marker.stat.mode == '0600')
+        quiet: true
+
+    - name: Inspect pre-existing service identities
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ item }}"]
+      loop: [codex-telegram, codex-worker, codex-ops]
+      changed_when: false
+      failed_when: false
+      register: messaging_accounts
+
+    - name: Refuse adopting unrelated accounts
+      ansible.builtin.assert:
+        that: messaging_marker.stat.exists or item.rc != 0
+        quiet: true
+      loop: "{{ messaging_accounts.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stop an owned installation before replacing code or policy
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: [codex-messaging-gateway.service, codex-messaging-broker.service, codex-messaging-metrics.timer]
+      when: messaging_marker.stat.exists
+
+  tasks:
+    - name: Require existing Python, sudo and node-exporter prerequisites
+      ansible.builtin.command:
+        argv: [/usr/bin/test, -x, "{{ item }}"]
+      loop: [/usr/bin/python3, /usr/bin/sudo, /usr/sbin/visudo]
+      changed_when: false
+
+    - name: Create separate private service groups
+      ansible.builtin.group:
+        name: "{{ item }}"
+        system: true
+      loop: [codex-telegram, codex-worker, codex-ops, codex-messaging-client]
+
+    - name: Create locked non-interactive service identities
+      ansible.builtin.user:
+        name: "{{ item }}"
+        group: "{{ item }}"
+        home: "/var/lib/codex-messaging/{{ 'operations' if item == 'codex-ops' else item | regex_replace('^codex-', '') }}"
+        create_home: false
+        shell: /usr/sbin/nologin
+        password_lock: true
+        system: true
+      loop: [codex-telegram, codex-worker, codex-ops]
+
+    - name: Grant only the coordinator access to the broker socket group
+      ansible.builtin.user:
+        name: codex-telegram
+        groups: codex-messaging-client
+        append: true
+
+    - name: Create root-owned installation and reference directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - /opt/codex-messaging
+        - /opt/codex-messaging/codex_messaging
+        - /opt/codex-messaging/tests
+        - /opt/codex-messaging/runtime
+        - /opt/codex-messaging/runtime/bin
+        - /opt/codex-messaging/runtime/codex-resources
+        - /var/lib/codex-messaging
+        - /var/lib/codex-messaging/reference
+        - /etc/codex-messaging
+        - /usr/local/libexec
+
+    - name: Create role-private durable state
+      ansible.builtin.file:
+        path: "/var/lib/codex-messaging/{{ item.directory }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+        mode: '0700'
+      loop:
+        - {directory: telegram, owner: codex-telegram}
+        - {directory: operations, owner: codex-ops}
+
+    - name: Protect the worker configuration while allowing its own auth cache
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: codex-worker
+        mode: '1770'
+      loop: [/var/lib/codex-messaging/worker, /var/lib/codex-messaging/worker/.codex]
+
+    - name: Install application and keyless fixture Python files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/opt/codex-messaging/{{ item | relpath(messaging_source) }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ query('ansible.builtin.fileglob', messaging_source + '/*.py') + query('ansible.builtin.fileglob', messaging_source + '/codex_messaging/*.py') + query('ansible.builtin.fileglob', messaging_source + '/tests/*.py') }}"
+
+    - name: Install only pinned runtime files from the operator-selected local source
+      ansible.builtin.copy:
+        src: "{{ codex_messaging_runtime_source }}/{{ item }}"
+        dest: "/opt/codex-messaging/runtime/{{ item }}"
+        owner: root
+        group: root
+        mode: '0755'
+      loop: [bin/codex, codex-resources/bwrap]
+
+    - name: Inspect installed runtime digests
+      ansible.builtin.stat:
+        path: "/opt/codex-messaging/runtime/{{ item }}"
+        checksum_algorithm: sha256
+      loop: [bin/codex, codex-resources/bwrap]
+      register: messaging_runtime
+
+    - name: Reject any different runtime build
+      ansible.builtin.assert:
+        that:
+          - messaging_runtime.results[0].stat.checksum == messaging_binary_sha256
+          - messaging_runtime.results[1].stat.checksum == messaging_bwrap_sha256
+        quiet: true
+
+    - name: Install the immutable worker configuration
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/worker.toml.j2"
+        dest: /var/lib/codex-messaging/worker/.codex/config.toml
+        owner: root
+        group: codex-worker
+        mode: '0640'
+
+    - name: Hash the protected worker configuration
+      ansible.builtin.stat:
+        path: /var/lib/codex-messaging/worker/.codex/config.toml
+        checksum_algorithm: sha256
+      register: messaging_config
+
+    - name: Install the root-protected worker manifest
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/worker.json.j2"
+        dest: /etc/codex-messaging/worker.json
+        owner: root
+        group: codex-worker
+        mode: '0640'
+
+    - name: Install closed keyless role settings
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/settings.json.j2"
+        dest: "/etc/codex-messaging/{{ item.file }}.json"
+        owner: root
+        group: "{{ item.group }}"
+        mode: '0640'
+      loop:
+        - {file: gateway, group: codex-telegram}
+        - {file: broker, group: codex-ops}
+
+    - name: Install fixed no-argument worker entry
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/worker-launcher.j2"
+        dest: /usr/local/libexec/codex-messaging-worker
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install exact worker-switch policy with syntax validation
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/sudoers.j2"
+        dest: /etc/sudoers.d/codex-messaging
+        owner: root
+        group: root
+        mode: '0440'
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: Install isolated units without starting or enabling them
+      ansible.builtin.template:
+        src: "{{ messaging_templates }}/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - codex-messaging-broker.service
+        - codex-messaging-gateway.service
+        - codex-messaging-metrics.service
+        - codex-messaging-metrics.timer
+
+    - name: Leave commissioning services stopped and disabled
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+        daemon_reload: true
+      loop: [codex-messaging-gateway.service, codex-messaging-broker.service, codex-messaging-metrics.timer]
+
+    - name: Record ownership of this keyless installation
+      ansible.builtin.copy:
+        content: "Purpose: identify the separately gated keyless Codex messaging installation.\n"
+        dest: /etc/codex-messaging/managed-keyless-v1
+        owner: root
+        group: root
+        mode: '0600'

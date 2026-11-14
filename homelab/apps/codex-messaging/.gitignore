@@ -1,0 +1,3 @@
+# Keep generated Python bytecode and test caches out of the source change.
+__pycache__/
+*.pyc

@@ -97,6 +97,13 @@ Offloading the simple services to oneill preserves its independent recovery role
 
 ## Provisioning & tooling
 
+- **Codex phone operations (2026-11-14): keyless source prepared, not deployed.** Telegram long
+  polling is selected; the [implementation plan](docs/codex-messaging-plan.md) records the agreed
+  boundaries and remaining gates. Source tests pass, including a dummy-auth pinned-runtime fixture.
+  The install creates only disabled services with no target/publication keys or OpenAI login.
+  Deployment, account/bot enrollment, service isolation and recovery proof remain pending; the
+  complete operational service is not ready.
+
 - **Ansible currently creates *and* configures** the LXCs — `pct create` + config in the `provision-*.yml` playbooks (ADR-005). This is the interim mechanism and recovers cleanly by re-running.
 - **Terraform** (`bpg/proxmox`, ADR-008) is scaffolded but its **import is deferred to cluster scale** — it will take over the *create* role then. Target boundary: *Terraform = box exists with the right shape; Ansible = box is set up.*
 
