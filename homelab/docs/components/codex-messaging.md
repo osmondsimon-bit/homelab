@@ -1,122 +1,131 @@
-Purpose: operate and commission the private Telegram-to-Codex service without granting premature infrastructure authority.
+Purpose: set up and operate the private Telegram relay to normal Codex after separate installation approval.
 
 # Codex messaging
 
-**State (2026-11-14): source only; no accounts, service, token, login or remote keys deployed.**
-**Security hold:** the [expanded assessment](../../apps/codex-messaging/security-review.md) found
-unresolved advisories in the pinned runtime. Gateway, worker and device-login commands now return
-`runtime_security_review_required` before reading credentials. A reviewed replacement/build-path
-assessment and repeated isolation tests must clear this gate before the sequence below can proceed.
-The [implementation plan](../codex-messaging-plan.md) owns scope, permissions and acceptance gates.
-[ADR-028](../../decisions/028-codex-messaging.md) records the proposed architecture;
-[research](../codex-messaging-research.md) compares transports. Telegram long polling needs outbound
-HTTPS, with no public listener, inbound forwarding or new VM. Bot chats are cloud conversations;
-use logical aliases and curated summaries. Filtering is a guardrail, not a guarantee that arbitrary
-text is anonymous. Never send credentials, raw logs, addresses or files through chat.
+**State (2026-11-14): source preparation only. Nothing installed, paired or running is claimed.**
+The [plan](../codex-messaging-plan.md) owns scope and remaining acceptance work;
+[ADR-028](../../decisions/028-codex-messaging.md) records the selected same-user design.
 
-## Prepared installation
+The relay runs as existing `simon`, with HOME and authoritative workspace `/home/simon` and the
+existing Codex subscription login/settings. It relays normal Codex tools, approvals and supported
+questions over outbound Telegram long polling. Native Codex permissions and repository rules still
+apply. One service, `codex-telegram.service`, uses root-owned code/runtime in `/opt/codex-messaging`,
+configuration `/etc/codex-telegram.json`, and private state `/var/lib/codex-telegram`.
 
-The [playbook](../../ansible/playbooks/provision-codex-messaging.yml) targets the existing `mgmt`
-group. After separate deployment approval, the operator supplies verified numeric private-chat and
-user IDs plus a local pinned runtime distribution. Public examples deliberately cannot enable it.
-Do not discover enrollment by accepting whichever sender arrives first. Verify the intended account
-locally and bind both IDs before staging configuration. Never paste a bot token into this repository,
-a command line, a model conversation or Telegram.
+The [current source review](../../apps/codex-messaging/relay-review.md) covers security and
+infrastructure; target installation and native execution remain unverified.
 
-The playbook creates locked `codex-telegram`, `codex-worker` and `codex-ops` identities, root-owned
-code under `/opt/codex-messaging`, protected settings under `/etc/codex-messaging`, and separate
-state under `/var/lib/codex-messaging`. Worker HOME and `.codex` have root-owned sticky group-write
-directories: the worker can maintain its auth cache but cannot replace root-owned configuration.
-The root manifest pins runtime, bwrap and configuration digests. Existing unmarked paths/accounts
-are refused; a partially failed installation needs local review before adoption.
+## Installation and commissioning
 
-`codex-telegram` can invoke only the fixed no-argument `codex-worker` wrapper through sudo. This
-requires `NoNewPrivileges=false` on the coordinator; its capability bounding set contains only
-SETUID/SETGID, and the sudo rule grants no root command. This boundary needs commissioning proof.
-The broker accepts only that coordinator's OS peer plus the configured user/chat identities. Its
-registry is empty and cannot be enabled from Telegram or JSON. No SSH or publication identity is
-installed, and no target dispatcher is deployed.
+These are future operator steps, **after separate installation authorization**. No command below
+was run against a real service/account during source preparation.
 
-The three service units and metrics timer share a component slice. All remain stopped and
-disabled after installation. No current exporter, firewall or monitoring rules are changed. The
-metrics writer exports only fixed numeric fields to the existing node-exporter textfile directory;
-missing/stale health becomes unhealthy. Alert integration is an operational-enrollment gate.
+1. Verify the intended management VM, Tailscale/console recovery access, current OS vendor patches,
+   backup state and resource/disk headroom. Review the exact source revision and rendered unit.
+   The [playbook](../../ansible/playbooks/provision-codex-messaging.yml) stages the single relay as
+   the existing user and leaves its service stopped/disabled. It creates no new identity or login.
+2. Supply controller-local verified Codex 0.169.0 and patched static bubblewrap 0.13.1 binaries.
+   Installation places both in `/opt/codex-messaging/runtime/bin`, root-owned and ahead of ordinary
+   PATH. [Runtime research](../../apps/codex-messaging/runtime-revision-research.md) owns hashes,
+   build provenance and dependency limitations. Verify the selected patched bwrap, not an older
+   bundled/system fallback.
+3. Run the local `check` as `simon`. It checks paths/configuration, pinned artifact hashes and
+   private-state ownership; it **does not read actual auth state or make a model request**.
+   Separately prove harmless native execution and configured sandbox restrictions on the actual
+   host. The research runner denied namespace/UID-map setup, so its smoke result cannot clear this.
+   A system service gets the user's HOME, SSH files and groups, but does not inherit an interactive
+   shell's `SSH_AUTH_SOCK`. If existing keys require an agent, supply the established agent socket
+   through a reviewed service environment/drop-in and verify it in this installed context.
+4. Verify the user's existing ChatGPT login/subscription and account-side zero-credit/top-up
+   settings in an attended setup step. If login is absent or expired, use normal Codex sign-in as
+   `simon` after authorization. Do not copy another cache or create API credentials. Unknown,
+   exhausted or paid-credit state must stop work rather than select a fallback provider.
+5. Obtain the bot token through the operator's normal Telegram/BotFather workflow and write it
+   locally to `/var/lib/codex-telegram/bot-token`, owned by `simon`, mode `0600`; keep its directory
+   `0700`. Use a secure local editor/input method, not command arguments, Git, model chat or logs.
+   The provisioning playbook does not fetch, copy or overwrite login/token secrets.
+6. With the service stopped and no other poller running, run `pair` as `simon`. It prints a fresh
+   nonce locally. Send `/pair <nonce>` from the intended **private** Telegram chat within ten
+   minutes, then verify the recorded local owner. Pairing requires the nonce, not whichever sender
+   arrives first. `enrollment.json` stores numeric `user_id`, `chat_id`, polling `offset` and
+   `paired_at`; never enroll a group or infer authority from usernames.
+7. In an attended window, test native approval/decline, supported questions, interruption, stale
+   callbacks/messages, duplicate delivery, restart and account/transport failure. A normal turn may
+   reach the model and requires separate live-use authorization. Only after these checks should
+   the operator enable/start the service and review the first task.
 
-The proposed component slice caps the combined services and worker descendants at one CPU,
-1 GiB RAM, no swap and 128 tasks, with narrower role limits. The broker admits 16 connections and
-the outbox keeps at most 128 undelivered replies; a full queue pauses new work and approvals while
-preserving `/stop`. The gateway's main SQLite file is limited to 64 MiB. WAL/checkpoint and worker
-cache sizes still require an aggregate disk allowance/high-water stop and monitoring before start;
-these settings do not constitute a filesystem quota or prove that the management VM has headroom.
-The worker launcher applies no-new-privileges after sudo changes identity. All limits require
-measurement and failure-path testing under the actual unit. See the
-[infrastructure review](../../apps/codex-messaging/infrastructure-review.md).
+Exact entry syntax (run as the existing user):
 
-## Commissioning sequence after installation authorization
+```bash
+python3 /opt/codex-messaging/entry.py --config /etc/codex-telegram.json check
+python3 /opt/codex-messaging/entry.py --config /etc/codex-telegram.json pair
+python3 /opt/codex-messaging/entry.py --config /etc/codex-telegram.json serve
+```
 
-This sequence is on hold until the runtime security gate above is cleared. Also verify current
-target vendor package status for sudo, Python and its linked libraries, systemd, OpenSSH and the
-running kernel. A source audit or mocked-model test cannot attest those installed packages.
+`serve` is normally systemd's job; running it manually while the unit is active would create a
+second poller. The config contains only these absolute paths:
 
-1. Confirm Tailscale access, the intended management VM and fresh protected recovery state. Inspect
-   the exact source revision, rendered units, sudo policy and binary hashes. Install with the
-   explicitly enabled keyless variables from a locally protected, ignored extra-vars file.
-2. Run the keyless preflight on the installed binary as the dedicated worker, with no real auth,
-   bot token, target key or publisher key present. Repeat credential-sentinel and native-tool/skills
-   catalog probes in the actual service containment. A failed check blocks enrollment.
-3. Verify account billing controls locally: existing included subscription, zero credit balance and
-   automatic top-ups disabled. The client requires subscription authentication and confirmed
-   zero-credit entitlement, and rejects exhausted or unknown allowances. Shared account balances may change after a precheck;
-   do not claim that a quota precheck alone guarantees no credit spending. If the account cannot
-   enforce the agreed cost constraint, stop before model use.
-4. Only after those checks, the operator completes a new device login directly as `codex-worker`
-   using `sudo -u codex-worker /usr/bin/python3 -I /opt/codex-messaging/entry.py worker-login`.
-   Do not copy Simon's interactive `.codex` cache. Recheck the effective feature table, empty skills
-   catalogs and real credential protection. Model smoke tests use fake diagnostics, with no
-   infrastructure or publication keys present. Auth, quota, tool or protocol ambiguity stops work.
-5. The operator creates the bot through BotFather, revokes any exposed token, and writes its token
-   locally to `/var/lib/codex-messaging/telegram/bot-token`, owned by `codex-telegram`, mode `0600`.
-   Keep command/history/log capture off that secret. The playbook never reads or overwrites it.
-6. Start the broker, then gateway and metrics timer in an attended keyless window. Prove foreign,
-   group, stale and duplicate input handling; private replies; pause/stop; restart; rate limiting;
-   and credential-free metrics. `/resume` must keep changes disabled. Stop again on any failed gate.
-7. Operational enrollment is a **later source and deployment change**: prove actual management VM
-   and hosting-node exclusions, enrolled read-only probes, target identity and pinned host keys,
-   fixed dispatcher/sudo boundaries, package/LXC vendor contracts, safe Git publication, alerts and
-   restore behavior. Host/VM reboot and unsupported diagnostics remain unavailable. Only then
-   consider a separately approved non-critical service operation. Do not install an unrestricted key.
+```json
+{
+  "user_home": "/home/simon",
+  "workspace": "/home/simon",
+  "state_dir": "/var/lib/codex-telegram",
+  "codex_binary": "/opt/codex-messaging/runtime/bin/codex",
+  "bwrap_binary": "/opt/codex-messaging/runtime/bin/bwrap"
+}
+```
 
-## Controls and recovery
+Relay state also includes `relay.sqlite` and `relay.lock`. Do not edit enrollment or the delivery
+cursor while running, and never commit these private files.
 
-`/status`, `/pause`, `/resume`, `/stop` and `/new` are handled locally without model usage. A new
-conversation cannot abandon an active approval. Pause prevents changes but allows reads. Stop
-prevents subsequent steps; an already-running apt process must finish safely. One approval applies
-to one immutable plan and expires after ten minutes. Uncertain dispatch is reviewed under the
-original job ID and is never replayed. Desktop change work requires pausing the phone operator.
+## Normal operation and privacy
 
-Worker threads expire after 30 days when inactive. Intake IDs older than 90 days are removed while
-preserving the delivery cursor. Cleanup runs serially while idle and holds if jobs are unresolved;
-it cannot delete active work. Unsent outbox messages and uncertain work remain for local review.
-Operation-journal retention and publisher integration remain blocked before operational enrollment;
-no deployed operational data exists in this milestone.
+Use one owner and one active turn initially. The relay preserves its own Codex thread across
+messages; it does not promise to import an existing ChatGPT desktop conversation or app tools.
+Coordinate phone and desktop work in the shared authoritative tree: preserve dirty/unrelated work,
+follow AGENTS/runbooks and avoid concurrent change operators.
 
-The proposed durable state is covered by the existing encrypted management-VM PBS image under
-[ADR-012](../../decisions/012-backups.md), with the current gaps and restore evidence owned by the
-[backup runbook](../operations/runbooks.md#restore-drills-a-backup-you-havent-restored-is-a-hypothesis).
-Use RPO ≤24 hours / RTO ≤1 day as commissioning targets, not measured guarantees. Before declaring
-the service live, record a fresh backup and isolated restore test for token/auth caches, gateway and
-broker SQLite/WAL state, settings and any later target journals. Verify coherent state with services
-quiesced and SQLite integrity checks. Never start a second live poller/dispatcher using restored keys.
-Disable network/units before booting the clone. Restore starts paused, invalidates approvals and
-reconciles original local/remote job IDs; missing or rolled-back evidence requires manual review.
-Tokens and access keys remain credentials in encrypted backups and need a revocation/re-enrollment
-procedure. PBS's existing off-site/key-custody limits remain unchanged and are not resolved here.
+The phone shows Codex's native command/file/permission approval requests and supported questions.
+Commands include their working directory; file approvals include the complete proposed patch.
+Review the full displayed scope: a permission grant may cover the current turn. Approval responses
+expire after ten minutes and must match the original request. An approval too large or unsuitable
+for safe phone presentation is declined for local review, including any scope that would need
+redaction. Prefer host aliases. Native
+policy controls what asks for approval, rather than a separate relay operation catalog.
 
-For rollback, stop and disable gateway, broker and metrics timer; remove only this component's
-textfile metrics and sudo grant; revoke the bot token/device login and any later dedicated keys
-through their owners. Retain the private state for review under its retention policy. Do not remove
-accounts or data as an automatic rollback, and never undo/replay a completed package operation.
+Send tasks as plain text. `/status` reports activity, `/pause` blocks new tasks, `/resume` permits
+fresh tasks, `/stop` requests interruption and pauses, and `/new` starts a new conversation when
+idle. After pause/recovery, send `/resume` in a later second than that pause/startup; an older queued
+control cannot resume work. `/help` lists the controls. Question replies accept an option number or
+plain text and expire after ten minutes.
 
-For outages, inspect unit state and safe error codes locally. Do not paste journal/database contents
-back into chat. Poll/auth failure or stale heartbeat requires local intervention; management-VM
-outage also removes phone access. Existing Tailscale/desktop recovery remains necessary.
+Interrupting a turn is not rollback. After an outage, crash or missing completion, inspect actual
+state before retrying commands. Do not automatically replay work or reuse old approval buttons.
+Management-VM outage/reboot also removes phone access; use Tailscale/desktop/console recovery.
+
+Telegram bot chats are cloud conversations, not end-to-end encrypted. Prefer aliases and concise
+summaries; output redaction is **best effort** and raw tool streams are not forwarded. Anything
+sent to the bot has already reached Telegram. Normal Codex can send necessary diagnostic context
+to OpenAI. Do not send tokens, credentials, private addresses or raw logs through chat.
+
+The relay and Codex share `simon`'s UID. Codex can therefore read relay token/state and other files
+available to that user. Instructions not to do so are guidance, **not a kernel-enforced boundary**.
+The recovery-repository prohibition still applies. If this accepted trust model changes, stop and
+revise the design rather than claiming private-directory modes separate same-UID processes.
+
+## Outage, recovery and rollback
+
+Stop/disable `codex-telegram.service` before repairing relay files, changing pairing or restoring
+state. Preserve SQLite with its coherent WAL state, enrollment and token as private data, and the
+existing Codex HOME under the established encrypted management-VM backup model
+([ADR-012](../../decisions/012-backups.md)). No new backup job or measured restore guarantee is
+claimed. An isolated restore must keep polling/service networking disabled: never run two restored
+instances with the same bot token. Invalidate pending approvals and review actual task outcomes
+before resuming.
+
+For rollback, stop and disable the single unit and revoke the bot token through its owner when
+appropriate. Preserve private state for review; do not automatically delete the user's existing
+Codex login, credentials or workspace, and do not undo or replay completed infrastructure changes.
+For failures inspect safe local error categories and unit state; avoid pasting journal/database
+contents into Telegram. A compromised token requires revocation/re-pairing, not a copied live state
+on a second poller. Installed recovery and first-operation evidence remain pending.

@@ -1,17 +1,6 @@
 """Reject non-subscription execution without echoing account or credential information."""
 
-from pathlib import Path
 from decimal import Decimal, InvalidOperation
-
-
-def worker_environment(context: Path, inherited: dict) -> dict:
-    """Build, rather than merge, a credential-free launching environment."""
-    forbidden = {"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "OPENAI_BASE_URL", "CHATGPT_BASE_URL",
-                 "CODEX_MODEL_PROVIDER", "CODEX_ACCESS_TOKEN", "OPENAI_ACCESS_TOKEN"}
-    for name, value in inherited.items():
-        if value and (name.upper() in forbidden or name.upper().endswith(("_API_KEY", "_ACCESS_TOKEN", "_BASE_URL"))):
-            raise AuthenticationRejected("environment_override")
-    return {"PATH": "/usr/bin:/bin", "HOME": str(context), "CODEX_HOME": str(context / ".codex"), "LANG": "C.UTF-8"}
 
 
 class AuthenticationRejected(Exception):

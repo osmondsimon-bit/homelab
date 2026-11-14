@@ -1,4 +1,0 @@
-#!/bin/sh
-# Purpose: switch to the pinned worker without accepting arguments, commands or paths.
-test "$#" -eq 0 || exit 64
-exec /usr/bin/setpriv --no-new-privs /usr/bin/python3 -I /opt/codex-messaging/entry.py worker

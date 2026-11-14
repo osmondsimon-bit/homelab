@@ -1,285 +1,212 @@
-"""Run the keyless commissioning stage with fixed paths and separately owned roles."""
+"""Pair one Telegram owner and run a thin relay using the existing Codex user."""
 
 import argparse
 import asyncio
 import contextlib
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
-import pwd
 import re
+import secrets
 import stat
 import sys
-import tempfile
 import time
 
-from .authentication import AuthenticationRejected, worker_environment
-from .configuration import ConfigurationRejected, keyless_settings
-from .gateway import Coordinator
-from .ipc import BrokerSocketServer
-from .operations import OperationsBroker, PolicyError, TargetRegistry
-from .preflight import RuntimeRejected, inspect_runtime
-from .remote import decode_wire, protected_json, run_bounded
-from .rpc import RpcWorker, WorkerRejected
-from .transport import BrokerClient, Telegram, TransportRejected
-from .worker_policy import RUNTIME_SECURITY_APPROVED, verify_features
+from .normal_worker import NormalWorker
+from .relay import Relay
+from .transport import Telegram, TransportRejected
+
+RUNTIMES = {
+    "codex_binary": "b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
+    "bwrap_binary": "711ac2c00998eede367c2b3827efa36ba4436dfce19ab9d3b6d56ff5a5996fa1",
+}
 
 
-CODE = Path("/opt/codex-messaging")
-STATE = Path("/var/lib/codex-messaging")
-WORKER_HOME = STATE / "worker"
-REFERENCE = STATE / "reference"
-SOCKET = Path("/run/codex-messaging/broker/operations.sock")
+class ConfigurationRejected(Exception):
+    """Keep local errors free of file contents, credentials and request URLs."""
 
 
-def _role(name):
-    try:
-        account = pwd.getpwnam(name)
-    except KeyError:
-        raise ConfigurationRejected("service_role") from None
-    if os.geteuid() != account.pw_uid:
-        raise ConfigurationRejected("service_role")
-    return account
-
-
-def _clean_environment(home):
-    selected = worker_environment(home, os.environ)
-    selected.pop("CODEX_HOME")
-    os.environ.clear()
-    os.environ.update(selected)
-
-
-def _private(path, owner, limit):
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+def private_read(path, maximum=8192):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_mode & 0o077 or info.st_size > limit:
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077 or info.st_nlink != 1 or info.st_size > maximum):
             raise ConfigurationRejected("private_file_permissions")
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            return stream.read(limit + 1)
+        return os.read(descriptor, maximum + 1).decode()
     finally:
         os.close(descriptor)
 
 
-def _root_hash(path, worker_group):
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+def settings(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-            raise ConfigurationRejected("runtime_permissions")
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 8192:
+            raise ConfigurationRejected("configuration_permissions")
+        result = json.loads(os.read(descriptor, 8193))
+    finally:
+        os.close(descriptor)
+    expected = {"user_home", "workspace", "state_dir", *RUNTIMES}
+    if not isinstance(result, dict) or set(result) != expected or any(
+            not isinstance(value, str) or not Path(value).is_absolute() for value in result.values()):
+        raise ConfigurationRejected("configuration_shape")
+    result = {key: Path(value) for key, value in result.items()}
+    for key in ("user_home", "workspace", "state_dir"):
+        if not result[key].is_dir():
+            raise ConfigurationRejected("configuration_directory")
+    state = result["state_dir"].lstat()
+    if not stat.S_ISDIR(state.st_mode) or state.st_uid != os.getuid() or state.st_mode & 0o077:
+        raise ConfigurationRejected("private_state_permissions")
+    if result["codex_binary"].parent != result["bwrap_binary"].parent:
+        raise ConfigurationRejected("runtime_directory")
+    return result
+
+
+def check_runtime(config):
+    for key, digest in RUNTIMES.items():
+        path = config[key]
         for parent in path.parents:
-            info = parent.stat()
-            permitted_sticky = (parent in {WORKER_HOME, WORKER_HOME / ".codex"}
-                                and info.st_uid == 0 and info.st_gid == worker_group
-                                and stat.S_IMODE(info.st_mode) == 0o1770)
-            if info.st_uid != 0 or info.st_mode & 0o022 and not permitted_sticky:
-                raise ConfigurationRejected("runtime_permissions")
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            return hashlib.file_digest(stream, "sha256").hexdigest()
+            info = parent.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                raise ConfigurationRejected("runtime_directory_permissions")
+        if not stat.S_ISREG(path.lstat().st_mode):
+            raise ConfigurationRejected("runtime_file_permissions")
+        with path.open("rb") as binary:
+            info = os.fstat(binary.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o7022
+                    or not info.st_mode & 0o111 or hashlib.file_digest(binary, "sha256").hexdigest() != digest):
+                raise ConfigurationRejected("runtime_integrity")
+
+
+@contextlib.contextmanager
+def state_lock(directory):
+    descriptor = os.open(directory / "relay.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077 or info.st_nlink != 1:
+            raise ConfigurationRejected("private_lock_permissions")
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
     finally:
         os.close(descriptor)
 
 
-def _worker(login=False):
-    account = _role("codex-worker")
-    manifest = protected_json("/etc/codex-messaging/worker.json")
-    fields = {"version", "binary_sha256", "bwrap_sha256", "config_sha256"}
-    if set(manifest) != fields or manifest["version"] != 1 or any(
-            not isinstance(manifest[field], str) or not re.fullmatch(r"[0-9a-f]{64}", manifest[field])
-            for field in fields - {"version"}):
-        raise ConfigurationRejected("runtime_manifest")
-    binary = CODE / "runtime/bin/codex"
-    for path, field in [(binary, "binary_sha256"),
-                        (CODE / "runtime/codex-resources/bwrap", "bwrap_sha256"),
-                        (WORKER_HOME / ".codex/config.toml", "config_sha256")]:
-        if _root_hash(path, account.pw_gid) != manifest[field]:
-            raise ConfigurationRejected("runtime_digest")
-    environment = worker_environment(WORKER_HOME, os.environ)
-    version = run_bounded([str(binary), "--version"], environment=environment, limit=4096, timeout=15)
-    if version.decode().strip() != "codex-cli 0.146.0":
-        raise ConfigurationRejected("runtime_version")
-    feature_table = run_bounded([str(binary), "features", "list"],
-                                environment=environment, limit=16384, timeout=20)
-    try:
-        verify_features(feature_table.decode())
-    except (ValueError, UnicodeError):
-        raise ConfigurationRejected("worker_features") from None
-    os.chdir(REFERENCE)
-    arguments = [str(binary)]
-    arguments += ["login", "--device-auth"] if login else ["--strict-config", "app-server", "--listen", "stdio://"]
-    os.execve(binary, arguments, environment)
+async def pair(client, destination, *, announce=print, clock=time.time):
+    if destination.exists():
+        raise ConfigurationRejected("already_paired")
+    nonce, started = secrets.token_urlsafe(24), clock()
+    phrase = "/pair " + nonce
+    announce("Send " + phrase + " in a private chat with your bot within ten minutes.")
+    offset = 0
+    while clock() - started < 600:
+        updates = await asyncio.to_thread(client.get_updates, offset)
+        for update in updates:
+            identifier, message = update.get("update_id"), update.get("message", {})
+            if type(identifier) is not int or identifier < offset:
+                continue
+            offset = identifier + 1
+            if not isinstance(message, dict):
+                continue
+            sender, chat, stamp = message.get("from", {}), message.get("chat", {}), message.get("date")
+            if (not isinstance(sender, dict) or not isinstance(chat, dict)
+                    or message.get("text") != phrase or chat.get("type") != "private"
+                    or sender.get("is_bot") is not False or type(sender.get("id")) is not int
+                    or type(chat.get("id")) is not int or sender["id"] <= 0 or chat["id"] != sender["id"]
+                    or type(stamp) is not int or not started - 5 <= stamp <= clock() + 60):
+                continue
+            descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(descriptor, "w") as output:
+                json.dump({"user_id": sender["id"], "chat_id": chat["id"], "offset": offset, "paired_at": int(clock())}, output)
+                output.flush()
+                os.fsync(output.fileno())
+            announce("Paired. Only this private Telegram account can use the relay.")
+            return
+    raise ConfigurationRejected("pairing_expired")
 
 
-class _NoRemoteAuthority:
-    def inspect(self, *_args, **_kwargs):
-        raise PolicyError("not_enrolled")
-
-    def dispatch(self, *_args, **_kwargs):
-        raise PolicyError("not_enrolled")
-
-    def query(self, *_args, **_kwargs):
-        raise PolicyError("not_enrolled")
-
-
-def _broker():
-    account = _role("codex-ops")
-    _clean_environment(STATE / "operations")
-    settings = keyless_settings(protected_json("/etc/codex-messaging/broker.json"))
-    operations = OperationsBroker(STATE / "operations/jobs.sqlite", TargetRegistry([]), _NoRemoteAuthority())
-    operations.pause()
-    peer = pwd.getpwnam("codex-telegram").pw_uid
-    server = BrokerSocketServer(SOCKET, operations, allowed_uid=peer, user_id=settings["user_id"],
-                                chat_id=settings["chat_id"], allow_changes=False)
-    try:
-        server.serve_forever(poll_interval=0.5)
-    finally:
-        server.server_close()
-        operations.close()
-
-
-def _health(path, value):
-    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".health-", delete=False) as output:
-        temporary = Path(output.name)
-        os.fchmod(output.fileno(), 0o600)
-        output.write(json.dumps(value).encode())
-        output.flush()
-        os.fsync(output.fileno())
-    os.replace(temporary, path)
-
-
-async def _gateway():
-    account = _role("codex-telegram")
-    _clean_environment(STATE / "telegram")
-    settings = keyless_settings(protected_json("/etc/codex-messaging/gateway.json"))
-    token = _private(STATE / "telegram/bot-token", account.pw_uid, 256).decode().strip()
-    telegram = Telegram(token)
-    broker = BrokerClient(str(SOCKET))
-    launcher = ["/usr/bin/sudo", "-n", "-u", "codex-worker", "--", "/usr/local/libexec/codex-messaging-worker"]
-    async with RpcWorker(launcher, WORKER_HOME, REFERENCE) as worker:
-        gateway = Coordinator(STATE / "telegram/gateway.sqlite", settings["user_id"], settings["chat_id"], worker, broker)
-        await gateway.startup()
-        poll = asyncio.create_task(asyncio.to_thread(telegram.get_updates, gateway.cursor()))
+async def serve(config, client, owner):
+    environment = dict(os.environ)
+    environment["PATH"] = str(config["bwrap_binary"].parent) + os.pathsep + environment.get("PATH", os.defpath)
+    async with NormalWorker([str(config["codex_binary"])], config["user_home"], config["workspace"], inherited=environment) as worker:
+        relay = Relay(config["state_dir"] / "relay.sqlite", owner["user_id"], owner["chat_id"], worker,
+                      home=config["user_home"], offset=owner["offset"])
+        polling = asyncio.create_task(asyncio.to_thread(client.get_updates, relay.cursor()))
         event = asyncio.create_task(worker.next_event())
-        poll_healthy, last_health = False, 0
+        sending = None
+        retry_at = 0
         try:
             while True:
-                done, _ = await asyncio.wait({poll, event}, timeout=1, return_when=asyncio.FIRST_COMPLETED)
-                if poll in done:
-                    try:
-                        updates = poll.result()
-                        poll_healthy = True
-                        for update in updates:
-                            try:
-                                await gateway.handle(update)
-                            except (PolicyError, WorkerRejected, ConnectionError, OSError, TimeoutError):
-                                await broker.pause()
-                                with gateway.database:
-                                    gateway._set("paused", True)
-                                    gateway._reply("Request needs local review. No uncertain operation will be replayed.")
-                    except TransportRejected as error:
-                        poll_healthy = False
-                        await asyncio.sleep(min(error.retry_after, 30))
-                    poll = asyncio.create_task(asyncio.to_thread(telegram.get_updates, gateway.cursor()))
-                if event in done:
-                    await gateway.worker_event(event.result())
+                pending = {polling, event}
+                if sending:
+                    pending.add(sending[1])
+                done, _ = await asyncio.wait(pending, timeout=1, return_when=asyncio.FIRST_COMPLETED)
+                if event.done():
+                    await relay.event(event.result())
                     event = asyncio.create_task(worker.next_event())
-                await gateway.tick()
-                await gateway.maintain()
-                for identifier, body in gateway.outbox():
+                await relay.tick()
+                if polling in done:
                     try:
-                        await asyncio.to_thread(telegram.send_message, body)
+                        updates = polling.result()
                     except TransportRejected:
-                        poll_healthy = False
-                        break
-                    gateway.sent(identifier)
-                if time.time() - last_health >= 30:
-                    _health(STATE / "telegram/health.json", {"updated": time.time(), "worker_alive": 1,
-                            "poll_healthy": int(poll_healthy), "paused": 1, "outbox_pending": len(gateway.outbox())})
-                    last_health = time.time()
+                        updates = []
+                        await asyncio.sleep(5)
+                    for update in updates:
+                        await relay.handle(update)
+                    polling = asyncio.create_task(asyncio.to_thread(client.get_updates, relay.cursor()))
+                if sending and sending[1] in done:
+                    try:
+                        sending[1].result()
+                        relay.sent(sending[0])
+                    except TransportRejected:
+                        retry_at = time.monotonic() + 5
+                    sending = None
+                if sending is None and time.monotonic() >= retry_at:
+                    messages = relay.outbox()
+                    if messages:
+                        identifier, body = messages[0]
+                        sending = (identifier, asyncio.create_task(asyncio.to_thread(client.send_message, body)))
         finally:
-            poll.cancel()
-            event.cancel()
-            for task in (poll, event):
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await task
-            gateway.close()
+            for task in [polling, event, sending[1] if sending else None]:
+                if task:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await task
+            relay.close()
 
 
-def _metrics():
-    if os.geteuid() != 0:
-        raise ConfigurationRejected("service_role")
-    account = pwd.getpwnam("codex-telegram")
-    healthy, stamp, worker, poll, pending = 0, 0, 0, 0, 0
+def main(arguments=None):
+    parser = argparse.ArgumentParser(description="Pair and run a private Telegram-to-Codex relay.")
+    parser.add_argument("--config", type=Path, default=Path("/etc/codex-telegram.json"))
+    parser.add_argument("command", choices=("check", "pair", "serve"))
+    options = parser.parse_args(arguments)
+    os.umask(0o077)
     try:
-        health = decode_wire(_private(STATE / "telegram/health.json", account.pw_uid, 2048))
-        if set(health) != {"updated", "worker_alive", "poll_healthy", "paused", "outbox_pending"}:
-            raise ValueError("health")
-        if (type(health["updated"]) not in {int, float} or not 0 <= time.time() - health["updated"] <= 180
-                or any(type(health[name]) is not int or health[name] not in {0, 1} for name in ("worker_alive", "poll_healthy", "paused"))
-                or type(health["outbox_pending"]) is not int or not 0 <= health["outbox_pending"] <= 10000):
-            raise ValueError("health")
-        stamp, worker, poll, pending = health["updated"], health["worker_alive"], health["poll_healthy"], health["outbox_pending"]
-        healthy = int(worker == 1 and poll == 1)
-    except (OSError, ValueError, PolicyError, ConfigurationRejected):
-        pass
-    body = (f"codex_messaging_healthy {healthy}\ncodex_messaging_last_heartbeat_timestamp_seconds {stamp}\n"
-            f"codex_messaging_worker_alive {worker}\ncodex_messaging_poll_healthy {poll}\n"
-            f"codex_messaging_outbox_pending {pending}\ncodex_messaging_changes_enabled 0\n")
-    directory = Path("/var/lib/prometheus/node-exporter")
-    with tempfile.NamedTemporaryFile(dir=directory, prefix=".codex-messaging-", delete=False) as output:
-        temporary = Path(output.name)
-        output.write(body.encode())
-        os.fchmod(output.fileno(), 0o644)
-    os.replace(temporary, directory / "codex_messaging.prom")
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="Codex messaging keyless commissioning stage")
-    parser.add_argument("command", choices=["gateway", "broker", "worker", "worker-login", "metrics", "preflight", "dispatcher", "maintenance"])
-    arguments, remaining = parser.parse_known_args(argv)
-    try:
-        if arguments.command in {"gateway", "worker", "worker-login"} and not RUNTIME_SECURITY_APPROVED:
-            raise RuntimeRejected("runtime_security_review_required")
-        if arguments.command in {"dispatcher", "maintenance"}:
-            if os.geteuid() != 0:
-                raise ConfigurationRejected("service_role")
-            if arguments.command == "dispatcher":
-                from .dispatcher import main as dispatch
-            else:
-                from .maintenance import main as dispatch
-            return dispatch(remaining)
-        if arguments.command == "preflight":
-            probe = argparse.ArgumentParser(description="Keyless pinned-runtime validation")
-            probe.add_argument("--binary", type=Path, required=True)
-            selected = probe.parse_args(remaining)
-            metadata = inspect_runtime(selected.binary)
-            sys.path.insert(0, str(CODE / "tests" if CODE.exists() else Path(__file__).resolve().parents[1] / "tests"))
-            from runtime_fixture import run_fixture
-            evidence = run_fixture(selected.binary, native_environment=False)
-            allowed = {"fixture_diagnostic", "request_user_input", "skills.list", "skills.read", "update_plan"}
-            if (any(evidence[name] != "unavailable" for name in ("native_shell", "native_image", "native_agent"))
-                    or evidence["dynamic_tool"] != "completed" or not set(evidence["advertised_tools"]) <= allowed
-                    or any(json.loads(evidence[name]).get("skills") != [] for name in ("skills_listing", "executor_skills_listing"))
-                    or any(evidence[name] != "skill package is not available from the requested authority" for name in ("orchestrator_read", "executor_read"))):
-                raise RuntimeRejected("worker_isolation")
-            print(json.dumps({**metadata, "dynamic_only_gate": "passed", "live_account_gate": "pending",
-                              "runtime_security_gate": "passed" if RUNTIME_SECURITY_APPROVED else "blocked"}))
+        config = settings(options.config)
+        check_runtime(config)
+        if options.command == "check":
+            print("Configuration and pinned runtime hashes verified. Subscription, native sandbox and Telegram still need the target-VM smoke checks.")
             return 0
-        if remaining:
-            raise ConfigurationRejected("command_arguments")
-        if arguments.command in {"worker", "worker-login"}:
-            _worker(login=arguments.command == "worker-login")
-        elif arguments.command == "broker":
-            _broker()
-        elif arguments.command == "metrics":
-            _metrics()
-        else:
-            asyncio.run(_gateway())
+        with state_lock(config["state_dir"]):
+            client = Telegram(private_read(config["state_dir"] / "bot-token").strip())
+            enrollment = config["state_dir"] / "enrollment.json"
+            if options.command == "pair":
+                asyncio.run(pair(client, enrollment))
+            else:
+                owner = json.loads(private_read(enrollment))
+                if (not isinstance(owner, dict) or set(owner) != {"user_id", "chat_id", "offset", "paired_at"}
+                        or any(type(value) is not int or value < 0 for value in owner.values())
+                        or not owner["user_id"] or owner["chat_id"] != owner["user_id"]):
+                    raise ConfigurationRejected("enrollment_shape")
+                asyncio.run(serve(config, client, owner))
         return 0
-    except (ConfigurationRejected, PolicyError, RuntimeRejected, AuthenticationRejected, WorkerRejected, TransportRejected) as error:
-        print(error.code, file=sys.stderr)
-        return 1
-    except Exception:
-        print("service_unavailable", file=sys.stderr)
+    except KeyboardInterrupt:
+        return 130
+    except Exception as error:
+        category = str(error) if isinstance(error, ConfigurationRejected) else getattr(error, "code", None)
+        if not isinstance(category, str) or not re.fullmatch(r"[a-z_]{1,60}", category):
+            category = "local_check_failed"
+        print(f"Relay stopped ({category}): check locally. Private details were not logged.", file=sys.stderr)
         return 1

@@ -1,12 +1,21 @@
 Purpose: record the bounded dependency and runtime security assessment for the source-only Codex messaging gateway, and distinguish evidence from outstanding deployment gates.
 
+> **Historical — retired broker design (2026-11-14).** This assessment concerns the earlier
+> separate-user operations platform and Codex 0.146.0 milestone. The user selected a same-user
+> Telegram relay to normal Codex instead. Statements below about brokers, disabled native tools,
+> service identities, hard security flags or operational registries are not current requirements or
+> acceptance evidence. Old source/document links are frozen at public commit `baf566b`.
+> Use [the current plan](../../docs/codex-messaging-plan.md),
+> [component runbook](../../docs/components/codex-messaging.md) and
+> [native runtime research](runtime-revision-research.md) for current scope and remaining checks.
+
 # Security assessment — 2026-11-14
 
 ## Verdict and scope
 
 **Do not enroll a real ChatGPT account, Telegram token, or infrastructure key with the currently pinned Codex 0.146.0 runtime.** The pin has a normal TLS dependency matching a certificate-validation advisory, as well as affected vendored sandbox source. The latter is partly mitigated by disabling native execution; that does not address the TLS path. This is a dependency assessment, not a penetration test or permission to deploy. The existing source-only/keyless work can remain reviewable while the runtime decision is revised.
 
-The assessment used public upstream source and advisory databases, public installed package metadata, and synthetic boundary-test evidence. It did not inspect authentication stores, private inventories, the private recovery repository, or hosts, and made no model requests. Application behavior and deployment gates remain authoritative in [the implementation plan](../../docs/codex-messaging-plan.md).
+The assessment used public upstream source and advisory databases, public installed package metadata, and synthetic boundary-test evidence. It did not inspect authentication stores, private inventories, the private recovery repository, or hosts, and made no model requests. Application behavior and deployment gates remain authoritative in [the implementation plan](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/docs/codex-messaging-plan.md).
 
 ## Evidence and limits
 
@@ -55,7 +64,7 @@ Additional material triage remains: [Tokio 1.52.3 I/O-safety violation](https://
 
 ## Existing first-party isolation limits
 
-The source's [empty thread environments](codex_messaging/rpc.py), [worker policy](../../ansible/templates/codex-messaging/worker.toml.j2) and [runtime boundary fixture](tests/runtime_fixture.py) intentionally remove native execution/image/subagent tools and require empty skill catalogs. Earlier synthetic testing observed `/proc/self/environ` exposure despite a `/proc` read-deny policy while native execution was available. Filesystem denials therefore cannot be represented as a proven universal secret boundary. Empty skills catalogs are also a deployment invariant: no general skills-tool disable switch or symlink-safe registered-resource boundary has been established. Re-run the negative probes after every runtime/configuration change, including forged native calls, nonempty or spoofed skill authorities, traversal/URI/symlink inputs, and credential-file/environment access using synthetic data.
+The source's [empty thread environments](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/apps/codex-messaging/codex_messaging/rpc.py), [worker policy](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/ansible/templates/codex-messaging/worker.toml.j2) and [runtime boundary fixture](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/apps/codex-messaging/tests/runtime_fixture.py) intentionally remove native execution/image/subagent tools and require empty skill catalogs. Earlier synthetic testing observed `/proc/self/environ` exposure despite a `/proc` read-deny policy while native execution was available. Filesystem denials therefore cannot be represented as a proven universal secret boundary. Empty skills catalogs are also a deployment invariant: no general skills-tool disable switch or symlink-safe registered-resource boundary has been established. Re-run the negative probes after every runtime/configuration change, including forged native calls, nonempty or spoofed skill authorities, traversal/URI/symlink inputs, and credential-file/environment access using synthetic data.
 
 OpenAI's [GHSA-w5fx-fh39-j5rw](https://github.com/openai/codex/security/advisories/GHSA-w5fx-fh39-j5rw) affects CLI **0.2.0 through 0.38.0**, patched **0.39.0**. Version 0.146.0 is outside that published cwd/write-root bypass range. This observation does not clear newer native/process/skills boundaries.
 
@@ -63,7 +72,7 @@ OpenAI's [GHSA-w5fx-fh39-j5rw](https://github.com/openai/codex/security/advisori
 
 Cargo.lock does not assess the target VM's **sudo, Python interpreter/standard library and its linked OpenSSL/SQLite, systemd, OpenSSH, kernel or distribution security backports**. The Python gateway's stdlib-only design does not remove these dependencies. This assessment read no target package state. The local npm executable/mode observations above attest only to the research environment; they do not attest to ownership, modes, package patch levels or running kernel on the deployment VM.
 
-The [gateway unit](../../ansible/templates/codex-messaging/codex-messaging-gateway.service.j2) deliberately uses `NoNewPrivileges=false` so the fixed sudo launcher can change to the worker identity. Consequently, sudo's privilege boundary is material even though the sudoers grant authorizes no root command. Ubuntu's [CVE-2025-32463 record](https://ubuntu.com/security/CVE-2025-32463) documents local root escalation through the chroot option; its [CVE-2025-32462 record](https://ubuntu.com/security/CVE-2025-32462) concerns host-matching authorization under specific sudoers configurations. Both were published **2025-06-30**, and Ubuntu **24.04 LTS** fixes both in **`1.9.15p5-3ubuntu5.24.04.1`**. The host-match condition is not established for this proposed rule, and the patched Ubuntu version need not have upstream version 1.9.17p1 because the distribution backports fixes. Those two fixes do not clear later sudo advisories.
+The [gateway unit](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/ansible/templates/codex-messaging/codex-messaging-gateway.service.j2) deliberately uses `NoNewPrivileges=false` so the fixed sudo launcher can change to the worker identity. Consequently, sudo's privilege boundary is material even though the sudoers grant authorizes no root command. Ubuntu's [CVE-2025-32463 record](https://ubuntu.com/security/CVE-2025-32463) documents local root escalation through the chroot option; its [CVE-2025-32462 record](https://ubuntu.com/security/CVE-2025-32462) concerns host-matching authorization under specific sudoers configurations. Both were published **2025-06-30**, and Ubuntu **24.04 LTS** fixes both in **`1.9.15p5-3ubuntu5.24.04.1`**. The host-match condition is not established for this proposed rule, and the patched Ubuntu version need not have upstream version 1.9.17p1 because the distribution backports fixes. Those two fixes do not clear later sudo advisories.
 
 **Before starting an enrolled service**, record the actual VM release and installed vendor package versions, compare their security status with current Ubuntu notices/advisories, and confirm any required service restarts or running-kernel update have taken effect. Cover sudo, Python and linked libraries, systemd, SSH and kernel, not just the Codex artifacts; require the two sudo fixes or a later vendor revision containing them. Ubuntu supplies [release-specific security/patch metadata](https://ubuntu.com/security/oval) for precisely this vendor-version assessment. This is an outstanding commissioning evidence requirement, not a recommendation to install another scanner or permission to inspect the target now.
 
@@ -81,7 +90,7 @@ The [gateway unit](../../ansible/templates/codex-messaging/codex-messaging-gatew
 - Installation could adopt unrelated groups/fixed files or retain identity drift. Preflight now
   rejects those collisions, links, shared UIDs/GIDs and unexpected memberships. The fixed worker
   launcher applies no-new-privileges after sudo switches identity. See the independent
-  [infrastructure review](infrastructure-review.md) for remaining installed-state gates.
+  [infrastructure review](https://github.com/osmondsimon-bit/homelab/blob/baf566b/homelab/apps/codex-messaging/infrastructure-review.md) for remaining installed-state gates.
 
 `RUNTIME_SECURITY_APPROVED=False` blocks all real gateway, worker and device-login entry points
 before credential reads; no configuration/environment override exists. The dummy-only preflight

@@ -1,0 +1,25 @@
+# Relay Telegram polling to the existing user's normal Codex session; activation is manual.
+[Unit]
+Description=Codex Telegram relay
+Wants=network-online.target
+After=network-online.target
+ConditionFileNotEmpty=/var/lib/codex-telegram/bot-token
+ConditionFileNotEmpty=/var/lib/codex-telegram/enrollment.json
+
+[Service]
+Type=simple
+User={{ codex_telegram_user }}
+WorkingDirectory={{ codex_telegram_workspace }}
+Environment=HOME={{ codex_telegram_home }}
+Environment="PATH=/opt/codex-messaging/runtime/bin:{{ codex_telegram_home }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/codex-messaging/entry.py --config /etc/codex-telegram.json serve
+Restart=on-failure
+RestartSec=30s
+KillMode=control-group
+TimeoutStopSec=15s
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-"""Run only installed gateway subcommands with an isolated Python import path."""
+"""Run the private Telegram relay from the installed source tree."""
 
 import sys
 from pathlib import Path

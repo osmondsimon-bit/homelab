@@ -1,43 +1,41 @@
-Purpose: describe the source-only Telegram commissioning package and its verification boundaries.
+Purpose: describe the private Telegram relay to a normal local Codex session and its source verification.
 
 # Codex messaging
 
-**Status: keyless source prepared; not deployed or operational.** The authoritative design and
-remaining gates are in [the implementation plan](../../docs/codex-messaging-plan.md), with operator
-procedures in [the component runbook](../../docs/components/codex-messaging.md).
+**Status (2026-11-14): source implementation verified; not installed, paired or running.**
+[The plan](../../docs/codex-messaging-plan.md) owns the selected scope and acceptance work;
+[the component runbook](../../docs/components/codex-messaging.md) owns setup and operation.
 
-**Security hold:** the [expanded advisory assessment](security-review.md) found unresolved runtime
-advisories. `gateway`, `worker` and `worker-login` fail before credential access with
-`runtime_security_review_required`. No configuration flag bypasses this guard. The pinned build is
-retained for dummy-only fixtures; it is not an approved real-account runtime. The
-[infrastructure review](infrastructure-review.md) records source hardening and remaining capacity,
-aggregate-storage, OS patch and installed-containment gates. No binary pin was silently upgraded.
+A Python 3.12 standard-library relay receives one paired owner's private Telegram messages through
+outbound long polling and connects them to Codex app-server over local stdio. Codex runs as the
+existing `simon` user in `/home/simon`, using that user's existing HOME, login, workspace, normal
+tools and repository rules. Native command/file/permission approvals and supported questions return
+to the phone. Approvals show the exact command/directory, full proposed patch or requested permissions;
+scope that needs redaction or cannot fit safely is declined for local review. The relay keeps its
+own Codex thread; transfer of an existing ChatGPT desktop chat is
+not promised.
 
-Python 3.12 standard-library code provides outbound Telegram long polling, private user/chat
-authorization, durable intake/outbox, a local Codex app-server client and a separately owned
-operations broker. Every operational change requires a canonical plan and a single-use approval.
-Requests never become shell commands. Lost dispatch replies reconcile the original job ID.
+The prepared runtime is official Codex **0.169.0** plus patched static **bubblewrap 0.13.1**,
+root-owned under `/opt/codex-messaging/runtime/bin` and prepended to the ordinary PATH. The
+[runtime research](runtime-revision-research.md) records provenance and the outstanding native host
+smoke test: this research runner denied namespace setup. Dependencies still need ordinary update
+review; the dated Cargo advisory matches do not establish that every dependency is secure.
 
-The installed entry supports **keyless mode only**: an empty target registry, paused changes,
-no SSH identity, no publisher and no configuration switch to grant operational authority.
-The playbook leaves all services disabled and stopped. It does not create a bot, install a token,
-sign into OpenAI, copy interactive auth or enroll any remote key. Account creation and installation
-are themselves gated by deployment authorization.
+One `codex-telegram.service` runs the relay. Private state belongs in `/var/lib/codex-telegram` and
+configuration in `/etc/codex-telegram.json`. Installation leaves the service disabled. Console nonce
+pairing verifies the owner before serving; possession of a Telegram username or being the first
+sender is insufficient. No token belongs in Git or a command-line argument.
 
-Source modules for the eventual remote broker, forced-command dispatcher, constrained apt
-transaction and graceful application-LXC reboot are exercised against fake machines. They are not
-enrolled by this package. Host reboot, direct VM reboot, DNS diagnostics, standalone-node management
-ownership proof and the bounded Git publisher are unavailable. Their failures must remain visible;
-they cannot trigger a generic shell fallback.
+Only the existing ChatGPT subscription is allowed: account/provider and usage/credit checks reject
+Platform authentication, provider fallback and ambiguous/exhausted allowance. Check account-side
+credit/top-up settings before live use. No new API key, paid fallback or copied login is required.
 
-The worker requires the pinned Codex CLI `0.146.0`, a root-protected configuration, no inherited
-provider overrides, ChatGPT subscription authentication and known allowance/zero-credit state.
-Typed tools use `environments: []`. Native tools are disabled and skill catalogs must remain empty.
-The mock-model fixture proves selected protocol/tool properties; it does not prove live-account or
-systemd confinement. A filesystem-only profile failed to hide synthetic `/proc` process data and
-must not be substituted for the selected tool restrictions.
+Telegram bot chats are cloud conversations, not end-to-end encrypted. Phone output uses concise
+summaries and best-effort redaction; raw tool streams are not forwarded. The model can receive
+necessary diagnostic context through normal Codex operation. **Same-UID processes can read the
+relay's token/state**: instructions against doing so are guidance, not kernel separation.
 
-From the repository root:
+Source checks from the repository root:
 
 ```bash
 python3 -m unittest discover -s homelab/apps/codex-messaging/tests -v
@@ -45,24 +43,11 @@ python3 -m compileall -q homelab/apps/codex-messaging
 git diff --check
 ```
 
-The ordinary suite skips the real-runtime fixture unless explicitly selected. Socket tests need
-permission to bind temporary Unix sockets and a loopback HTTP fixture. Run the full keyless gate
-against the locally installed pinned binary:
+Synthetic tests do not prove target namespace support, actual account cost controls, pairing or
+recovery. No deployment, account enrollment, bot call or real model request is claimed by this
+source milestone. The earlier [security](security-review.md) and [infrastructure](infrastructure-review.md)
+reports are historical assessments of the retired broker design.
 
-```bash
-CODEX_MESSAGING_TEST_BINARY=YOUR_PINNED_CODEX_BINARY \
-  python3 -m unittest discover -s homelab/apps/codex-messaging/tests -v
-python3 -I homelab/apps/codex-messaging/entry.py preflight \
-  --binary YOUR_PINNED_CODEX_BINARY
-```
-
-The native fixture copies that binary and its adjacent `codex-resources/bwrap` into temporary
-storage, uses dummy authentication and a local scripted model, and confines network access with
-Landlock and seccomp. It requires Linux x86-64 and Landlock ABI 4. It performs no real model call
-and installs nothing. Its provider override exists only in the fixture, never production settings.
-
-No application package dependency was added. The separately installed Codex runtime is Apache-2.0
-([upstream license](https://github.com/openai/codex/blob/rust-v0.146.0/LICENSE)); its bundled bwrap
-uses LGPL-2.1-or-later ([upstream license](https://github.com/containers/bubblewrap/blob/main/COPYING)).
-Retain upstream notices with the operator-supplied runtime distribution; this repository does not
-redistribute the runtime binaries.
+The [current source review](relay-review.md) covers the revised relay's security and infrastructure.
+The 38-test offline suite includes an end-to-end HTTP/stdio fixture for a task, native approval and result;
+it uses no real bot, credentials or model.

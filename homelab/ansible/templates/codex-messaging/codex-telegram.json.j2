@@ -1,0 +1,8 @@
+{# Configure the relay without storing a Telegram token or enrolled identifiers. #}
+{{ {
+  'user_home': codex_telegram_home,
+  'workspace': codex_telegram_workspace,
+  'state_dir': '/var/lib/codex-telegram',
+  'codex_binary': '/opt/codex-messaging/runtime/bin/codex',
+  'bwrap_binary': '/opt/codex-messaging/runtime/bin/bwrap'
+} | to_nice_json }}

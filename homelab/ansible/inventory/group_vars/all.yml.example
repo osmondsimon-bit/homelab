@@ -416,9 +416,11 @@ byparr_image: "ghcr.io/thephaseless/byparr@sha256:874f719518f617d03a60e03411fc5d
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
 prowlarr_vpn_wg_config: ""
 
-# Codex phone access: explicit, separately approved keyless installation only.
-# Keep real enrollment IDs in ignored local extra-vars; never put bot/auth tokens here.
-codex_messaging_install_keyless: false
-codex_messaging_user_id: 0
-codex_messaging_chat_id: 0
-codex_messaging_runtime_source: /YOUR_PINNED_CODEX_DISTRIBUTION
+# Telegram access to normal Codex: installation requires separate approval.
+# These are non-secret controller-local artifact paths; never put a token/login here.
+codex_telegram_enabled: false
+codex_telegram_user: simon
+codex_telegram_home: /home/simon
+codex_telegram_workspace: /home/simon
+codex_telegram_codex_source: /YOUR_VERIFIED_CODEX_0_169_0_BINARY
+codex_telegram_bwrap_source: /YOUR_VERIFIED_BUBBLEWRAP_0_13_1_BINARY

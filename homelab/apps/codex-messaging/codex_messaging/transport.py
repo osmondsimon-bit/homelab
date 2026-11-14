@@ -1,7 +1,5 @@
-"""Use bounded Telegram HTTPS and local broker requests without exposing credentials."""
+"""Use bounded outbound Telegram HTTPS without exposing credentials in errors."""
 
-import asyncio
-import contextlib
 import json
 import re
 import ssl
@@ -9,7 +7,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .operations import PolicyError
 from .presentation import safe_text
 
 
@@ -74,58 +71,3 @@ class Telegram:
         if body.get("text") != safe_text(body.get("text")):
             raise TransportRejected("telegram_private_output")
         return self._call("sendMessage", {**body, "link_preview_options": {"is_disabled": True}})
-
-
-class BrokerClient:
-    """Only the coordinator can reach this local socket; methods are not chat-selected RPC."""
-
-    def __init__(self, socket_path):
-        self.socket_path = socket_path
-
-    async def _call(self, method, arguments):
-        reader, writer = await asyncio.wait_for(asyncio.open_unix_connection(self.socket_path, limit=128_000), timeout=5)
-        try:
-            writer.write(json.dumps({"version": 1, "method": method, "arguments": arguments}).encode() + b"\n")
-            await writer.drain()
-            raw = await asyncio.wait_for(reader.readline(), timeout=45)
-            reply = json.loads(raw)
-            if not isinstance(reply, dict) or reply.get("ok") is not True:
-                code = reply.get("error") if isinstance(reply, dict) else None
-                raise PolicyError(code if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,60}", code) else "broker_unavailable")
-            return reply.get("result")
-        except (ValueError, asyncio.LimitOverrunError):
-            raise ConnectionError("broker_protocol") from None
-        finally:
-            writer.close()
-            with contextlib.suppress(OSError):
-                await writer.wait_closed()
-
-    async def prepare(self, user_id, chat_id, target, operation, parameters):
-        return await self._call("prepare", {"user_id": user_id, "chat_id": chat_id, "target_alias": target,
-                                            "operation": operation, "parameters": parameters})
-
-    async def approve(self, user_id, chat_id, approval_id, digest):
-        return await self._call("approve", {"user_id": user_id, "chat_id": chat_id,
-                                            "approval_id": approval_id, "plan_digest": digest})
-
-    async def diagnose(self, user_id, chat_id, target, parameters):
-        return await self._call("diagnose", {"user_id": user_id, "chat_id": chat_id, "target_alias": target,
-                                             "parameters": parameters})
-
-    async def pause(self):
-        return await self._call("pause", {})
-
-    async def resume(self):
-        return await self._call("resume", {})
-
-    async def stop(self):
-        return await self._call("stop", {})
-
-    async def status(self, job_id):
-        return await self._call("status", {"job_id": job_id})
-
-    async def reconcile(self, job_id):
-        return await self._call("reconcile", {"job_id": job_id})
-
-    async def recoverable_jobs(self):
-        return await self._call("recoverable_jobs", {})

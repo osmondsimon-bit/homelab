@@ -1,5 +1,12 @@
 Purpose: assess phone messaging interfaces for Codex on the management VM before choosing a design or implementation.
 
+> **Historical design research.** Channel/API findings were gathered on 2026-11-13. The later user
+> decision selects normal Codex as existing `simon`, rather than the restricted worker/broker
+> recommendations below. The [current plan](codex-messaging-plan.md) and
+> [ADR-028](../decisions/028-codex-messaging.md) own that decision;
+> [runtime research](../apps/codex-messaging/runtime-revision-research.md) covers the revised native
+> runtime. This note does not authorize installation, enrollment or model use.
+
 # Codex messaging gateway research
 
 Researched 2026-11-13. This is research and proposed design, not an accepted ADR or deployment authorization. No bridge was installed, account connected, or infrastructure changed. Local inspection was limited to public instructions, Git status, and CLI version/help; credential stores, inventories, and private repositories were not inspected.

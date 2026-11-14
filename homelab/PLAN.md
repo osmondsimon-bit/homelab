@@ -97,15 +97,17 @@ Offloading the simple services to oneill preserves its independent recovery role
 
 ## Provisioning & tooling
 
-- **Codex phone operations (2026-11-14): security hold; not deployed.** Telegram long
-  polling is selected; the [implementation plan](docs/codex-messaging-plan.md) records the agreed
-  boundaries and remaining gates. Source tests pass, including a dummy-auth pinned-runtime fixture.
-  Expanded advisory/infrastructure review found runtime dependency blockers and source risks;
-  fixes add account/group/path checks, resource bounds and complete approval scope. Gateway,
-  worker and login now fail closed until a reviewed runtime revision clears the security gate.
-  The proposed install creates only disabled services with no target/publication keys or OpenAI login.
-  Deployment, account/bot enrollment, service isolation and recovery proof remain pending; the
-  complete operational service is not ready.
+- **Codex phone access (2026-11-14): normal relay source implementation verified; not deployed.**
+  Telegram long polling connects one console-paired private owner to normal Codex as existing
+  `simon`, using the authoritative workspace and existing ChatGPT subscription. The user rejected
+  the earlier restricted broker design. Prepared runtime: official Codex 0.169.0 plus patched
+  static bubblewrap 0.13.1; local build/version/ELF checks pass, but this runner denied native
+  namespace smoke. Source tests include the HTTP/stdio task→approval→result flow, with a
+  [current security/infrastructure review](apps/codex-messaging/relay-review.md).
+  [The plan](docs/codex-messaging-plan.md) owns remaining installed-host,
+  pairing, native approval/question, account-cost and recovery checks. One service remains disabled
+  until separately approved installation and commissioning; no token, login or host operation was
+  exercised by this source work.
 
 - **Ansible currently creates *and* configures** the LXCs — `pct create` + config in the `provision-*.yml` playbooks (ADR-005). This is the interim mechanism and recovers cleanly by re-running.
 - **Terraform** (`bpg/proxmox`, ADR-008) is scaffolded but its **import is deferred to cluster scale** — it will take over the *create* role then. Target boundary: *Terraform = box exists with the right shape; Ansible = box is set up.*

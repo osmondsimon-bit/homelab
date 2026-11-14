@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from codex_messaging.authentication import AuthenticationRejected, require_subscription, worker_environment
+from codex_messaging.authentication import AuthenticationRejected, require_subscription
 
 
 class SubscriptionTests(unittest.TestCase):
@@ -28,25 +28,12 @@ class SubscriptionTests(unittest.TestCase):
             require_subscription(account, {"rateLimits": {}})
         self.assertEqual(rejected.exception.code, "usage_unknown")
 
-    def test_inherited_api_and_endpoint_overrides_are_rejected(self):
-        for name in ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "HTTP_PROXY"]:
-            with self.subTest(name=name), self.assertRaises(AuthenticationRejected) as rejected:
-                worker_environment(Path("/var/lib/codex-messaging/worker"), {name: "fixture-only-value"})
-            self.assertEqual(rejected.exception.code, "environment_override")
-
-    def test_included_subscription_and_clean_worker_context_are_accepted(self):
+    def test_included_subscription_with_zero_credit_state_is_accepted(self):
         require_subscription(
             {"requiresOpenaiAuth": True, "account": {"type": "chatgpt", "planType": "plus"}},
             {"rateLimits": {"primary": {"usedPercent": 20}, "secondary": {"usedPercent": 30},
                             "credits": {"hasCredits": False, "unlimited": False, "balance": "0"}}},
         )
-        environment = worker_environment(Path("/var/lib/codex-messaging/worker"), {
-            "SSH_AUTH_SOCK": "/fixture/agent", "PATH": "/fixture/untrusted", "CUSTOM_VALUE": "fixture-only",
-        })
-        self.assertNotIn("SSH_AUTH_SOCK", environment)
-        self.assertNotIn("CUSTOM_VALUE", environment)
-        self.assertEqual(environment["PATH"], "/usr/bin:/bin")
-
     def test_credit_entitlements_or_unknown_credit_state_require_local_review(self):
         account = {"requiresOpenaiAuth": True, "account": {"type": "chatgpt", "planType": "plus"}}
         for credits in [None, {}, {"hasCredits": True, "unlimited": False, "balance": "20"},
