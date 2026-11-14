@@ -2,6 +2,22 @@ Purpose: identify ordinary dependency remediation for a normal Codex session rea
 
 # Native runtime revision research — 2026-11-14
 
+**Commissioning update (2026-11-15):** installed native checks now pass with the reviewed exact-path
+AppArmor policy, restricted child capabilities and unchanged global namespace restriction.
+The normal account models also require the matching official `codex-code-mode-host`, which was
+missing from the initial package. [Installed acceptance](../../docs/components/codex-messaging.md#installed-acceptance-record--2026-11-15)
+records the successful native turn and owner-confirmed phone task. The dated investigation below
+retains its original research-stage limitations.
+
+The [official 0.169.0 companion archive](https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz)
+matched release digest `cbed6a8d25e8268792b757767fbc76d4c62e84bcf8ee4a63f97547f0de3aaceb`;
+the 70,023,704-byte executable is pinned at
+`e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed` alongside Codex.
+It is a standard Apache-2.0 workspace component using the upstream embedded V8/ICU runtime,
+not an external Node installation. Its normal local transport is gRPC over stdio, adding no TCP
+listener. Preserve upstream third-party notices when redistributing binaries. Integrity preflight
+and Ansible now require all three reviewed executables before serving.
+
 ## Current recommendation and result
 
 Use the official **Codex 0.169.0 Linux x86_64 musl release** with a **patched, compatible system bubblewrap**, preferably current upstream **0.13.1** or an independently verified vendor backport. Upstream **0.12.0** is the minimum release fixing the identified setup traversal. Normal Codex execution environments and tools remain part of the intended product. The earlier helper-free/environment-free proposal is **retired**, and its negative tests do not establish that a normal native session works.

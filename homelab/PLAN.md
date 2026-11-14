@@ -97,17 +97,18 @@ Offloading the simple services to oneill preserves its independent recovery role
 
 ## Provisioning & tooling
 
-- **Codex phone access (2026-11-14): normal relay source implementation verified; not deployed.**
+- **Codex phone access (2026-11-15): live, privately paired and enabled.**
   Telegram long polling connects one console-paired private owner to normal Codex as existing
   `simon`, using the authoritative workspace and existing ChatGPT subscription. The user rejected
   the earlier restricted broker design. Prepared runtime: official Codex 0.169.0 plus patched
-  static bubblewrap 0.13.1; local build/version/ELF checks pass, but this runner denied native
-  namespace smoke. Source tests include the HTTP/stdio task→approval→result flow, with a
+  static bubblewrap 0.13.1 plus the matching official Code Mode host. Installed integrity,
+  subscription/zero-credit admission and native sandbox checks pass with the scoped helper policy;
+  global namespace restrictions remain enabled. The owner confirmed `/status` and a normal `pwd`
+  task through Telegram after the corrected runtime update. Source tests include the HTTP/stdio
+  task→approval→result flow, with a
   [current security/infrastructure review](apps/codex-messaging/relay-review.md).
-  [The plan](docs/codex-messaging-plan.md) owns remaining installed-host,
-  pairing, native approval/question, account-cost and recovery checks. One service remains disabled
-  until separately approved installation and commissioning; no token, login or host operation was
-  exercised by this source work.
+  [The component runbook](docs/components/codex-messaging.md) owns installed acceptance and operation;
+  [the plan](docs/codex-messaging-plan.md) tracks additional approval/question and recovery coverage.
 
 - **Ansible currently creates *and* configures** the LXCs — `pct create` + config in the `provision-*.yml` playbooks (ADR-005). This is the interim mechanism and recovers cleanly by re-running.
 - **Terraform** (`bpg/proxmox`, ADR-008) is scaffolded but its **import is deferred to cluster scale** — it will take over the *create* role then. Target boundary: *Terraform = box exists with the right shape; Ansible = box is set up.*

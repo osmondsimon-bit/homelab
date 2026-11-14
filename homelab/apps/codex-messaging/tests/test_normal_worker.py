@@ -128,6 +128,8 @@ class NormalWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(environment["FIXTURE_BASE_URL"], "https://native.fixture")
         self.assertIn('forced_login_method="chatgpt"', argv)
         self.assertIn('model_provider="openai"', argv)
+        self.assertIn('openai_base_url="https://chatgpt.com/backend-api/codex"', argv)
+        self.assertNotIn('openai_base_url="https://api.openai.com/v1"', argv)
         self.assertEqual(argv[-3:], ["app-server", "--listen", "stdio://"])
         for record in records:
             if record.get("method") in {"thread/start", "turn/start"}:

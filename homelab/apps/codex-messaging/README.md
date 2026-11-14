@@ -2,7 +2,7 @@ Purpose: describe the private Telegram relay to a normal local Codex session and
 
 # Codex messaging
 
-**Status (2026-11-14): source implementation verified; not installed, paired or running.**
+**Status (2026-11-15): running, enabled and privately paired; normal Telegram task verified.**
 [The plan](../../docs/codex-messaging-plan.md) owns the selected scope and acceptance work;
 [the component runbook](../../docs/components/codex-messaging.md) owns setup and operation.
 
@@ -15,16 +15,20 @@ scope that needs redaction or cannot fit safely is declined for local review. Th
 own Codex thread; transfer of an existing ChatGPT desktop chat is
 not promised.
 
-The prepared runtime is official Codex **0.169.0** plus patched static **bubblewrap 0.13.1**,
+The runtime is official Codex **0.169.0**, its matching **codex-code-mode-host** companion,
+and patched static **bubblewrap 0.13.1**,
 root-owned under `/opt/codex-messaging/runtime/bin` and prepended to the ordinary PATH. The
-[runtime research](runtime-revision-research.md) records provenance and the outstanding native host
-smoke test: this research runner denied namespace setup. Dependencies still need ordinary update
+[runtime research](runtime-revision-research.md) records provenance; installed native sandbox checks
+now pass with the reviewed exact-path AppArmor policy. Dependencies still need ordinary update
 review; the dated Cargo advisory matches do not establish that every dependency is secure.
 
 One `codex-telegram.service` runs the relay. Private state belongs in `/var/lib/codex-telegram` and
 configuration in `/etc/codex-telegram.json`. Installation leaves the service disabled. Console nonce
 pairing verifies the owner before serving; possession of a Telegram username or being the first
 sender is insufficient. No token belongs in Git or a command-line argument.
+Ubuntu 24.04 can explicitly opt into the exact-path helper AppArmor policy via
+`codex_telegram_install_apparmor_profile`; it preserves restricted child capabilities and leaves
+global namespace settings and the vendor profile alone. The installed native checks passed.
 
 Only the existing ChatGPT subscription is allowed: account/provider and usage/credit checks reject
 Platform authentication, provider fallback and ambiguous/exhausted allowance. Check account-side
@@ -44,8 +48,8 @@ git diff --check
 ```
 
 Synthetic tests do not prove target namespace support, actual account cost controls, pairing or
-recovery. No deployment, account enrollment, bot call or real model request is claimed by this
-source milestone. The earlier [security](security-review.md) and [infrastructure](infrastructure-review.md)
+recovery. Installed runtime/account/native checks pass, and the owner confirmed `/status` and a
+fresh harmless command through Telegram. The earlier [security](security-review.md) and [infrastructure](infrastructure-review.md)
 reports are historical assessments of the retired broker design.
 
 The [current source review](relay-review.md) covers the revised relay's security and infrastructure.

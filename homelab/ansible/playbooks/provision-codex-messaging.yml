@@ -23,17 +23,19 @@
           - codex_telegram_workspace is match('^/[A-Za-z0-9_./-]+$')
           - codex_telegram_codex_source is defined
           - codex_telegram_bwrap_source is defined
+          - codex_telegram_code_mode_host_source is defined
           - codex_telegram_codex_source | default('') is match('^/')
           - codex_telegram_bwrap_source | default('') is match('^/')
+          - codex_telegram_code_mode_host_source | default('') is match('^/')
           - ansible_system == 'Linux'
           - ansible_architecture == 'x86_64'
           - ansible_python.version.major == 3
           - ansible_python.version.minor >= 12
           - query('ansible.builtin.fileglob', telegram_source + '/codex_messaging/*.py') | length > 0
-        fail_msg: Explicit staging, an existing user/context and both pinned local Linux x86_64 artifacts are required. This playbook never activates the relay.
+        fail_msg: Explicit staging, an existing user/context and all three pinned local Linux x86_64 artifacts are required. This playbook never activates the relay.
         quiet: true
 
-    - name: Inspect the two operator-supplied local artifacts
+    - name: Inspect the three operator-supplied local artifacts
       ansible.builtin.stat:
         path: "{{ item }}"
         follow: false
@@ -41,6 +43,7 @@
       loop:
         - "{{ codex_telegram_codex_source }}"
         - "{{ codex_telegram_bwrap_source }}"
+        - "{{ codex_telegram_code_mode_host_source }}"
       delegate_to: localhost
       become: false
       run_once: true
@@ -54,6 +57,7 @@
           - not (telegram_artifacts.results | selectattr('stat.islnk') | list | length)
           - telegram_artifacts.results[0].stat.checksum == 'b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b'
           - telegram_artifacts.results[1].stat.checksum == '711ac2c00998eede367c2b3827efa36ba4436dfce19ab9d3b6d56ff5a5996fa1'
+          - telegram_artifacts.results[2].stat.checksum == 'e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed'
         quiet: true
         fail_msg: Local artifact bytes do not match the reviewed release hashes.
 
@@ -96,7 +100,7 @@
     - name: Refuse to replace an active or enabled relay or legacy installation
       ansible.builtin.assert:
         that:
-          - item not in ansible_facts.services or (ansible_facts.services[item].state == 'stopped' and ansible_facts.services[item].status == 'disabled')
+          - item not in ansible_facts.services or (ansible_facts.services[item].state in ['stopped', 'inactive'] and ansible_facts.services[item].status == 'disabled')
         fail_msg: Stop and disable an existing installation explicitly before staging replacement source; this playbook does neither.
         quiet: true
       loop:
@@ -120,6 +124,8 @@
         - {path: /opt/codex-messaging/entry.py, kind: isreg}
         - {path: /etc/codex-telegram.json, kind: isreg}
         - {path: /etc/systemd/system/codex-telegram.service, kind: isreg}
+        - {path: /etc/apparmor.d/codex-telegram-bwrap, kind: isreg}
+        - {path: /opt/codex-messaging/runtime/bin/codex-code-mode-host, kind: isreg}
       register: telegram_reserved
 
     - name: Refuse unsafe existing privileged paths before writing
@@ -161,9 +167,9 @@
     - name: Refuse stale runtime helpers that could shadow the reviewed bwrap
       ansible.builtin.assert:
         that:
-          - telegram_runtime_names.files | map(attribute='path') | difference(['/opt/codex-messaging/runtime/bin', '/opt/codex-messaging/runtime/bin/codex', '/opt/codex-messaging/runtime/bin/bwrap']) | length == 0
+          - telegram_runtime_names.files | map(attribute='path') | difference(['/opt/codex-messaging/runtime/bin', '/opt/codex-messaging/runtime/bin/codex', '/opt/codex-messaging/runtime/bin/bwrap', '/opt/codex-messaging/runtime/bin/codex-code-mode-host']) | length == 0
         quiet: true
-        fail_msg: Review and remove legacy runtime artifacts explicitly before staging this two-binary runtime.
+        fail_msg: Review and remove legacy runtime artifacts explicitly before staging the reviewed runtime.
       when: telegram_reserved.results[2].stat.exists
 
     - name: Inspect the private relay state directory without reading its contents
@@ -189,6 +195,25 @@
           - telegram_python.stat.exists
           - telegram_python.stat.executable | default(false)
         quiet: true
+
+    - name: Inspect AppArmor support for the optional helper policy
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/sbin/apparmor_parser
+        - /etc/apparmor.d/abi/4.0
+      register: telegram_apparmor_support
+      when: codex_telegram_install_apparmor_profile | default(false) | bool
+
+    - name: Require the reviewed Ubuntu AppArmor policy interface
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version == '24.04'
+          - telegram_apparmor_support.results[0].stat.executable | default(false)
+          - telegram_apparmor_support.results[1].stat.isreg | default(false)
+        quiet: true
+      when: codex_telegram_install_apparmor_profile | default(false) | bool
 
   tasks:
     - name: Create root-owned application and runtime directories
@@ -240,6 +265,7 @@
       loop:
         - {source: "{{ codex_telegram_codex_source }}", name: codex}
         - {source: "{{ codex_telegram_bwrap_source }}", name: bwrap}
+        - {source: "{{ codex_telegram_code_mode_host_source }}", name: codex-code-mode-host}
 
     - name: Install root-controlled non-secret relay settings
       ansible.builtin.template:
@@ -256,6 +282,26 @@
         owner: root
         group: root
         mode: '0644'
+
+    - name: Install the optional exact-path helper namespace policy
+      ansible.builtin.template:
+        src: "{{ telegram_templates }}/codex-telegram-bwrap.j2"
+        dest: /etc/apparmor.d/codex-telegram-bwrap
+        owner: root
+        group: root
+        mode: '0644'
+        validate: /usr/sbin/apparmor_parser --skip-kernel-load --skip-cache %s
+      when: codex_telegram_install_apparmor_profile | default(false) | bool
+
+    - name: Load only the two relay helper profiles
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/apparmor_parser
+          - --replace
+          - --skip-cache
+          - /etc/apparmor.d/codex-telegram-bwrap
+      changed_when: true
+      when: codex_telegram_install_apparmor_profile | default(false) | bool
 
     - name: Reload unit definitions without starting or enabling the relay
       ansible.builtin.systemd_service:

@@ -419,8 +419,10 @@ prowlarr_vpn_wg_config: ""
 # Telegram access to normal Codex: installation requires separate approval.
 # These are non-secret controller-local artifact paths; never put a token/login here.
 codex_telegram_enabled: false
+codex_telegram_install_apparmor_profile: false  # Explicit opt-in for Ubuntu 24.04 helper namespaces
 codex_telegram_user: simon
 codex_telegram_home: /home/simon
 codex_telegram_workspace: /home/simon
 codex_telegram_codex_source: /YOUR_VERIFIED_CODEX_0_169_0_BINARY
 codex_telegram_bwrap_source: /YOUR_VERIFIED_BUBBLEWRAP_0_13_1_BINARY
+codex_telegram_code_mode_host_source: /YOUR_VERIFIED_CODEX_0_169_0_CODE_MODE_HOST_BINARY

@@ -4,7 +4,7 @@ Purpose: record the accepted architecture for private Telegram access to normal 
 
 **Date:** 2026-11-14
 
-**Status:** Accepted for source preparation; deployment pending
+**Status:** Accepted; live 2026-11-15
 
 ## Context
 
@@ -22,10 +22,14 @@ correlate responses with the active thread/turn/request. Persist this relay's co
 invalidate stale approvals on failure. Do not replay uncertain commands.
 
 Install root-owned code and pinned runtime under `/opt/codex-messaging`; prepend
-`runtime/bin` containing official Codex 0.169.0 and patched static bubblewrap 0.13.1 to ordinary PATH.
+`runtime/bin` containing official Codex 0.169.0, its matching Code Mode host and patched static
+bubblewrap 0.13.1 to ordinary PATH.
 Use `/etc/codex-telegram.json`, private `/var/lib/codex-telegram` state and one
 `codex-telegram.service`. Leave the service disabled until separately approved installation,
 console/private-chat nonce pairing and native host smoke testing are complete.
+On Ubuntu 24.04, an explicitly selected AppArmor policy may authorize namespace setup for that exact
+patched helper while retaining the distribution-style child capability denial. Keep the global
+namespace restriction and `/usr/bin/bwrap` policy unchanged.
 
 Use the existing ChatGPT login and subscription only. Force the intended provider/login path,
 reject API-key/provider/credit fallback, and check usage plus account-side spend settings. No copied
@@ -48,6 +52,7 @@ Outage or reboot of the management VM also removes this interface.
 
 The retired broker, separate worker identity, custom operation/SSH registry, bounded source
 publisher and native-tool restrictions are not part of this decision. Historical reviews do not
-clear the revised relay. A patched helper was built in temporary storage; native namespace tests
-were blocked by the research runner, so installed-host proof and all deployment/enrollment steps
-remain pending. This ADR does not declare a live service.
+clear the revised relay. A patched helper was built and installed; source/runtime integrity and
+existing subscription admission checks pass. The helper-only host policy preserves restricted
+children; actual native checks, owner pairing and a harmless normal phone task pass. Additional
+live interaction/recovery coverage is recorded in the component runbook.

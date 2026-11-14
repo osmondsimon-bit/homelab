@@ -12,6 +12,7 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 | Capability | Tool | Notes |
 |------------|------|-------|
 | AI coding agents | Claude Code + Codex | Primary tools on mgmt-vm; the independent cold control node `mgmt-vm2` has an AI-ready recovery baseline codified without copying agent credentials (live refresh pending 2026-07-19) |
+| Phone access to normal Codex | Telegram long polling + local app-server | **Live 2026-11-15** — existing user/subscription, one console-paired private owner, normal tools/approvals. Native sandbox checks, `/status` and a normal phone command verified. [Setup and operation](components/codex-messaging.md). |
 | On-demand infra review | `infra-designer` agent | Invoked before any new VM/LXC/network change |
 | Scheduled status reports | `infra-manager` routine | Weekly, Mondays 08:00 UTC via Claude Code cloud |
 | Provisioning (create + configure) | Ansible (`pct` in playbooks) | Interim mechanism — `provision-*.yml` pct-create + configure the LXCs and recover cleanly (ADR-005) |
@@ -40,7 +41,6 @@ Reference platform reviewed: [TadMSTR homelab-agent](https://github.com/TadMSTR/
 
 | Capability | Tool | Defer until | Trigger |
 |------------|------|------------|---------|
-| Phone access to normal Codex | Telegram long polling + local app-server | Source review, then approved installation and commissioning | [Same-user relay preparation](codex-messaging-plan.md); existing subscription, native tools/approvals, nonce pairing. Patched helper built; target native smoke and live setup pending. Not deployed. |
 | SSO / forward auth | Authentik | Phase 4+ | 4+ services with independent login |
 | Self-hosted git | Gitea | New house | Second server + NAS available |
 | CI/CD pipeline | Woodpecker CI | New house | Active Ansible pipeline needing automated testing |

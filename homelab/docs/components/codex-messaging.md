@@ -1,8 +1,10 @@
-Purpose: set up and operate the private Telegram relay to normal Codex after separate installation approval.
+Purpose: set up and operate the private Telegram relay to normal Codex.
 
 # Codex messaging
 
-**State (2026-11-14): source preparation only. Nothing installed, paired or running is claimed.**
+**State (2026-11-15): running, enabled and privately paired.** Installed integrity, existing
+subscription/zero-credit admission and native sandbox checks pass. The owner confirmed `/status`
+and a normal `pwd` task through Telegram; the home path is shortened to `~` in the phone reply.
 The [plan](../codex-messaging-plan.md) owns scope and remaining acceptance work;
 [ADR-028](../../decisions/028-codex-messaging.md) records the selected same-user design.
 
@@ -13,26 +15,35 @@ apply. One service, `codex-telegram.service`, uses root-owned code/runtime in `/
 configuration `/etc/codex-telegram.json`, and private state `/var/lib/codex-telegram`.
 
 The [current source review](../../apps/codex-messaging/relay-review.md) covers security and
-infrastructure; target installation and native execution remain unverified.
+infrastructure, the helper policy, and corrections found during live commissioning.
 
 ## Installation and commissioning
 
-These are future operator steps, **after separate installation authorization**. No command below
-was run against a real service/account during source preparation.
+Simon authorized installation on 2026-11-15. These are repeatable operator procedures; the state
+above distinguishes completed checks from pending work. Password/token entry stays in the VM terminal.
 
 1. Verify the intended management VM, Tailscale/console recovery access, current OS vendor patches,
    backup state and resource/disk headroom. Review the exact source revision and rendered unit.
    The [playbook](../../ansible/playbooks/provision-codex-messaging.yml) stages the single relay as
    the existing user and leaves its service stopped/disabled. It creates no new identity or login.
-2. Supply controller-local verified Codex 0.169.0 and patched static bubblewrap 0.13.1 binaries.
-   Installation places both in `/opt/codex-messaging/runtime/bin`, root-owned and ahead of ordinary
+2. Supply controller-local verified Codex 0.169.0, its matching `codex-code-mode-host` companion,
+   and patched static bubblewrap 0.13.1. Installation places all three in
+   `/opt/codex-messaging/runtime/bin`, root-owned and ahead of ordinary
    PATH. [Runtime research](../../apps/codex-messaging/runtime-revision-research.md) owns hashes,
    build provenance and dependency limitations. Verify the selected patched bwrap, not an older
    bundled/system fallback.
+   On Ubuntu 24.04, if namespace restrictions reject this custom helper path, explicitly set
+   `codex_telegram_install_apparmor_profile: true`. The playbook validates and loads only the
+   two profiles in `codex-telegram-bwrap`: the exact pinned executable can set up namespaces,
+   and its children inherit the restrictive profile with capabilities denied. The global sysctl
+   and `/usr/bin/bwrap` policy are unchanged. This is optional outside that host configuration.
 3. Run the local `check` as `simon`. It checks paths/configuration, pinned artifact hashes and
    private-state ownership; it **does not read actual auth state or make a model request**.
    Separately prove harmless native execution and configured sandbox restrictions on the actual
    host. The research runner denied namespace/UID-map setup, so its smoke result cannot clear this.
+   Native acceptance must observe the patched helper executing, a workspace write succeeding,
+   an outside write and network socket failing, and the restricted child label with zero effective
+   capabilities. A failed check stops setup before pairing or service activation.
    A system service gets the user's HOME, SSH files and groups, but does not inherit an interactive
    shell's `SSH_AUTH_SOCK`. If existing keys require an agent, supply the established agent socket
    through a reviewed service environment/drop-in and verify it in this installed context.
@@ -49,10 +60,10 @@ was run against a real service/account during source preparation.
    minutes, then verify the recorded local owner. Pairing requires the nonce, not whichever sender
    arrives first. `enrollment.json` stores numeric `user_id`, `chat_id`, polling `offset` and
    `paired_at`; never enroll a group or infer authority from usernames.
-7. In an attended window, test native approval/decline, supported questions, interruption, stale
-   callbacks/messages, duplicate delivery, restart and account/transport failure. A normal turn may
-   reach the model and requires separate live-use authorization. Only after these checks should
-   the operator enable/start the service and review the first task.
+7. In an attended window, enable/start the service after native execution, account admission and
+   owner pairing succeed. Verify `/status` and a harmless normal task from Telegram. Model turns
+   use the existing included allowance. Keep exercising approval/decline, supported questions,
+   interruption, restart and transport failure against safe fixtures as capabilities are used.
 
 Exact entry syntax (run as the existing user):
 
@@ -77,6 +88,33 @@ second poller. The config contains only these absolute paths:
 
 Relay state also includes `relay.sqlite` and `relay.lock`. Do not edit enrollment or the delivery
 cursor while running, and never commit these private files.
+The companion path is derived beside `codex_binary`, keeping this five-key configuration unchanged.
+Its absence or wrong hash rejects startup. Models using ordinary Code Mode require this host;
+copying only the main Codex executable can leave inference working without usable native tools.
+
+The built-in provider's inference override is pinned to
+`https://chatgpt.com/backend-api/codex`; `chatgpt_base_url` remains
+`https://chatgpt.com/backend-api` for account operations. Do not replace the inference URL with
+the Platform API URL: an explicit override takes precedence over the authentication-derived default.
+
+## Installed acceptance record — 2026-11-15
+
+- All three root-owned runtime hashes and the installed CLI/worker source match the reviewed candidate.
+- The custom helper policy matches its source; the global namespace restriction remains enabled.
+  Native checks observed the patched helper executing, successful workspace writes, denied outside
+  writes/network sockets, the restricted child label and zero effective capabilities.
+- Existing ChatGPT account/allowance admission passed. A live normal turn executed one harmless
+  native command with zero automatic approvals. No Platform API credentials or fallback were added.
+- The operator entered the token locally, paired the private owner and enabled the service. It
+  remained active with zero automatic restarts after the targeted runtime update. The owner
+  confirmed `/status` and the fresh `pwd` task returned the home alias through Telegram.
+
+The initial live checks exposed and fixed an incorrect inference URL, a missing standard tool-host
+companion and an installer `inactive`/`stopped` state mismatch. Source regressions cover routing
+and installer admission; 38 offline relay/worker tests pass. Live native approval/question variants,
+long-running remote tasks and isolated restore remain operational coverage work, not claims made
+by the harmless first-task check. The existing encrypted whole-VM backup decision applies; no new
+backup schedule or measured restore guarantee was created.
 
 ## Normal operation and privacy
 
@@ -128,4 +166,7 @@ appropriate. Preserve private state for review; do not automatically delete the 
 Codex login, credentials or workspace, and do not undo or replay completed infrastructure changes.
 For failures inspect safe local error categories and unit state; avoid pasting journal/database
 contents into Telegram. A compromised token requires revocation/re-pairing, not a copied live state
-on a second poller. Installed recovery and first-operation evidence remain pending.
+on a second poller. If the helper policy must be removed, first stop all relay turns, unload only
+`/etc/apparmor.d/codex-telegram-bwrap` with `apparmor_parser --remove`, and remove that custom file.
+Do not unload the vendor policy or lower the global namespace restriction. An isolated installed
+restore drill remains pending.

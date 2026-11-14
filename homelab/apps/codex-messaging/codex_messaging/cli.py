@@ -22,6 +22,7 @@ RUNTIMES = {
     "codex_binary": "b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
     "bwrap_binary": "711ac2c00998eede367c2b3827efa36ba4436dfce19ab9d3b6d56ff5a5996fa1",
 }
+CODE_MODE_HOST_SHA256 = "e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed"
 
 
 class ConfigurationRejected(Exception):
@@ -66,8 +67,9 @@ def settings(path):
 
 
 def check_runtime(config):
-    for key, digest in RUNTIMES.items():
-        path = config[key]
+    artifacts = [(config[key], digest) for key, digest in RUNTIMES.items()]
+    artifacts.append((config["codex_binary"].with_name("codex-code-mode-host"), CODE_MODE_HOST_SHA256))
+    for path, digest in artifacts:
         for parent in path.parents:
             info = parent.lstat()
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:

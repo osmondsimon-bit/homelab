@@ -62,7 +62,7 @@ class NormalWorker:
         arguments = list(self.launcher)
         for override in ('forced_login_method="chatgpt"', 'model_provider="openai"',
                          'chatgpt_base_url="https://chatgpt.com/backend-api"',
-                         'openai_base_url="https://api.openai.com/v1"'):
+                         'openai_base_url="https://chatgpt.com/backend-api/codex"'):
             arguments.extend(["-c", override])
         arguments.extend(["app-server", "--listen", "stdio://"])
         try:
