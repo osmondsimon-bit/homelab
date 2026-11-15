@@ -20,6 +20,16 @@ from test_normal_worker import PEER
 
 class ServiceFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_private_task_native_approval_and_summary_cross_both_real_transports(self):
+        records, received = await self.approval_flow("approval", 0)
+        self.assertIn({"id": "server-command", "result": {"decision": "accept"}}, records)
+        self.assertEqual(received[0]["text"], "Working on it.")
+
+    async def test_decline_cancels_native_request_and_relay_still_answers_status(self):
+        records, received = await self.approval_flow("cancel", 1)
+        self.assertIn({"id": "server-command", "result": {"decision": "cancel"}}, records)
+        self.assertEqual(received[-1]["text"], "Ready. idle.")
+
+    async def approval_flow(self, mode, button):
         received, complete = [], threading.Event()
         updates = [{"update_id": 1, "message": {"from": {"id": 101}, "chat": {"id": 101, "type": "private"},
                     "text": "Inspect the fixture", "date": int(time.time())}}]
@@ -40,10 +50,13 @@ class ServiceFlowTests(unittest.IsolatedAsyncioTestCase):
                     with gate:
                         received.append(body)
                         if "reply_markup" in body:
-                            data = body["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+                            data = body["reply_markup"]["inline_keyboard"][0][button]["callback_data"]
                             updates.append({"update_id": 2, "callback_query": {"from": {"id": 101},
                                 "message": {"chat": {"id": 101, "type": "private"}}, "data": data}})
-                        if body["text"] == "Codex finished. No summary was supplied.":
+                        if body["text"].startswith(("Codex finished.", "Codex stopped or failed.")):
+                            updates.append({"update_id": 3, "message": {"from": {"id": 101},
+                                "chat": {"id": 101, "type": "private"}, "text": "/status", "date": int(time.time())}})
+                        if body["text"] == "Ready. idle.":
                             complete.set()
                     result = {"message_id": len(received)}
                 self.send_response(200)
@@ -56,7 +69,7 @@ class ServiceFlowTests(unittest.IsolatedAsyncioTestCase):
             workspace.mkdir()
             wire = root / "wire.jsonl"
             binary = root / "fixture-codex"
-            binary.write_text(f"#!{sys.executable}\nimport sys\nsys.argv=[sys.argv[0],{str(wire)!r},'approval']\n" + PEER)
+            binary.write_text(f"#!{sys.executable}\nimport sys\nsys.argv=[sys.argv[0],{str(wire)!r},{mode!r}]\n" + PEER)
             binary.chmod(0o700)
             config = {"codex_binary": binary, "bwrap_binary": root / "bwrap", "user_home": root,
                       "workspace": workspace, "state_dir": root}
@@ -79,8 +92,7 @@ class ServiceFlowTests(unittest.IsolatedAsyncioTestCase):
                     thread.join(timeout=2)
             records = [json.loads(line) for line in wire.read_text().splitlines()]
             self.assertEqual(sum(item.get("method") == "turn/start" for item in records), 1)
-            self.assertIn({"id": "server-command", "result": {"decision": "accept"}}, records)
-            self.assertEqual(received[0]["text"], "Working on it.")
+            return records, received
 
 
 if __name__ == "__main__":

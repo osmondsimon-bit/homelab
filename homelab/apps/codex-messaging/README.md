@@ -53,5 +53,6 @@ fresh harmless command through Telegram. The earlier [security](security-review.
 reports are historical assessments of the retired broker design.
 
 The [current source review](relay-review.md) covers the revised relay's security and infrastructure.
-The 38-test offline suite includes an end-to-end HTTP/stdio fixture for a task, native approval and result;
-it uses no real bot, credentials or model.
+The 40-test offline suite includes end-to-end HTTP/stdio fixtures for approval and result, plus
+decline/cancel followed by a working status reply.
+It uses no real bot, credentials or model.

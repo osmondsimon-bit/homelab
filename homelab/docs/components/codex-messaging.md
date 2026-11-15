@@ -111,10 +111,42 @@ the Platform API URL: an explicit override takes precedence over the authenticat
 
 The initial live checks exposed and fixed an incorrect inference URL, a missing standard tool-host
 companion and an installer `inactive`/`stopped` state mismatch. Source regressions cover routing
-and installer admission; 38 offline relay/worker tests pass. Live native approval/question variants,
-long-running remote tasks and isolated restore remain operational coverage work, not claims made
+and installer admission; 40 offline relay/worker tests pass. File-change/turn-permission approvals,
+structured questions, long-running remote tasks and isolated restore remain additional coverage, not claims made
 by the harmless first-task check. The existing encrypted whole-VM backup decision applies; no new
 backup schedule or measured restore guarantee was created.
+
+## Owner-attended interaction checks — 2026-11-15
+
+| Interaction | Live result |
+| --- | --- |
+| Conversation follow-up | Remembered the owner's harmless test label. |
+| Native Decline | Marker stayed absent; relay remained active after the decision-mapping fix. |
+| Native Approve | The fresh approved command created the temporary marker. |
+| Stop | A native sleep was observed; interruption was acknowledged and the process was absent afterward. |
+| Pause/resume | A fresh paused request was blocked; resume accepted a fresh model request. |
+| Phone privacy | A synthetic public documentation address was withheld in the phone reply. No real private address or credential was used. |
+
+The first native **Decline** exposed an
+upstream decision mismatch: ordinary command prompts offered `accept/cancel`, but the relay always
+sent `decline`. It exited and restarted once; recovery paused work, invalidated old buttons and left
+the denied marker absent. The corrected worker uses an explicitly offered `cancel` when `decline`
+is unavailable, while retaining ordinary one-use acceptance and all correlation checks.
+
+The previous release reproduces the exact failure in an isolated HTTP/stdio replay. The fix passes
+the real native rejection probe and two regressions: denial followed by another task, and Telegram
+decline followed by a working status reply. Independent review found no authority expansion. The
+operator installed the reviewed worker; the live retest left the marker absent and the relay stayed
+active with no restarts. A fresh **Approve** then created the marker successfully.
+
+A native test sleep was observed running. The owner sent `/stop`, received interruption/pause
+notices, and the test process was absent afterward; the relay remained active. A fresh request while
+paused was blocked. These checks do not imply rollback of remote or already completed effects.
+The current generic interrupted-turn notice says “Codex stopped or failed”; it also appears after
+an intentional native cancellation and does not by itself mean the service crashed.
+The relay was left resumed, active and enabled, with no automatic restarts after the fix. Temporary
+marker and diagnostic files were removed after recording these results. Address withholding was
+verified end to end; this does not turn heuristic redaction into a confidentiality guarantee.
 
 ## Normal operation and privacy
 

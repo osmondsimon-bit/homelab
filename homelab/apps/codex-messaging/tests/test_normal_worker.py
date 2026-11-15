@@ -28,6 +28,7 @@ def prompt():
   'threadId':'thread-fixture','turnId':'turn-fixture','itemId':'command-fixture','startedAtMs':0,
   'command':'ssh fixture true','cwd':'/fixture/workspace','availableDecisions':['accept','acceptForSession','decline']}
  method='item/commandExecution/requestApproval'
+ if mode=='cancel': params['availableDecisions']=['accept','cancel']
  if mode=='file':
   method='item/fileChange/requestApproval'
   params={key:value for key,value in params.items() if key not in ('command','availableDecisions','cwd')}
@@ -48,8 +49,9 @@ for line in sys.stdin:
  message=json.loads(line); record(message)
  method=message.get('method'); ident=message.get('id')
  if method is None:
-  if mode in ('approval','file','permissions','question'):
-   send({'method':'turn/completed','params':{'threadId':'thread-fixture','turn':{'id':'turn-fixture','status':'completed'}}})
+  if mode in ('approval','cancel','file','permissions','question'):
+   status='interrupted' if mode=='cancel' and message.get('result',{}).get('decision')=='cancel' else 'completed'
+   send({'method':'turn/completed','params':{'threadId':'thread-fixture','turn':{'id':'turn-fixture','status':status}}})
   continue
  if method=='initialize': result={}
  elif method=='account/read':
@@ -76,7 +78,7 @@ for line in sys.stdin:
  if method=='turn/interrupt':
   send({'method':'turn/completed','params':{'threadId':'thread-fixture','turn':{'id':'turn-fixture','status':'interrupted'}}})
  if method=='turn/start':
-  if mode in ('approval','file','permissions','question','malformed_question','unknown','foreign'): prompt(); continue
+  if mode in ('approval','cancel','file','permissions','question','malformed_question','unknown','foreign'): prompt(); continue
   if mode=='output':
    send({'method':'item/commandExecution/outputDelta','params':{'threadId':'thread-fixture','turnId':'turn-fixture','delta':'PRIVATE TOOL OUTPUT'}})
    send({'method':'item/completed','params':{'threadId':'thread-fixture','turnId':'turn-fixture','item':{'id':'command','type':'commandExecution','command':'fixture','aggregatedOutput':'PRIVATE TOOL OUTPUT'}}})
@@ -197,6 +199,20 @@ class NormalWorkerTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(reply["result"], {"decision":"accept" if accepted else "decline"})
                     else:
                         self.assertEqual(reply["result"], {"scope":"turn", "permissions":event["params"]["permissions"] if accepted else {}})
+
+    async def test_decline_uses_offered_cancel_and_keeps_worker_usable(self):
+        async with self.worker("cancel") as worker:
+            await worker.begin("Request native human approval.")
+            approval = await worker.next_event()
+            await worker.approve(approval, False)
+            self.assertEqual((await worker.next_event())["params"]["turn"]["status"], "interrupted")
+            with self.assertRaises(WorkerRejected):
+                await worker.approve(approval, False)
+            await worker.begin("Request a fresh native human approval.", "thread-fixture")
+            await worker.approve(await worker.next_event(), True)
+            self.assertEqual((await worker.next_event())["params"]["turn"]["status"], "completed")
+        replies = [record["result"] for record in self.records() if record.get("id") == "server-command" and "result" in record]
+        self.assertEqual(replies, [{"decision": "cancel"}, {"decision": "accept"}])
 
     async def test_question_answers_are_bound_to_the_exact_pending_request(self):
         async with self.worker("question") as worker:

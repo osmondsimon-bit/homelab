@@ -123,3 +123,43 @@ production-versus-candidate gap for normal command execution. No credential or p
 was printed or committed, no Platform API key/fallback was introduced, and no global namespace
 restriction or vendor profile was lowered. This final acceptance is coordinator/operator evidence;
 the independent source reviewer did not repeat the live account, token or model operations.
+
+## Owner-attended commissioning addendum — negative native approvals, 2026-11-15 (Sydney)
+
+The coordinator reports that a memory follow-up passed and the phone displayed a native approval for a harmless temporary marker command. The owner's **Decline** left the marker absent, but the relay exited with `approval_decision_unavailable` and restarted once. Recovery paused the session and invalidated old buttons. This was an availability/protocol compatibility defect; no denied command execution was observed.
+
+Independent inspection of the pinned 0.169.0 source confirms the cause. [`ExecApprovalRequestEvent::default_available_decisions`](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/protocol/src/approvals.rs#L379) normally offers `Approved` and `Abort`, with additional affirmative options only for applicable requests. The [v2 mapping](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/app-server-protocol/src/protocol/v2/item.rs#L109) exposes `Abort` as `cancel`. `decline` is a distinct negative decision that permits the agent to continue the turn; `cancel` also interrupts the turn. The [server response handler](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/app-server/src/bespoke_event_handling.rs#L2126) maps `cancel` back to `Abort`.
+
+**Bounded fix verdict: acceptable; no authority expansion.** For a negative response only, the worker selects `cancel` when an explicit offered list lacks `decline` but contains `cancel`. When `decline` is offered it remains preferred; a missing legacy list retains existing behavior. Positive approval still requires the plain offered `accept`; session approval and policy amendments are never substituted. Malformed lists and unavailable decisions still reject safely. Immutable request/current-turn correlation, single-use consumption and the separate turn-scoped permission response are unchanged. No configuration, credential permissions, model tools or sandbox policy change is involved.
+
+Independent external-peer verification passed **18 worker tests**, including the new case: offered `accept/cancel`, owner denial sends `cancel`, the turn ends interrupted, reuse is rejected, and a fresh task can subsequently receive an explicit ordinary `accept`. The coordinator also reproduced the full GUI decline/status-continuity regression red against the previous implementation and green against the candidate. This review inspected that regression, but its independent execution was blocked at the runner's loopback socket bind (`EPERM`); an independent GUI pass is not claimed.
+
+At this review point a standalone live rejection probe was still pending and the corrected root-owned worker had not been installed. A candidate/live pass and the separately authorized user-local root patch must precede the owner retry. Declining a native request can legitimately interrupt its turn when cancellation is the offered negative choice; it must not restart the relay or cause the denied action to execute. No token, enrollment, private cache or raw native output was read by this reviewer, and no deployment or service action was performed.
+
+## Negative-decision deployment and interaction retest — 2026-11-15 (Sydney)
+
+Coordinator evidence after the review: a live native request had `kind=command` and offered
+`accept/cancel`. The corrected worker rejected it with cancellation, the native turn ended
+interrupted, and the temporary marker remained absent; zero approvals were granted by the probe.
+The operator installed only the corrected worker, and its installed bytes matched the source.
+
+The owner retried Decline through Telegram. The marker remained absent, the relay stayed active
+with no automatic restart, and a subsequent fresh Approve created the marker. A remembered test
+label verified conversational follow-up. The owner also interrupted an observed native sleep;
+the test process was absent afterward and a fresh request while paused was blocked. These are
+coordinator/operator live observations, not a claim that the independent reviewer accessed bot
+credentials or repeated live model operations. The full offline suite passed 40 tests.
+
+The prevention gap was a protocol fixture that advertised the legacy `decline` choice without
+covering the current default `cancel` choice. The new native and full-transport regressions cover
+that actual offered set and require the next task/status to remain usable. Positive approvals still
+require ordinary `accept`; no session/policy-amendment fallback, broader permission or silent retry
+was introduced. No production debug logging was added.
+
+The owner subsequently confirmed that `/resume` accepted a fresh synthetic-address request and
+the documentation address was withheld in the phone reply. Final service metadata remained
+active/enabled with zero automatic restarts since the patch; installed worker bytes still matched
+the reviewed source. Temporary test markers and diagnostic harnesses were removed. This confirms
+ordinary conversation, command approval/denial, interruption, pause/resume and synthetic-address
+withholding; it does not claim exhaustive live file/permission/question variants, recovery drills
+or guaranteed redaction of arbitrary sensitive content.

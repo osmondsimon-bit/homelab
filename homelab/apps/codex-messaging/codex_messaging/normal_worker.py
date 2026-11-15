@@ -303,8 +303,13 @@ class NormalWorker:
         else:
             decision = "accept" if accepted else "decline"
             available = event["params"].get("availableDecisions")
-            if available is not None and (not isinstance(available, list) or decision not in available):
-                raise WorkerRejected("approval_decision_unavailable")
+            if available is not None:
+                if not isinstance(available, list):
+                    raise WorkerRejected("approval_decision_unavailable")
+                if not accepted and "decline" not in available and "cancel" in available:
+                    decision = "cancel"
+                if decision not in available:
+                    raise WorkerRejected("approval_decision_unavailable")
             result = {"decision": decision}
         del self.server_requests[event["id"]]
         await self._send({"id": event["id"], "result": result})

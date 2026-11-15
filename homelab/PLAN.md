@@ -109,6 +109,9 @@ Offloading the simple services to oneill preserves its independent recovery role
   [current security/infrastructure review](apps/codex-messaging/relay-review.md).
   [The component runbook](docs/components/codex-messaging.md) owns installed acceptance and operation;
   [the plan](docs/codex-messaging-plan.md) tracks additional approval/question and recovery coverage.
+  Owner-attended interaction tests found and fixed native denial mapping (`cancel` when offered);
+  command approval/denial, follow-up, stop/pause/resume and synthetic-address withholding now pass
+  with 40 offline regressions. The service is left resumed, active and enabled.
 
 - **Ansible currently creates *and* configures** the LXCs — `pct create` + config in the `provision-*.yml` playbooks (ADR-005). This is the interim mechanism and recovers cleanly by re-running.
 - **Terraform** (`bpg/proxmox`, ADR-008) is scaffolded but its **import is deferred to cluster scale** — it will take over the *create* role then. Target boundary: *Terraform = box exists with the right shape; Ansible = box is set up.*

@@ -95,7 +95,7 @@ phone access; Tailscale/desktop recovery remains necessary.
 
 ## Verification and operating follow-through
 
-**Source complete:** 38 offline tests pass, including the HTTP/stdio task, native approval and result
+**Source complete:** 40 offline tests pass, including the HTTP/stdio task, native approval and result
 flow, owner checks, questions/cancellation, restart and replay protection. Playbook syntax and both
 templates verify with synthetic configuration; the rendered systemd unit verifies.
 [The current review](../apps/codex-messaging/relay-review.md) records security/infrastructure findings
@@ -107,7 +107,9 @@ subscription admission, paired-owner status reply, normal native command turn an
 The initial inference URL and missing runtime companion were corrected before declaring normal
 task execution operational. Existing normal tools/model settings and approval policy remain intact.
 
-Continue exercising native approval/question variants, interruption, transport loss and long-running
+Owner-attended follow-up, command approval/denial, interruption and paused-request checks are
+recorded in the component runbook, including the offered-`cancel` compatibility correction.
+Continue exercising file/permission approval and structured-question variants, transport loss and long-running
 remote jobs against safe fixtures. Existing source coverage is not a claim that every live variant
 was exercised. Keep ordinary OS/runtime patch review and headroom monitoring, and use the encrypted
 management-VM backup model. Prevent a restored clone from polling concurrently; an isolated restore
