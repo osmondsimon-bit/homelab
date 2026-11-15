@@ -143,6 +143,5 @@ Final host checks report all pools healthy, cluster quorum on both nodes, all ex
 guests still running, and both replication jobs with zero failures. Prometheus and Alertmanager
 ready, **18/18** scrapes up and **no pending or firing alerts** after the refreshed maintenance
 metrics were scraped. Maintenance metrics were refreshed on each host after patching.
-Vaultwarden Docker health is healthy; ByParr's 15-minute Docker probe interval initially leaves its
-status starting despite direct local health HTTP 200. Keep the direct health evidence distinct
-from that delayed Docker status.
+Vaultwarden and ByParr Docker health are both **healthy**. ByParr's initial starting status cleared
+on its first normal 15-minute probe; direct local health had already returned HTTP 200.
