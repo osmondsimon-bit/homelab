@@ -153,6 +153,11 @@ the last day of each month to open those queues and run the deliberate maintenan
 
 ## Security hardening
 
+Latest vulnerability triage: [repository and current-advisory assessment, 2026-11-15](docs/operations/security-audit-2026-11-15.md).
+It confirms critical/high dependency advisories in the separate finance worker lockfile and a
+likely Technitium version match requiring live confirmation. This was not a fresh live estate scan;
+current runtime versions, appliance inventories and exposure tests remain outstanding.
+
 Standard practices: network segmentation, least-privilege access, and no direct internet exposure.
 
 ## Home Assistant expansion
@@ -211,6 +216,7 @@ These are prioritised gaps identified by harsh self-review. Framed as questions 
 - [ ] **UniFi stale object cleanup** — WireGuard Client network (ADR-003 superseded) + vestigial untagged Default net (0 clients, already firewalled off) are known dead objects. Delete them via UniFi UI before they confuse Phase 4 network design.
 
 **Security (confirmed gaps, not hypothetical):**
+- [ ] **Triage the 2026-11-15 vulnerability matches** — [V01/V02 and coverage limits](docs/operations/security-audit-2026-11-15.md): correct finance-worker dependencies in its independent repository before the next extraction; confirm both live Technitium versions against the 15.6.2 security fixes. Conditional Glance/Tailscale matches require configuration/version evidence; no infrastructure update or exploit test ran during triage.
 - [ ] **Address the 2026-10-11 security audit findings and remaining active test set** — [the audit follow-up](docs/operations/security-audit-2026-10-11.md#remediation-follow-up--2026-10-11) records verified S01–S04 fixes, including the live qBittorrent dependency/readiness rollout with unchanged process identity. S05 now has verified authenticated LAN HTTPS scraping, a healthy TLS/expiry probe and source-restricted HAOS proxy; encrypted backup inclusion and landing of its new addon and SSL/share artifacts are verified. Restore of those additions remains untested. Other audit findings and disruptive validation remain open.
 - [ ] **[P1] Resolve private config backup secret handling.** ADR-007 intended `homelab-private` to hold non-credential recovery config, but `backup-local-config.sh` copies gitignored `group_vars/all.yml`, which now contains VPN and service API credentials and is tracked in the private repository's Git history. The private repo is therefore **credential-bearing in practice**; private visibility is access control, not encryption. Choose and record a durable model: (a) split credentials from recoverable non-secret config and exclude them from this backup; (b) encrypt secret-bearing backup material before Git; or (c) explicitly accept plaintext credential-bearing Git storage with documented GitHub/clone protections and residual risk. Completion requires updating ADR-007, ADR-018, the backup script and restore procedure; deciding whether history must be rewritten; and rotating affected credentials if plaintext history is removed or considered exposed. Until then, `/home/simon` is the only working/deployment tree and `/home/simon/homelab-private/homelab` is a restore snapshot only.
 - [ ] **Tighten Home→IoT and Home→Camera firewall policies** — two over-broad `Secure→Unsecure (ANY)` ALLOW rules confirmed via v2 firewall review 2026-06-19. Both should be scoped to `HA-IP → coordinator-IP:port` and `HA-IP → camera-IPs`. Can the UniFi API push policy changes, or is this UI-only? Answer that question first, then action.
