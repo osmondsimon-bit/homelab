@@ -26,7 +26,7 @@ reject_text() {
 
 require_text "$vars" 'depName=ghcr.io/seerr-team/seerr' \
   'Renovate must track the official Seerr image'
-require_text "$vars" 'seerr_image: "ghcr.io/seerr-team/seerr:v3.4.1"' \
+require_text "$vars" 'seerr_image: "ghcr.io/seerr-team/seerr@sha256:aadee014b40e28cf9aa4928bc9d1183a6eb08f8c44d543cddc9efdcb16549be2"' \
   'Seerr must use the exact approved stable release'
 reject_text "$vars" 'fallenbagel/jellyseerr' \
   'the retired Jellyseerr image must not remain in deployment defaults'
@@ -54,7 +54,7 @@ reject_text "$playbook" '--force-recreate' \
 
 require_text "$component" '# Seerr (VM 125)' \
   'the component documentation must use the current product name'
-require_text "$component" '`ghcr.io/seerr-team/seerr:v3.4.1`' \
+require_text "$component" '**3.5.2**' \
   'the component documentation must record the deployed image'
 
 printf 'PASS: Seerr migration regression contract\n'

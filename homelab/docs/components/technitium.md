@@ -7,7 +7,7 @@ DHCP and hands this out as the resolver (ADR-011).
 |---|---|
 | Host / VMID | **oneill** (KAMRUI Essenx E2) / CT 111 (unprivileged LXC, Debian 12) |
 | IP | `YOUR_TECHNITIUM_IP` (static, set in the CT config — reserve/exclude in UniFi) |
-| Software | Technitium DNS `15.6`; both resolvers verified 2026-10-09 after sequential updates and DNS/blocking probes |
+| Software | Technitium DNS `15.6.2`; both resolvers verified 2026-11-15 after sequential updates and DNS/blocking probes |
 | Ports | `53` DNS, `5380` web console (LAN-only HTTP) |
 | Serves | **home VLAN only** (IoT/guest use the gateway for DNS-by-VLAN-role; camera + management excluded — no internet) |
 | Upstreams | DoH forwarders — Cloudflare, Quad9 (`forwarderProtocol: Https`) |
@@ -84,3 +84,5 @@ No LXC-level backup yet; reproducible-from-code. **DNS redundancy live (Phase 4 
 2nd resolver CT 117 `technitium2` on carter — config-identical via the `technitium_instances`
 playbook loop, on an independent node from CT 111. GuestDown covers `lxc/117`. (Operator step:
 hand both `.6` + the 2nd IP out as DHCP DNS servers so clients fail over.)
+
+Security update evidence and retained rollback checkpoints: [2026-11-15 remediation](../operations/security-remediation-2026-11-15.md).

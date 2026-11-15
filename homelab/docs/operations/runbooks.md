@@ -900,6 +900,23 @@ live `all.yml`, and re-run the owning provision play. Renovate never automerges 
 repository-side `renovate.json` is ready; proposal PRs begin only after the Renovate GitHub App is
 enabled for this repository.
 
+### Locally packaged system bubblewrap
+
+VM 100 uses the reviewed local `bubblewrap` 0.13.1 security package described in the
+[November security remediation record](security-remediation-2026-11-15.md). The separate managed
+relay runtime remains independently pinned. Do not assume unattended upgrades maintain this local
+package: its version outranks Noble's 0.9.0 vendor packages, including future backports.
+
+At every monthly maintenance window, check upstream bubblewrap advisories/releases and Ubuntu's
+bubblewrap CVE status against the installed system and managed-runtime versions. Record the review
+and either build/review a fixed local artifact or transition to a verified vendor backport. Review
+musl/libcap advisories for the static artifact as well. A vendor transition must demonstrate that its
+patches cover the tracked CVEs, retain a rollback checkpoint, and explicitly select the reviewed
+version through the package manager (a lower version requires `--allow-downgrades`). Verify the
+installed hash/package, root ownership, non-setuid mode, normal user namespace behavior, existing
+AppArmor profiles and unchanged sysctls before declaring the transition complete. Never weaken
+sandbox policy to make a package test pass.
+
 ### Docker VM image cleanup
 
 After application updates, review `sudo docker system df`, `sudo docker image ls --no-trunc`,

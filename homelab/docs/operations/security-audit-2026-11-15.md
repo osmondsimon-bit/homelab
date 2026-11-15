@@ -35,6 +35,13 @@ restart, firewall change, or recovery operation ran against production. This is 
 and vulnerability assessment with explicit applicability checks, not a penetration test or proof
 that every scanner match is exploitable.
 
+## Remediation follow-up
+
+The operator approved and completed the [2026-11-15 remediation](security-remediation-2026-11-15.md).
+That record owns the deployed versions, health checks, source fixes, rollback checkpoints and
+remaining accepted/conditional findings. The sections below preserve the original assessment
+baseline; their original vulnerable versions are not a claim about the post-rollout state.
+
 ## Priority findings
 
 Priority reflects remediation urgency; upstream severity does not by itself establish a reachable

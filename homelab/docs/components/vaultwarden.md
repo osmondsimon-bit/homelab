@@ -9,7 +9,7 @@ LAN or the internet.**
 | Host / VMID | **carter** / VM 118 (Ubuntu 24.04 cloud-image VM, **not** an LXC; built on Apophis, moved 2026-07-22) |
 | IP | `YOUR_VAULTWARDEN_IP` (static; reserve in UniFi) |
 | Shape | 2 GB / 1 core / 10 GB; CPU `Skylake-Client-noTSX-IBRS` (migratable across the Coffee-Lake pair) |
-| Runtime | Official `vaultwarden/server:1.37.4` **Docker container**, Docker **confined to this VM**; verified live 2026-10-09 |
+| Runtime | Official `vaultwarden/server` **1.37.5** (digest-pinned) **Docker container**, Docker **confined to this VM**; verified live 2026-11-15 |
 | Bind | container published to `127.0.0.1:8080` only |
 | TLS / access | **Tailscale Serve** terminates TLS → `https://vaultwarden.<tailnet>.ts.net`; tailnet ACL restricts it to `group:operators` (node tagged `tag:vaultwarden`, default-deny) |
 | Hardening | container `cap_drop: ALL` + `no-new-privileges`; **signups OFF**; **Argon2id `ADMIN_TOKEN`** (hash only on the VM) |
@@ -53,3 +53,5 @@ The hand-built recipe is retained in [operations/runbooks.md](../operations/runb
 
 ADR-010 (password manager) · ADR-014 (Docker confinement exception) · ADR-018 (tiered secrets) ·
 [secrets-register.md](../operations/secrets-register.md) · [tailscale-acl.hujson](../../ansible/files/tailscale-acl.hujson).
+
+Security update evidence and retained rollback checkpoints: [2026-11-15 remediation](../operations/security-remediation-2026-11-15.md).

@@ -19,6 +19,7 @@ Shell scripts for provisioning, maintenance, and admin tasks.
 | `unifi-query.sh` | Read-only UniFi (UDM) query helper for config review + troubleshooting — GET-only against the controller API via a view-only account; creds in gitignored `~/.unifi-ro.env` | mgmt-vm |
 | `infra-portal-generate.py` | Python generator — reads `physical_infra/` YAML/JSON, renders D2 diagrams, outputs single-page HTML for the infra portal (CT 116). Run via daily systemd timer or `systemctl start infra-portal-generate.service` (ADR-020) | mgmt-vm |
 | `git-precommit-scan.sh` | Privacy/secret guard (ADR-006). Default staged mode keeps the local pre-commit hook fast; `--full-tree` audits every tracked file. GitHub Actions runs the full-tree mode on pushes, pull requests, manual dispatch, and weekly. Use `--require-gitleaks` for a strict dependency check; append `# scan-allow` to an intentional IP/MAC example. | mgmt-vm + GitHub Actions |
+| `build-bwrap-backport.py` | Build the reviewed local bubblewrap 0.13.1 Debian package from its exact verified static binary, upstream source archive, and full musl/libcap license notices. Requires `dpkg-deb`; never installs anything. Install separately through `provision-system-bwrap.yml` after approval; see the security-remediation runbook. | mgmt-vm |
 
 > Provisioning is now primarily done via Ansible (`../ansible/`, ADR-005). These
 > scripts are manual fallbacks and references the playbooks encode — not the primary path.

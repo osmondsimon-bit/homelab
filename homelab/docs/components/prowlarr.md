@@ -8,7 +8,7 @@ indexer domains *and* the VPN keeps a consistent exit IP for Cloudflare solving.
 |---|---|
 | Host / VMID | **apophis** / VM 125 (the Docker VM, shared with Seerr) |
 | WebUI | `http://YOUR_JELLYSEERR_IP:9696` (published on the VM IP by Gluetun) |
-| Packaging | `lscr.io/linuxserver/prowlarr` `2.6.5.5623-ls163` Docker container, **`network_mode: service:gluetun`** (digest-pinned; verified live 2026-10-09) |
+| Packaging | `lscr.io/linuxserver/prowlarr` `2.7.0.5723-ls168` Docker container, **`network_mode: service:gluetun`** (digest-pinned; verified live 2026-11-15) |
 | VPN | **Gluetun** → a 2nd ProtonVPN WireGuard exit (no port-forwarding); egress verified ≠ home WAN |
 | Cloudflare | **ByParr** (FlareSolverr-compatible solver) shares Gluetun's netns → Prowlarr reaches it at `http://localhost:8191`; tag CF-gated indexers (e.g. 1337x) |
 | DNS | Gluetun's own resolver (DoT over the VPN) — **not** Technitium |
@@ -45,3 +45,5 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 
 ## Related
 ADR-022 (+ 2026-06-27 revision) · ADR-014 (Docker exception) · [jellyseerr.md](jellyseerr.md) · [sonarr.md](sonarr.md) · [radarr.md](radarr.md) · [qbittorrent.md](qbittorrent.md).
+
+Security update evidence and retained rollback checkpoints: [2026-11-15 remediation](../operations/security-remediation-2026-11-15.md).

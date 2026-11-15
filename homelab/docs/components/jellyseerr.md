@@ -12,7 +12,7 @@ the indexer-VPN stack (Gluetun + Prowlarr + ByParr). Migrated in place from Jell
 | IP / UI | `YOUR_JELLYSEERR_IP` — `:5055` (LAN/Tailscale only; **LAN-direct**, *not* behind the VPN) |
 | Shape | 3 GB / 2 cores / 20 GB (RAM + disk sized for ByParr's headless browser) |
 | Co-tenants | `gluetun` + `prowlarr` + `byparr` (the indexer-VPN sidecars — see [prowlarr.md](prowlarr.md)) |
-| Image | `ghcr.io/seerr-team/seerr:v3.5.0` (pinned tag; verified live and healthy 2026-10-09); UID 1000, `init: true`, container `no-new-privileges` |
+| Image | `ghcr.io/seerr-team/seerr` **3.5.2** (digest-pinned; verified live and healthy 2026-11-15); UID 1000, `init: true`, container `no-new-privileges` |
 | Backup | NONE routinely by design — small SQLite config, reproducible; the off-VM migration rollback archive is temporary |
 
 ## How it's managed
@@ -37,3 +37,5 @@ cd ~/homelab/ansible && ansible-playbook playbooks/provision-jellyseerr.yml
 
 ## Related
 ADR-022 · ADR-014 (Docker exception #2) · [prowlarr.md](prowlarr.md) · [jellyfin.md](jellyfin.md).
+
+Security update evidence and retained rollback checkpoints: [2026-11-15 remediation](../operations/security-remediation-2026-11-15.md).

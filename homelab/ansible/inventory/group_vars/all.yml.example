@@ -125,8 +125,8 @@ vaultwarden_disk_gb: 10
 vaultwarden_ip: YOUR_VAULTWARDEN_IP/24                     # verify free; reserve in UniFi
 vaultwarden_cpu: Skylake-Client-noTSX-IBRS                 # migratable across the Coffee-Lake pair (x86-64-v2-AES panics Debian cloud images)
 vaultwarden_startup: "order=2,up=10"
-# renovate: datasource=docker depName=vaultwarden/server
-vaultwarden_image: vaultwarden/server:1.37.4              # PINNED container tag — Renovate proposes; operator deploys deliberately
+# renovate: datasource=docker depName=vaultwarden/server currentValue=1.37.5
+vaultwarden_image: vaultwarden/server@sha256:4fe17f415f90087377d37c755e0ea3cf189dcc6794e49cdd2a9adbb4937d9e1f # 1.37.5; reviewed security release
 vaultwarden_domain: https://vaultwarden.YOUR_TAILNET.ts.net # Tailscale Serve URL (tailnet-only) — Glance link-tile + Bitwarden server URL
 
 # --- Actual Budget VM (personal finance, Carter; ADR-023) --------------------
@@ -143,8 +143,8 @@ actual_mac: YOUR_ACTUAL_MAC                               # reserve this MAC+IP 
 actual_cpu: Skylake-Client-noTSX-IBRS                     # live-migratable across the Coffee-Lake cluster pair
 actual_startup: "order=5,up=10"
 actual_ts_authkey_file: "{{ lookup('env', 'HOME') }}/.tailscale-actual-authkey" # one-use join key; chmod 600, never commit, delete after join
-# renovate: datasource=docker depName=actualbudget/actual-server
-actual_image: actualbudget/actual-server:26.10.0           # PINNED stable release; operator deploys deliberately
+# renovate: datasource=docker depName=actualbudget/actual-server currentValue=26.11.0
+actual_image: actualbudget/actual-server@sha256:06cf186569cf58d93e12659ff1a517b65b5b0ebee7050a3991d4bd8a1d398da6 # 26.11.0; export before upgrade
 actual_domain: "{{ vaultwarden_domain | regex_replace('vaultwarden\\.', 'actual.') }}"
 
 # Optional category AI overlay at :8443/insights (ADR-024). Both the 24-month baseline and monthly
@@ -157,7 +157,7 @@ actual_insights_timezone: "{{ patching_timezone | default('Etc/UTC') }}" # compl
 actual_insights_history_months: 24                       # local comparison window; never raw transactions
 actual_insights_exceptional_categories: []               # exact category names excluded from underlying run rate
 # renovate: datasource=docker depName=node
-actual_insights_node_image: node:24.21.0-bookworm-slim   # PINNED LTS build base for the companion image
+actual_insights_node_image: node:24.22.3-bookworm-slim   # PINNED patched LTS build base; companion remains opt-in
 finance_dashboard_enabled: false                        # preserve independent tailnet route :8444 on Actual reprovision
 actual_insights_server_password_file: "{{ lookup('env', 'HOME') }}/.actual-insights-server-password"
 actual_insights_sync_id_file: "{{ lookup('env', 'HOME') }}/.actual-insights-sync-id"
@@ -402,17 +402,17 @@ jellyseerr_disk_gb: 20                                      # ByParr's browser-b
 jellyseerr_ip: YOUR_JELLYSEERR_IP/24
 jellyseerr_cpu: Skylake-Client-noTSX-IBRS
 jellyseerr_port: 5055
-# renovate: datasource=docker depName=ghcr.io/seerr-team/seerr
-seerr_image: "ghcr.io/seerr-team/seerr:v3.5.0"             # PIN — Renovate proposes; operator deploys deliberately
+# renovate: datasource=docker depName=ghcr.io/seerr-team/seerr currentValue=v3.5.2
+seerr_image: "ghcr.io/seerr-team/seerr@sha256:aadee014b40e28cf9aa4928bc9d1183a6eb08f8c44d543cddc9efdcb16549be2" # v3.5.2; reviewed security release
 # Indexer VPN stack on VM 125 (Gluetun + Prowlarr behind it) — bypasses ISP blocks + consistent exit IP.
 # Prowlarr WebUI published on the VM IP :{{ prowlarr_port }}. (ByParr/FlareSolverr added behind the same
 # Gluetun later only if an indexer needs Cloudflare-solving.)
 # renovate: datasource=docker depName=qmcgaw/gluetun currentValue=v3.41.3
 gluetun_image: "qmcgaw/gluetun@sha256:fa19cc76b2af13d57a8d3dc3066f2ada061b1c761b8aecf989b3877c0486e027"   # PINNED by digest — Renovate proposes; operator deploys deliberately
-# renovate: datasource=docker depName=lscr.io/linuxserver/prowlarr currentValue=latest
-prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902"   # Prowlarr 2.6.5.5623-ls163; PINNED by digest
-# renovate: datasource=docker depName=ghcr.io/thephaseless/byparr currentValue=3.0.4
-byparr_image: "ghcr.io/thephaseless/byparr@sha256:874f719518f617d03a60e03411fc5d090647e1a877041e81f8dc965927c7deb6"   # PINNED by digest — Renovate proposes; operator deploys deliberately
+# renovate: datasource=docker depName=lscr.io/linuxserver/prowlarr currentValue=2.7.0.5723-ls168
+prowlarr_docker_image: "lscr.io/linuxserver/prowlarr@sha256:6660787a99b2e58203539583663c973b48979fc00ff2cb78dc0ea17429e1f6ef" # Prowlarr 2.7.0.5723-ls168; reviewed rebuild
+# renovate: datasource=docker depName=ghcr.io/thephaseless/byparr currentValue=3.1.1
+byparr_image: "ghcr.io/thephaseless/byparr@sha256:c66fa161187b8fa527bfad7eefa2647ea1c553f77df68cbffd6fe83366d1787b" # 3.1.1; browser/CA security refresh
 # Paste a 2nd ProtonVPN WireGuard config (any server, NO port-forwarding) in the REAL all.yml. SECRET.
 prowlarr_vpn_wg_config: ""
 

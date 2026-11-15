@@ -25,7 +25,7 @@ grep -Fq 'actual_vmid: 127' "$example_vars" \
   || fail 'Actual must use the agreed VMID 127'
 grep -Fq 'actual_mac: YOUR_ACTUAL_MAC' "$example_vars" \
   || fail 'Actual must use a pre-reserved deterministic MAC address'
-grep -Fq 'actualbudget/actual-server:26.9.0' "$example_vars" \
+grep -Fq 'actualbudget/actual-server@sha256:06cf186569cf58d93e12659ff1a517b65b5b0ebee7050a3991d4bd8a1d398da6' "$example_vars" \
   || fail 'Actual must use the pinned stable container release'
 grep -Fq '127.0.0.1:5006:5006' "$playbook" \
   || fail 'Actual must bind only to VM loopback'

@@ -1,0 +1,91 @@
+---
+# Install the reviewed local bubblewrap backport without changing sandbox policy or restarting services.
+- name: Install the management system bubblewrap security backport
+  hosts: mgmt
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Require the reviewed artifact and explicit installation authorization
+      ansible.builtin.assert:
+        that:
+          - system_bwrap_install_approved | default(false) | bool
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version == '24.04'
+          - ansible_architecture == 'x86_64'
+          - system_bwrap_deb_source | default('') is match('^/')
+          - system_bwrap_deb_sha256 | default('') is match('^[a-f0-9]{64}$')
+        quiet: true
+
+    - name: Verify the controller-local package before transfer
+      ansible.builtin.stat:
+        path: "{{ system_bwrap_deb_source }}"
+        follow: false
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: bwrap_artifact
+
+    - name: Reject missing, linked, or unreviewed package bytes
+      ansible.builtin.assert:
+        that:
+          - bwrap_artifact.stat.isreg | default(false)
+          - not (bwrap_artifact.stat.islnk | default(false))
+          - bwrap_artifact.stat.checksum | default('') == system_bwrap_deb_sha256
+        quiet: true
+
+  tasks:
+    - name: Create the protected local package cache
+      ansible.builtin.file:
+        path: /var/cache/homelab
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Transfer the reviewed package
+      ansible.builtin.copy:
+        src: "{{ system_bwrap_deb_source }}"
+        dest: /var/cache/homelab/bubblewrap_0.13.1-0homelab1_amd64.deb
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Verify the staged package immediately before installation
+      ansible.builtin.stat:
+        path: /var/cache/homelab/bubblewrap_0.13.1-0homelab1_amd64.deb
+        follow: false
+        checksum_algorithm: sha256
+      register: bwrap_staged
+
+    - name: Reject altered or linked staged package bytes
+      ansible.builtin.assert:
+        that:
+          - bwrap_staged.stat.isreg | default(false)
+          - not (bwrap_staged.stat.islnk | default(false))
+          - bwrap_staged.stat.uid == 0
+          - bwrap_staged.stat.mode == '0644'
+          - bwrap_staged.stat.checksum | default('') == system_bwrap_deb_sha256
+        quiet: true
+
+    - name: Install the local backport through the package manager
+      ansible.builtin.apt:
+        deb: /var/cache/homelab/bubblewrap_0.13.1-0homelab1_amd64.deb
+        state: present
+        update_cache: false
+
+    - name: Verify the installed system executable
+      ansible.builtin.stat:
+        path: /usr/bin/bwrap
+        follow: false
+        checksum_algorithm: sha256
+      register: bwrap_installed
+
+    - name: Require the reviewed non-setuid executable
+      ansible.builtin.assert:
+        that:
+          - bwrap_installed.stat.isreg | default(false)
+          - not (bwrap_installed.stat.islnk | default(false))
+          - bwrap_installed.stat.uid == 0
+          - bwrap_installed.stat.mode == '0755'
+          - bwrap_installed.stat.checksum == '711ac2c00998eede367c2b3827efa36ba4436dfce19ab9d3b6d56ff5a5996fa1'
+        quiet: true

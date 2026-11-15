@@ -7,7 +7,7 @@ monitoring, encrypted PBS protection, portable export, and an isolated restore d
 |---|---|
 | Host / VMID | **carter** / VM 127 (Ubuntu 24.04) |
 | Shape | 1 vCPU / 2 GB RAM / 10 GB ZFS disk |
-| Packaging | pinned official `actualbudget/actual-server:26.10.0` Docker image; verified live 2026-10-09 |
+| Packaging | pinned official `actualbudget/actual-server` **26.11.0** (digest-pinned) Docker image; verified live 2026-11-15 |
 | Data | `/opt/actual/data` on the VM, mounted at `/data` in the container |
 | Access | `https://actual.<tailnet>.ts.net` through Tailscale Serve; no LAN/public listener |
 | Authentication | Actual server password only; optional budget E2EE is required by this design |
@@ -78,3 +78,5 @@ category-aggregate-only worker and a separate networkless report server on priva
 `8444`. When `finance_dashboard_enabled` is true, this playbook restores that route after its
 deliberate Tailscale Serve reset; the dashboard project remains responsible for the relay and
 validated report deployment.
+
+Security update evidence and retained rollback checkpoints: [2026-11-15 remediation](../operations/security-remediation-2026-11-15.md).

@@ -14,6 +14,11 @@ const matches = config.customManagers.flatMap((manager) =>
   manager.matchStrings.flatMap((pattern) => [...defaults.matchAll(new RegExp(pattern, "g"))]),
 );
 const dependencies = matches.map((match) => match.groups.depName).sort();
+for (const match of matches) {
+  if (/^[a-f0-9]{64}$/.test(match.groups.currentValue)) {
+    throw new Error(`Renovate treated a digest as a release tag for ${match.groups.depName}`);
+  }
+}
 const expected = [
   "actualbudget/actual-server",
   "ghcr.io/seerr-team/seerr",

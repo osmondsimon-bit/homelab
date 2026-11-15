@@ -91,3 +91,11 @@ The earlier official OSV registry scan covered **1,296** package/version entries
 Git-pinned **rmcp 3.5.1** is outside that registry-only count. Its [HTTP client still buffers JSON bodies](https://github.com/modelcontextprotocol/rust-sdk/blob/98a54789b80110ad210495c4ad845c89e1980471/crates/rmcp/src/transport/common/reqwest/streamable_http_client.rs); the [3.9.0 fix](https://rustsec.org/advisories/RUSTSEC-2026-0462.html) remains relevant when configuring MCP servers. These conditional issues require ordinary runtime update/risk decisions as capabilities are actually used; they do not justify claiming all Codex 0.169.0 dependencies secure.
 
 Next concrete result needed: verify this patched helper's selection by official Codex 0.169.0 and a normal native session on an environment permitting the required namespaces, using only synthetic data. The binary has not been installed or published; provisioning and actual sign-in remain separate actions. No deployment or enrollment occurred in this assessment.
+
+## System-helper follow-up — 2026-11-15
+
+The [estate security remediation](../../docs/operations/security-remediation-2026-11-15.md) replaced
+VM 100's separately vulnerable system `/usr/bin/bwrap` with package `0.13.1-0homelab1`, reusing the
+reviewed static artifact above. Normal-user isolation fixtures passed on the actual VM; existing
+AppArmor/sysctls, managed relay binaries and running service were preserved. This closes the system
+package finding; it does not claim a new paid Codex turn or revalidation of every launcher path.
