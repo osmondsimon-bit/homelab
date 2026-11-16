@@ -10,7 +10,7 @@ Prometheus, native packages, no Docker.
 | IP / ports | `YOUR_MONITORING_IP` — Grafana `:3000`, Prometheus `:9090`, Alertmanager `:9093` (LAN/Tailscale only, no public exposure) |
 | TSDB | Prometheus data on a quota'd ZFS bind-mount (`rpool/data/monitoring-tsdb`), ~30-day retention. **Not backed up** — history is non-critical, rebuilds from code |
 | Exporters | node (`:9100` on apophis+carter+oneill), including five-minute host ZFS/SMART/NVMe/kernel textfile metrics; pve-exporter (`:9221`), unpoller/UniFi (`:9130`), Home Assistant `/api/prometheus`, blackbox (`:9115`) — TCP probe of the SLZB-06 coordinator and HTTP probe of qBittorrent |
-| Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; persistent host-health checks are failure-only (no PASS notifications); apophis dead-man's-switch covers "oneill down" |
+| Alerting | Prometheus rules → Alertmanager → `am-ntfy.py` bridge (`127.0.0.1:9095`) → **ntfy**; persistent host-health checks are failure-only (no PASS notifications); independent Apophis timer covers "oneill down" and exports its own heartbeat |
 
 ## How it's managed
 
@@ -37,9 +37,33 @@ Glance's **Active Alerts** panel presents the same guidance prominently on Overv
 
 On 2026-11-08, retained ntfy history confirmed repeated urgent coordinator/bridge messages were
 accepted during a real outage. This proves server acceptance, not that a subscribed phone displayed
-or sounded them. The operator confirmed those messages were present in the app; phone/watch popup
-delivery remains unverified. If a push is missed, check the exact private topic subscription, app notification
+or sounded them. The operator confirmed those messages were present in the app; that check did not
+verify phone/watch popups. See [PLAN.md](../../PLAN.md) for the latest delivery-drill evidence.
+If a push is missed, check the exact private topic subscription, app notification
 permission, priority filters and background-delivery settings. Never publish the topic in logs.
+
+### Independent Oneill outage notifications
+
+`provision-deadmans-switch.yml` targets only Apophis and is included in `provision-host.yml`, so
+rebuilding the host also reinstalls the fallback. `oneill-watch.timer` checks Prometheus HTTP health
+and the primary Technitium TCP listener every five minutes, independently of Oneill's alerting stack.
+A failed check sends an urgent ntfy notification, repeats after 30 minutes or a changed failure, and
+sends one recovery notification once both checks pass. A TCP listener proves reachability, not DNS
+answer correctness. Failed notification attempts retry at the next check; normal health is silent.
+
+The private destination lives in root-only `/etc/default/oneill-watch` and is passed to curl through
+stdin, keeping it out of command arguments and logs. HTTPS delivery has bounded retries and falls
+back to verified Cloudflare DoH at `https://1.1.1.1/dns-query` if normal delivery fails. The fallback
+needs internet access but does not depend on Oneill or the host's DNS resolver. Certificate
+verification remains enabled for both DoH and ntfy.
+
+The checker publishes `homelab_oneill_watch_*` textfile metrics through Apophis's existing exporter.
+`OneillWatchMissing` catches both a missing installation and a heartbeat older than 15 minutes,
+after five further minutes. `OneillWatchDeliveryFailed` catches notification failures sustained for
+five minutes. These rules make drift visible while the main monitoring stack is available; they
+cannot notify through an unavailable ntfy service. The independent checker remains responsible for
+the Oneill outage itself. A total-site or internet outage still needs the externally hosted
+heartbeat deferred in ADR-013; this change does not add that service.
 
 PVE token creation and all Technitium token-producing/consuming configuration tasks suppress
 Ansible output even under verbose execution. Existing tokens are not recreated by the focused
@@ -124,5 +148,6 @@ and the dead-man's-switch all live in
 
 Stateless relative to Ansible (config + rules + dashboards in git) → recovery is a reprovision;
 only the TSDB *history* is lost (acceptable, ADR-013). The PVE-exporter→apophis token wiring and
-the dead-man's-switch are re-applied by re-running the playbooks. Single instance = a *visibility*
+the dead-man's-switch are re-applied by re-running the playbooks; the host rebuild includes the
+Apophis fallback automatically. Single instance = a *visibility*
 SPOF, not a production one.

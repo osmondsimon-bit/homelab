@@ -12,7 +12,7 @@
 # NOT included here (run per-node afterwards — they create specific guests and/or prompt for
 # secrets, so they aren't blanket base config): provision-monitoring (oneill),
 # provision-tailscale (apophis+oneill), provision-technitium (oneill+carter), provision-pbs,
-# provision-vaultwarden, provision-deadmans-switch (apophis), provision-patching, and the media
+# provision-vaultwarden, provision-patching, and the media
 # plays. See the "Host rebuild — ordered recipe" section in docs/operations/runbooks.md for the
 # full per-node checklist.
 
@@ -21,3 +21,4 @@
 - import_playbook: install-node-exporter.yml    # node_exporter (node-local; lost on reinstall)
 - import_playbook: provision-nic-hardening.yml  # e1000e TX-hang mitigation (2026-07-10 incident)
 - import_playbook: provision-net-watchdog.yml   # network-isolation self-heal watchdog
+- import_playbook: provision-deadmans-switch.yml # Apophis-only independent Oneill alert fallback

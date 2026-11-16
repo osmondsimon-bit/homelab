@@ -585,11 +585,54 @@ backlog item.)
     (respecting `for: 5m`), then `RESOLVED` when it came back — full path Prometheus → Alertmanager →
     am-ntfy → ntfy → phone confirmed. Gap found + closed in the same test: the service LXCs weren't
     individually watched (added `GuestDown`).
-- **Dead-man's-switch:** `provision-deadmans-switch.yml` installs a 5-min cron on **apophis**
-  (`/usr/local/bin/oneill-watch.sh`) that checks oneill's Prometheus + Technitium DNS and ntfy-alerts
-  on failure — so "oneill/Technitium down" is caught even though Alertmanager lives on oneill (it
-  can't alert on its own host being down). Test: `ssh root@YOUR_PROXMOX_IP /usr/local/bin/oneill-watch.sh`
-  (silent when healthy).
+- **Dead-man's-switch:** `provision-deadmans-switch.yml` installs **Apophis-only**
+  `oneill-watch.timer` (every five minutes), also included in `provision-host.yml`. It checks
+  Oneill's Prometheus HTTP health and Technitium TCP/53 listener, then directly publishes urgent
+  ntfy alerts, 30-minute reminders and a recovery notification. Bounded HTTPS delivery retries
+  with verified, literal-IP-bootstrapped DoH if normal DNS/delivery fails. The private URL stays in
+  root-only `/etc/default/oneill-watch`; never print/source it in a diagnostic shell with tracing.
+  See [notification behavior and limits](../components/monitoring.md#independent-oneill-outage-notifications).
+  - Install/repair: `ansible-playbook playbooks/provision-deadmans-switch.yml` from `ansible/`.
+  - On Apophis: `systemctl is-enabled oneill-watch.timer`; `systemctl list-timers oneill-watch.timer`;
+    `systemctl start oneill-watch.service`; `journalctl -u oneill-watch.service -n 20`.
+    Use the service so systemd supplies its private EnvironmentFile. Healthy checks send no push.
+  - Inspect `/var/lib/prometheus/node-exporter/homelab_oneill_watch.prom`. A current heartbeat,
+    `probe_success=1` and `delivery_success=1` are expected. Delivery success means no outstanding
+    failed attempt; an ordinary healthy run does not send a notification or prove phone delivery.
+  - `OneillWatchMissing` catches missing/stale heartbeats, including an entirely missing install.
+    `OneillWatchDeliveryFailed` catches failed sends; inspect the service journal and internet
+    connectivity. Neither rule replaces the independent notifier during a Oneill outage.
+
+#### Isolated fallback delivery drill
+
+Run on Apophis as root. This deliberately sends **DRILL** outage/recovery messages while production
+checks and services keep running. A private mount namespace replaces only the drill's resolver with
+a non-working one, forcing verified DoH delivery. Separate state/metrics keep the drill out of the
+production heartbeat. Never disable TLS validation to make this pass.
+
+```bash
+install -d -m 0700 /run/oneill-watch-drill
+printf 'nameserver 127.0.0.1\noptions timeout:1 attempts:1\n' > /run/oneill-watch-drill/resolv.conf
+systemd-run --unit=oneill-watch-drill-failure --wait --pipe --collect \
+  -p EnvironmentFile=/etc/default/oneill-watch \
+  -p BindReadOnlyPaths=/run/oneill-watch-drill/resolv.conf:/etc/resolv.conf \
+  /usr/bin/env STATE_DIR=/run/oneill-watch-drill/state \
+  TEXTFILE_DIR=/run/oneill-watch-drill/metrics NOTIFY_PREFIX=DRILL \
+  MONITORING_URL=http://127.0.0.1:1/ /usr/local/bin/oneill-watch.sh
+systemd-run --unit=oneill-watch-drill-recovery --wait --pipe --collect \
+  -p EnvironmentFile=/etc/default/oneill-watch \
+  -p BindReadOnlyPaths=/run/oneill-watch-drill/resolv.conf:/etc/resolv.conf \
+  /usr/bin/env STATE_DIR=/run/oneill-watch-drill/state \
+  TEXTFILE_DIR=/run/oneill-watch-drill/metrics NOTIFY_PREFIX=DRILL \
+  /usr/local/bin/oneill-watch.sh
+rm -r /run/oneill-watch-drill
+```
+
+Confirm both messages in retained ntfy history using the private-topic poll procedure above;
+print only titles, priorities and timestamps, never the private URL. HTTP acceptance confirms server
+delivery; the operator must separately confirm the subscribed phone/watch displayed or sounded it.
+Local regressions: `python3 tests/test-oneill-watch.py`; rule behavior:
+`promtool test rules tests/fixtures/oneill-watch-alerts.yml` (from the `homelab/` project root).
 
 ### Persistent host hardware and ZFS health
 
@@ -1478,7 +1521,7 @@ are easy to forget — that's the whole point of `provision-host.yml`).
 |---|------|-----|-----------|
 | 1 | Install PVE from ISO → **ZFS (RAID0)**, set hostname + network | at the console | ✋ manual (ISO installer) |
 | 2 | Re-add the mgmt-vm root SSH key | `ssh-keygen -R <ip>` then `ssh-copy-id root@<ip>` from mgmt-vm | ✋ manual (bootstrap trust) |
-| 3 | **Base host config** — no-sub repos, key-only SSH, node_exporter, NIC-hardening, net-watchdog | `ansible-playbook playbooks/provision-host.yml --limit <node>` | ✅ `provision-host.yml` |
+| 3 | **Base host config** — no-sub repos, key-only SSH, node_exporter, NIC-hardening, net-watchdog, Apophis-only Oneill notifier | `ansible-playbook playbooks/provision-host.yml --limit <node>` | ✅ `provision-host.yml` |
 | 4 | `apt dist-upgrade` the host | `ansible-playbook playbooks/update-pve-host.yml --limit <node>` | ✅ `update-pve-host.yml` |
 | 5 | **Cluster join** (apophis/carter only — oneill is standalone) | `pvecm add …` on the node's TTY — **mind the 2FA join blocker** | ✋ manual — see per-node section |
 | 6 | Storage + replication (cluster nodes) | `pvesm set local-zfs --nodes …`; `pvesr create-local-job …` | ✋ manual — see per-node section |
@@ -1489,7 +1532,7 @@ Vaultwarden at the prompt where noted):
 
 | Node | Run after base |
 |------|----------------|
-| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-deadmans-switch.yml` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`) |
+| **apophis** | `provision-tailscale.yml --limit apophis` · `provision-patching.yml` · media plays (`provision-jellyfin/qbittorrent/sonarr/radarr/jellyseerr.yml`); independent Oneill notifications already included in base |
 | **carter** | `provision-technitium.yml --limit carter` (admin pw) · restore stateful VM 127 from PBS (or `provision-actual.yml` only for a clean deployment with no finance data) · `provision-patching.yml` |
 | **oneill** | `provision-monitoring.yml` (Grafana pw) · `provision-tailscale.yml --limit oneill -e tailscale_ctid=126 …` (see [tailscale.md](../components/tailscale.md)) · `provision-technitium.yml --limit oneill` · `provision-pbs.yml` · `provision-ha-backup-share.yml` |
 

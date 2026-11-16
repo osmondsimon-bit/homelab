@@ -1,0 +1,79 @@
+# Verify that missing, stale and failed notification checks alert, while fresh checks stay quiet.
+rule_files:
+  - ../../ansible/files/monitoring/alert-rules.yml
+evaluation_interval: 1m
+tests:
+  - name: missing installation is detected
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",node="apophis",instance="watch-test"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OneillWatchMissing
+        exp_alerts:
+          - exp_labels: {job: node, node: apophis, instance: watch-test, severity: critical}
+            exp_annotations:
+              summary: Independent Oneill outage notifier is missing or stale
+              description: Apophis is reachable but its Oneill check has no heartbeat within 15 minutes. Inspect oneill-watch.timer/service or re-run provision-deadmans-switch.yml. Without it, a Oneill outage also disables alerting.
+
+  - name: fresh heartbeat and successful delivery are quiet
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",node="apophis",instance="watch-test"}'
+        values: '1+0x30'
+      - series: 'homelab_oneill_watch_last_check_timestamp_seconds{job="node",node="apophis",instance="watch-test"}'
+        values: '0+60x30'
+      - series: 'homelab_oneill_watch_delivery_success{job="node",node="apophis",instance="watch-test"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: OneillWatchMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: OneillWatchDeliveryFailed
+        exp_alerts: []
+
+  - name: a stopped checker is detected despite retained metrics
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",node="apophis",instance="watch-test"}'
+        values: '1+0x25'
+      - series: 'homelab_oneill_watch_last_check_timestamp_seconds{job="node",node="apophis",instance="watch-test"}'
+        values: '0+0x25'
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: OneillWatchMissing
+        exp_alerts:
+          - exp_labels: {job: node, node: apophis, instance: watch-test, severity: critical}
+            exp_annotations:
+              summary: Independent Oneill outage notifier is missing or stale
+              description: Apophis is reachable but its Oneill check has no heartbeat within 15 minutes. Inspect oneill-watch.timer/service or re-run provision-deadmans-switch.yml. Without it, a Oneill outage also disables alerting.
+
+  - name: failed delivery alerts while the checker is otherwise fresh
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",node="apophis",instance="watch-test"}'
+        values: '1+0x10'
+      - series: 'homelab_oneill_watch_last_check_timestamp_seconds{job="node",node="apophis",instance="watch-test"}'
+        values: '0+60x10'
+      - series: 'homelab_oneill_watch_delivery_success{job="node",node="apophis",instance="watch-test"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OneillWatchDeliveryFailed
+        exp_alerts:
+          - exp_labels: {job: node, node: apophis, instance: watch-test, severity: critical}
+            exp_annotations:
+              summary: Independent Oneill notification delivery failed
+              description: The Apophis fallback could not publish to ntfy using normal DNS or verified DoH. Check journalctl -u oneill-watch, internet access and the private notification configuration. Phone delivery is not proven by HTTP acceptance.
+
+  - name: an unreachable Apophis is handled by TargetDown
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",node="apophis",instance="watch-test"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OneillWatchMissing
+        exp_alerts: []

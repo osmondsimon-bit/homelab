@@ -2,6 +2,18 @@
 
 Latest maintenance: [OS/security packages and controlled restarts, 2026-11-13](docs/operations/maintenance-2026-11-13.md). All 21 running apt targets have zero eligible pending packages/security packages after 49 upgrades across ten machines. Oneill, Carter and their running guests completed verified restarts, followed by Apophis's five LXCs and VM 125. All 18 monitoring targets are up, no alerts are firing, all five backup groups are fresh, and quorum/replication are healthy. **Apophis's operator console reboot remains pending; management VM 100 retains the only reboot flag and will cycle with HA VM 200 during that host reboot.** The previous November 8 management restart was independently confirmed successful. HA appliance and pinned application upgrades remain outside this window by operator choice. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
 
+Latest incident/recovery (2026-11-16): Oneill stopped responding on November 15 around 20:28 AEDT;
+the operator restarted it on November 16. All seven containers, three Glance pages, 18 monitoring
+targets and ZFS health passed recovery checks; the hang's cause remains unconfirmed. Five backup
+groups have pending freshness warnings after the outage and still need catch-up verification.
+The independent Apophis notifier was absent, explaining the monitoring-host alerting gap.
+Its [replacement timer and drift alerts](docs/components/monitoring.md#independent-oneill-outage-notifications)
+are deployed; isolated outage/recovery notifications reached ntfy with normal DNS deliberately
+disabled, and the primary Alertmanager delivery drill also reached ntfy. The operator confirmed
+both fallback notifications appeared with alerts on the subscribed device. The
+[rebuild](docs/operations/runbooks.md#host-rebuild--ordered-recipe)
+now includes the fallback automatically.
+
 ## Current infrastructure
 
 ### apophis (Proxmox host)

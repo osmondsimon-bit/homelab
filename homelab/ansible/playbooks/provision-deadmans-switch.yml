@@ -1,50 +1,110 @@
 ---
-# Dead-man's-switch on apophis: independently checks oneill's monitoring + Technitium
-# DNS and alerts via ntfy if either is unreachable. A monitor running ON oneill can't
-# report oneill being down — this lives on apophis to cover that (ADR-013). Idempotent.
-#
-# Run from the mgmt-vm, inside homelab/ansible/, targeting apophis:
-#   ansible-playbook playbooks/provision-deadmans-switch.yml --limit apophis
-#
-# Uses ntfy_base_url/ntfy_topic + monitoring_ip/technitium_ip from group_vars.
-# Subscribe the ntfy app to the topic to receive alerts.
+# Install the independent Oneill outage notifier on Apophis (ADR-013).
+# Runs every five minutes, bypasses local DNS on delivery failure, and exports its heartbeat.
+# Run from ansible/: ansible-playbook playbooks/provision-deadmans-switch.yml
 
 - name: Install the oneill dead-man's-switch on apophis
-  hosts: proxmox
+  hosts: apophis
   gather_facts: false
 
   tasks:
-    - name: Install the watch script
-      ansible.builtin.copy:
-        dest: /usr/local/bin/oneill-watch.sh
-        mode: "0755"
-        content: |
-          #!/usr/bin/env bash
-          # Dead-man's-switch (managed by ansible — provision-deadmans-switch.yml).
-          # From apophis, check oneill's monitoring + Technitium DNS; ntfy on failure.
-          set -u
-          NTFY="{{ ntfy_base_url }}/{{ ntfy_topic }}"
-          fail=""
-          curl -fsS --max-time 5 "http://{{ monitoring_ip | regex_replace('/.*$','') }}:9090/-/healthy" >/dev/null 2>&1 \
-            || fail="${fail}monitoring(:9090) "
-          timeout 3 bash -c '</dev/null >/dev/tcp/{{ technitium_ip | regex_replace('/.*$','') }}/53' 2>/dev/null \
-            || fail="${fail}technitium-DNS(:53) "
-          if [ -n "$fail" ]; then
-            curl -fsS -H "Title: Homelab alert (from apophis)" -H "Priority: high" -H "Tags: rotating_light" \
-              -d "oneill check FAILED: ${fail}" "$NTFY" >/dev/null 2>&1
-          fi
+    - name: Require a private HTTPS notification destination
+      ansible.builtin.assert:
+        that:
+          - ntfy_base_url is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?$')
+          - ntfy_topic is match('^[A-Za-z0-9_-]+$')
+        quiet: true
       no_log: true
 
-    - name: Schedule the check every 5 minutes
+    - name: Install the watch script
       ansible.builtin.copy:
-        dest: /etc/cron.d/oneill-watch
+        src: "{{ playbook_dir }}/../files/monitoring/oneill-watch.sh"
+        dest: /usr/local/bin/oneill-watch.sh
+        owner: root
+        group: root
+        mode: "0755"
+        validate: /bin/bash -n %s
+
+    - name: Install the root-only watch environment
+      ansible.builtin.copy:
+        dest: /etc/default/oneill-watch
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          NTFY_URL={{ (ntfy_base_url ~ '/' ~ ntfy_topic) | to_json }}
+          MONITORING_URL="http://{{ monitoring_ip | regex_replace('/.*$', '') }}:9090/-/healthy"
+          DNS_IP="{{ technitium_ip | regex_replace('/.*$', '') }}"
+      no_log: true
+
+    - name: Ensure the exporter textfile directory exists
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the bounded watch service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/oneill-watch.service
         mode: "0644"
         content: |
-          # oneill dead-man's-switch (managed by ansible)
-          */5 * * * * root /usr/local/bin/oneill-watch.sh
+          [Unit]
+          Description=Independently check Oneill monitoring and DNS from Apophis
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          EnvironmentFile=/etc/default/oneill-watch
+          ExecStart=/usr/local/bin/oneill-watch.sh
+          TimeoutStartSec=90
+          StateDirectory=oneill-watch
+          StateDirectoryMode=0700
+          UMask=0077
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=strict
+          ReadWritePaths=/var/lib/prometheus/node-exporter
 
-    - name: Report
-      ansible.builtin.debug:
-        msg:
-          - "Dead-man's-switch installed on {{ inventory_hostname }} — runs every 5 min."
-          - "Alerts to ntfy topic (subscribe the app). Test: run /usr/local/bin/oneill-watch.sh"
+    - name: Install the five-minute watch timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/oneill-watch.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Check Oneill independently every five minutes
+          [Timer]
+          OnBootSec=1min
+          OnUnitActiveSec=5min
+          AccuracySec=10s
+          [Install]
+          WantedBy=timers.target
+
+    - name: Remove the superseded cron entry
+      ansible.builtin.file:
+        path: /etc/cron.d/oneill-watch
+        state: absent
+
+    - name: Enable the independent watch timer
+      ansible.builtin.systemd:
+        name: oneill-watch.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Check Oneill and write the initial heartbeat
+      ansible.builtin.systemd:
+        name: oneill-watch.service
+        state: started
+
+    - name: Confirm the watch heartbeat exists
+      ansible.builtin.stat:
+        path: /var/lib/prometheus/node-exporter/homelab_oneill_watch.prom
+      register: oneill_watch_heartbeat
+
+    - name: Require an installed and running check
+      ansible.builtin.assert:
+        that: oneill_watch_heartbeat.stat.exists
+        quiet: true

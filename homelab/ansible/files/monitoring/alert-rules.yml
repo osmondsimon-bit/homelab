@@ -19,6 +19,28 @@ groups:
           summary: "Target down: {{ $labels.job }} ({{ $labels.instance }})"
           description: "Prometheus has failed to scrape {{ $labels.job }} at {{ $labels.instance }} for 5m."
 
+      # Detect a missing installation as well as a stopped timer; a stale-only rule misses absence.
+      - alert: OneillWatchMissing
+        expr: >
+          (up{job="node", node="apophis"} == 1)
+          unless on(node)
+          ((time() - homelab_oneill_watch_last_check_timestamp_seconds{node="apophis"}) < 900)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Independent Oneill outage notifier is missing or stale"
+          description: "Apophis is reachable but its Oneill check has no heartbeat within 15 minutes. Inspect oneill-watch.timer/service or re-run provision-deadmans-switch.yml. Without it, a Oneill outage also disables alerting."
+
+      - alert: OneillWatchDeliveryFailed
+        expr: homelab_oneill_watch_delivery_success{node="apophis"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Independent Oneill notification delivery failed"
+          description: "The Apophis fallback could not publish to ntfy using normal DNS or verified DoH. Check journalctl -u oneill-watch, internet access and the private notification configuration. Phone delivery is not proven by HTTP acceptance."
+
       # Real filesystems under 10% free (excludes pseudo/overlay/squashfs mounts).
       - alert: NodeFilesystemSpaceLow
         expr: >

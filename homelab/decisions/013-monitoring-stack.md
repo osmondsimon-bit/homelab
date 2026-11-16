@@ -81,3 +81,12 @@ private topic from `/etc/am-ntfy/env` (0600) so the topic never lands in the uni
 pip/Docker deps, fully reproducible from code. Alertmanager's **cluster port (`:9094`) is disabled**
 (single instance, and it otherwise binds all interfaces). Rules + AM config are validated with
 `promtool`/`amtool` before each (re)start. Both halves verified end-to-end against ntfy.
+
+## Implementation note — independent-check drift protection (2026-11-16)
+
+The Apophis check uses a systemd timer in place of cron for bounded execution and journal visibility,
+with the same five-minute cadence and host placement. `provision-host.yml` includes its installation.
+The check exports a heartbeat and delivery status so the normal monitoring stack detects a missing
+installation, stopped checker or failed send. HTTPS delivery can retry through verified DoH without
+depending on Oneill's DNS. See the [component reference](../docs/components/monitoring.md#independent-oneill-outage-notifications)
+and [drill procedure](../docs/operations/runbooks.md#isolated-fallback-delivery-drill).
