@@ -494,6 +494,66 @@ groups:
           resolved_title: "Zigbee coordinator reachable"
           resolved_description: "The SLZB-06 Zigbee TCP service is reachable again. Zigbee2MQTT may still be recovering; check the dashboard for a remaining bridge alert."
 
+      # Preserve a quick result signal as well as archive age. HA exports these two numeric
+      # timestamps already; a ten-minute grace avoids calling a normal running backup a failure.
+      - alert: HomeAssistantBackupUnsuccessful
+        expr: >
+          (
+            max by(job, instance) ({__name__=~"(hass|homeassistant)_sensor_timestamp_seconds", job="home-assistant", entity="sensor.backup_last_attempted_automatic_backup"})
+            > on(job, instance)
+            max by(job, instance) ({__name__=~"(hass|homeassistant)_sensor_timestamp_seconds", job="home-assistant", entity="sensor.backup_last_successful_automatic_backup"})
+          )
+          and on(job, instance)
+          (
+            time() - max by(job, instance) ({__name__=~"(hass|homeassistant)_sensor_timestamp_seconds", job="home-assistant", entity="sensor.backup_last_attempted_automatic_backup"}) > 600
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          title: "Home Assistant backup needs attention"
+          summary: "A Home Assistant automatic backup attempt has no successful result after ten minutes."
+          description: "The backup may have failed or stalled. Check Settings > System > Backups and the Oneill Samba destination; retry using the existing automatic settings after the destination recovers. The normal freshness budget is a separate safety net."
+          resolved_title: "Home Assistant backup attempt alert cleared"
+          resolved_description: "The unsuccessful-attempt condition cleared. Verify HA's last-successful timestamp, its archive on Oneill and any missing-telemetry alert before treating the backup as recovered."
+
+      - alert: HomeAssistantBackupTelemetryMissing
+        expr: >
+          (up{job="home-assistant"} == 1)
+          unless on(job, instance)
+          (
+            max by(job, instance) ({__name__=~"(hass|homeassistant)_sensor_timestamp_seconds", job="home-assistant", entity="sensor.backup_last_attempted_automatic_backup"})
+            and on(job, instance)
+            max by(job, instance) ({__name__=~"(hass|homeassistant)_sensor_timestamp_seconds", job="home-assistant", entity="sensor.backup_last_successful_automatic_backup"})
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant backup result telemetry is missing"
+          description: "HA is scrapeable but an automatic-backup attempt/success timestamp is absent. Check the Backup integration sensors and the pinned Prometheus keep-list. Do not interpret missing data as a successful backup."
+
+      # Other PBS groups remaining visible must not hide the loss of the native HA backup series.
+      - alert: HomeAssistantBackupMissing
+        expr: absent(homelab_backup_last_success_timestamp_seconds{type="ha", group="home-assistant"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant backup archive is missing from Oneill"
+          description: "The backup inventory has no native HA archive, even if PBS groups are still present. Check the Samba dataset, expected automatic backup filenames and HA backup destination."
+
+      - alert: BackupCollectorStale
+        expr: >
+          absent(homelab_backup_collector_last_check_timestamp_seconds)
+          or (time() - homelab_backup_collector_last_check_timestamp_seconds) > 5400
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup inventory collector is missing or stale"
+          description: "The hourly backup-freshness collector is absent or has not completed for over 90 minutes. Check backup-freshness.timer/service on Oneill; an old retained metrics file does not prove collection is running."
+
       # A backup group hasn't had a fresh backup within its own staleness budget
       # (homelab_backup_max_age_seconds, default 36h). Metrics come from the backup-hub
       # textfile collector (backup-freshness.sh / provision-backup-monitoring.yml, ADR-017):

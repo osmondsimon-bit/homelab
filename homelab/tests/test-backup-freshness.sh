@@ -49,4 +49,7 @@ if grep -Fq 'group="ct/124"' "$metrics"; then
   fail 'explicitly ignored one-off PBS groups must not be emitted'
 fi
 
+grep -Eq '^homelab_backup_collector_last_check_timestamp_seconds [0-9]+$' "$metrics" \
+  || fail 'a retained textfile must expose whether the collector itself is still running'
+
 printf 'PASS: backup freshness recognizes HA filenames and excludes one-off PBS groups\n'

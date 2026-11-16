@@ -1,12 +1,12 @@
 ---
 # Validate and atomically deploy the committed Prometheus rules plus the narrow
-# HA System Monitor scrape allow-list without
+# HA System Monitor and backup-result scrape allow-list without
 # reprovisioning CT 114, recreating PVE API tokens, or restarting the full stack.
 #
 # Run from the mgmt-vm, inside homelab/ansible/:
 #   ansible-playbook playbooks/deploy-monitoring-rules.yml
 
-- name: Deploy validated Prometheus rules and HA memory allow-list
+- name: Deploy validated Prometheus rules and HA health allow-list
   hosts: oneill
   gather_facts: false
 
@@ -20,7 +20,7 @@
     monitoring_config_host_stage: /tmp/homelab-prometheus.candidate.yml
     monitoring_config_ct_stage: /tmp/homelab-prometheus.candidate.yml
     monitoring_config_live: /etc/prometheus/prometheus.yml
-    monitoring_ha_memory_regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state|(hass|homeassistant)_sensor_(unit_percent|data_size_mib);sensor\.system_monitor_(memory_free|memory_use|memory_usage|swap_usage|memory_pressure_some_60s_average|memory_pressure_full_60s_average)'
+    monitoring_ha_memory_regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state|(hass|homeassistant)_sensor_(unit_percent|data_size_mib);sensor\.system_monitor_(memory_free|memory_use|memory_usage|swap_usage|memory_pressure_some_60s_average|memory_pressure_full_60s_average)|(hass|homeassistant)_sensor_timestamp_seconds;sensor\.backup_last_(attempted|successful)_automatic_backup'
 
   tasks:
     - name: Stage the committed rules on the Proxmox host
@@ -45,7 +45,7 @@
           - "{{ monitoring_config_host_stage }}"
       changed_when: true
 
-    - name: Add the approved HA memory entities to the scrape allow-list candidate
+    - name: Add the approved HA health entities to the scrape allow-list candidate
       ansible.builtin.lineinfile:
         path: "{{ monitoring_config_host_stage }}"
         regexp: '^(\s+)regex: .*binary_sensor\\\.zigbee2mqtt_bridge_connection_state.*$'

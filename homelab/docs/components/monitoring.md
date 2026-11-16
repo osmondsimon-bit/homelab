@@ -65,6 +65,30 @@ cannot notify through an unavailable ntfy service. The independent checker remai
 the Oneill outage itself. A total-site or internet outage still needs the externally hosted
 heartbeat deferred in ADR-013; this change does not add that service.
 
+### Backup failure and missing-data signals
+
+HA's [Backup integration](https://www.home-assistant.io/integrations/backup/) exports last-attempted
+and last-successful automatic backup times. The scrape keep-list retains exactly those two
+timestamp sensors as infrastructure-health signals; backup events and unrelated timestamps remain
+excluded. `HomeAssistantBackupUnsuccessful` warns when an attempt is newer than the last success
+and has remained without a successful result for over ten minutes, followed by a two-minute alert
+hold. This catches failures and stalled attempts sooner than the separate 36-hour archive-age
+budget; it does not classify HA's internal failure reason. Short normal backup runs stay quiet.
+
+`HomeAssistantBackupTelemetryMissing` warns after five minutes if HA is scrapeable but either
+result timestamp is missing. `HomeAssistantBackupMissing` detects a missing native HA archive
+series even when PBS data is still present. The hourly backup inventory also exports
+`homelab_backup_collector_last_check_timestamp_seconds`: `BackupCollectorStale` detects an absent
+collector heartbeat, or a scan over 90 minutes old, sustained for 15 minutes. A retained metrics file
+is no longer evidence that collection is still running. Existing `BackupStale` and `BackupAbsent`
+remain the archive-age and total-metric-loss checks.
+
+These job-specific rules run on the monitoring hub. The independent Apophis notifier covers the
+hub being unavailable and explicitly warns that backup destinations may be affected. After a hub
+outage, verify both HA's successful result and the archive on Oneill; a cleared alert alone does not
+prove that a backup is restorable. Existing backup selection, destination and encryption stay under
+the [backup runbook](../operations/runbooks.md#home-assistant--native-partial-backup-primary-for-ha).
+
 PVE token creation and all Technitium token-producing/consuming configuration tasks suppress
 Ansible output even under verbose execution. Existing tokens are not recreated by the focused
 security deployment. Historical operator-log review and any indicated rotation remain separate.

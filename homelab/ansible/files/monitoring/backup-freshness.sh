@@ -7,7 +7,7 @@
 #   homelab_backup_last_success_timestamp_seconds  (epoch of newest snapshot/file)
 #   homelab_backup_count                           (snapshots/files retained)
 #   homelab_backup_max_age_seconds                 (staleness budget; powers BackupStale)
-# Anything missing simply isn't emitted -> BackupAbsent catches it.
+# Missing HA backups and collector heartbeat have dedicated alerts; BackupAbsent covers total loss.
 set -euo pipefail
 
 PBS_DATASTORE="${PBS_DATASTORE:-/rpool/data/pbs-datastore}"
@@ -75,6 +75,10 @@ if [[ -d "$HA_SHARE" ]]; then
   shopt -u nullglob nocaseglob
   [[ -n "$newest" ]] && emit_group "ha" "home-assistant" "$newest" "$count"
 fi
+
+emit '# HELP homelab_backup_collector_last_check_timestamp_seconds Epoch of the last completed backup inventory scan.'
+emit '# TYPE homelab_backup_collector_last_check_timestamp_seconds gauge'
+emit "homelab_backup_collector_last_check_timestamp_seconds $(date +%s)"
 
 chmod 0644 "$tmp"
 mv -f "$tmp" "$out"

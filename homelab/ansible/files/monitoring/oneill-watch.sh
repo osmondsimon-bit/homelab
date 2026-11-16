@@ -65,7 +65,7 @@ if [[ -n "$fail" ]]; then
   fi
   if (( now - last_notified >= 1800 )); then
     if publish 'Oneill unavailable' urgent \
-      "Oneill check failed from Apophis: $fail. Glance and the normal alert pipeline may be unavailable. Check Oneill power, console and network."; then
+      "Oneill check failed from Apophis: $fail. Glance, backup destinations and the normal alert pipeline may be unavailable. Check Oneill power, console and network; verify missed backups after recovery."; then
       write_state last-notified "$now"
       delivery=1
       echo 'oneill-watch: outage notification accepted' >&2

@@ -5,8 +5,8 @@ Latest maintenance: [OS/security packages and controlled restarts, 2026-11-13](d
 Latest incident/recovery (2026-11-16): Oneill stopped responding on November 15 around 20:28 AEDT;
 the operator restarted it on November 16. All seven containers, three Glance pages, 18 monitoring
 targets and ZFS health passed recovery checks. The operator suspects an unplugged power lead
-caused a hard power-off, consistent with the abrupt journal cutoff. Five backup groups have pending
-freshness warnings after the outage and still need catch-up verification.
+caused a hard power-off, consistent with the abrupt journal cutoff. The missed HA native backup
+has been recovered (below); four PBS groups remain overdue after the outage.
 The independent Apophis notifier was absent, explaining the monitoring-host alerting gap.
 Its [replacement timer and drift alerts](docs/components/monitoring.md#independent-oneill-outage-notifications)
 are deployed; isolated outage/recovery notifications reached ntfy with normal DNS deliberately
@@ -14,6 +14,15 @@ disabled, and the primary Alertmanager delivery drill also reached ntfy. The ope
 both fallback notifications appeared with alerts on the subscribed device. The
 [rebuild](docs/operations/runbooks.md#host-rebuild--ordered-recipe)
 now includes the fallback automatically.
+
+Backup follow-up (2026-11-16): HA's automatic backup attempt failed while its Oneill Samba
+destination was unavailable. A catch-up using the existing automatic settings completed at
+22:10 AEDT; its new compressed, encrypted partial archive was verified on Oneill and inventory is
+fresh. [Backup result and collector alerts](docs/components/monitoring.md#backup-failure-and-missing-data-signals)
+are deployed: two retained HA result timestamps, missing-HA-data checks and a completed-scan
+heartbeat supplement the existing archive-age rules. All 18 monitoring targets remain up; the
+new checks are healthy/inactive. `BackupStale` is firing for PBS groups `vm/100`, `vm/118`, `vm/127`
+and `ct/129`, with their warning messages accepted by ntfy; those catch-ups remain outstanding.
 
 ## Current infrastructure
 

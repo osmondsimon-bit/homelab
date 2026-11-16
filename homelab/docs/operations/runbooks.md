@@ -1052,6 +1052,26 @@ ssh root@YOUR_CARTER_IP "pct restore <newvmid> pbs-oneill:backup/ct/129/<ISO-tim
   `habackup`) added in HAOS as network storage. Portable — restores onto any HAOS.
 - **Backup location must be the share**, not just "this device" — confirm the automatic backup
   writes to oneill (files land in CT 113 `/srv/ha-backups`), otherwise it only stays local.
+- **Failed or missed backup:** inspect `event.backup_automatic_backup` (`event_type` and
+  `failed_reason`) alongside `sensor.backup_last_attempted_automatic_backup` and
+  `sensor.backup_last_successful_automatic_backup`. An attempted time is not a successful result.
+  After the destination recovers, use **Create automatic backup** (`backup.create_automatic`) to
+  retry with the existing selection, encryption and destination. Verify HA reports completion,
+  then independently confirm the new archive's date/size and readable `backup.json` metadata on
+  the Oneill share. Refresh inventory using `systemctl start backup-freshness.service` on Oneill.
+  Do not change the destination or disable encryption merely to make a failing job appear green.
+- **Alerting:** the [backup-specific monitoring signals](../components/monitoring.md#backup-failure-and-missing-data-signals)
+  catch an unsuccessful attempt after a ten-minute grace plus two-minute hold, missing HA result
+  timestamps, missing native HA archives even when PBS data exists, and a missing/stalled inventory
+  collector. The 36-hour freshness budget plus 30-minute hold remains a separate safety net.
+  While Oneill is down these Prometheus rules cannot run; the Apophis notifier is the independent
+  hub-outage alarm. Once the hub returns, alert hold periods start again, so inspect missed jobs
+  immediately rather than waiting for the freshness alarm. HA's own failure event currently has
+  no separate direct push automation; the fast attempt check and independent host alarm cover
+  these two paths without copying HA credentials or restarting the appliance.
+- **Regression checks** (from `homelab/`): `python3 tests/test-ha-backup-monitoring.py`,
+  `bash tests/test-backup-freshness.sh`, and
+  `promtool test rules tests/fixtures/ha-backup-alerts.yml`.
 - **Selection (keep current as you add apps):** HA config + the **stateful add-ons** —
   Zigbee2MQTT (critical: avoids re-pairing), Mosquitto, Cloudflared, etc. **media excluded**;
   recorder DB kept small via `recorder` `purge_keep_days` (~10–14). ⚠️ **When you add a new

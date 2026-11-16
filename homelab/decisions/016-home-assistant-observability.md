@@ -98,3 +98,15 @@ virtual-host identity. Backup inclusion of the new SSL/share files and proxy add
 and landing were verified on 2026-10-11; restoring these additions remains untested.
 The [runbook](../docs/operations/runbooks.md#home-assistant-metrics--verified-lan-tls) owns setup,
 certificate expiry/rotation, backup selection and verification procedures.
+
+## Backup-health measurement exception — 2026-11-16
+
+Retain only `sensor.backup_last_attempted_automatic_backup` and
+`sensor.backup_last_successful_automatic_backup` as numeric timestamp measurements through the
+existing authenticated TLS scrape. Comparing these two operational timestamps detects failed or
+stalled backups without waiting for archive-age expiry. This adds two bounded infrastructure-health
+series; backup event histories and all unrelated timestamps remain excluded. No HA source-filter,
+credential, network or recorder change is required. The
+[monitoring reference](../docs/components/monitoring.md#backup-failure-and-missing-data-signals)
+owns the rule semantics; the [backup runbook](../docs/operations/runbooks.md#home-assistant--native-partial-backup-primary-for-ha)
+owns verification and catch-up.

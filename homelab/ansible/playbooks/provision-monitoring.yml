@@ -445,8 +445,8 @@
               static_configs:
                 - targets: ["{{ ha_metrics_server_name }}:{{ ha_metrics_port | default(8443) }}"]
                   labels: { instance: "{{ ha_ip | regex_replace('/.*$', '') }}:8123" }
-              # Measurements-only keep-list (ADR-016). HA's metrics TSDB stores ONLY
-              # numeric physical quantities + climate temps; state/event metrics
+              # Bounded measurement/health keep-list (ADR-016): numeric physical quantities,
+              # climate temperatures and pinned operational signals. General state/event metrics
               # (hass_state_change_*, hass_entity_available, switches/lights/binary/
               # presence/automations) stay in HA's recorder + Long-Term Statistics.
               # This bounds cardinality as the home grows (50 dimmers = light/switch
@@ -460,10 +460,11 @@
                 # is the signal for Zigbee2MQTTBridgeDown and adds negligible cardinality.
                 # The six pinned System Monitor entities provide truthful HAOS memory/PSI
                 # telemetry; unlike PVE's QEMU value, memory usage excludes reclaimable cache.
-                # (up/scrape_* are synthetic and bypass relabeling.)
+                # Two pinned backup timestamps detect unsuccessful attempts without exporting
+                # backup events or unrelated timestamps. (up/scrape_* bypass relabeling.)
                 - source_labels: [__name__, entity]
                   separator: ';'
-                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state|(hass|homeassistant)_sensor_(unit_percent|data_size_mib);sensor\.system_monitor_(memory_free|memory_use|memory_usage|swap_usage|memory_pressure_some_60s_average|memory_pressure_full_60s_average)'
+                  regex: '(hass|homeassistant)_(sensor_(temperature_celsius|humidity_percent|battery_percent|power_w|energy_kwh|current_a|voltage_v|voltage_mv|illuminance_lx|signal_strength_dbm|precipitation_mm|pressure_hpa|carbon_dioxide_ppm|pm25_ugm3)|climate_(current|target)_temperature_celsius);.*|(hass|homeassistant)_binary_sensor_state;binary_sensor\.zigbee2mqtt_bridge_connection_state|(hass|homeassistant)_sensor_(unit_percent|data_size_mib);sensor\.system_monitor_(memory_free|memory_use|memory_usage|swap_usage|memory_pressure_some_60s_average|memory_pressure_full_60s_average)|(hass|homeassistant)_sensor_timestamp_seconds;sensor\.backup_last_(attempted|successful)_automatic_backup'
                   action: keep
           {% endif %}
           {% if zigbee_coordinator_target is defined %}

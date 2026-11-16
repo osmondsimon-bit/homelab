@@ -1,0 +1,148 @@
+# Exercise unsuccessful HA attempts, missing data and stalled backup collection.
+rule_files:
+- ../../ansible/files/monitoring/alert-rules.yml
+evaluation_interval: 1m
+tests:
+- name: an unsuccessful attempt is detected without waiting 36 hours
+  interval: 1m
+  input_series:
+  - &id001
+    series: up{job="home-assistant",instance="ha-test"}
+    values: 1+0x30
+  - &id002
+    series: homeassistant_sensor_timestamp_seconds{job="home-assistant",instance="ha-test",entity="sensor.backup_last_attempted_automatic_backup"}
+    values: 60+0x30
+  - &id003
+    series: homeassistant_sensor_timestamp_seconds{job="home-assistant",instance="ha-test",entity="sensor.backup_last_successful_automatic_backup"}
+    values: 0+0x30
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: HomeAssistantBackupUnsuccessful
+    exp_alerts:
+    - exp_labels:
+        job: home-assistant
+        instance: ha-test
+        severity: warning
+      exp_annotations: &id004
+        title: Home Assistant backup needs attention
+        summary: A Home Assistant automatic backup attempt has no successful result after ten minutes.
+        description: The backup may have failed or stalled. Check Settings > System > Backups and the Oneill Samba
+          destination; retry using the existing automatic settings after the destination recovers. The normal freshness
+          budget is a separate safety net.
+        resolved_title: Home Assistant backup attempt alert cleared
+        resolved_description: The unsuccessful-attempt condition cleared. Verify HA's last-successful timestamp,
+          its archive on Oneill and any missing-telemetry alert before treating the backup as recovered.
+- name: a normally running backup is allowed ten minutes
+  interval: 1m
+  input_series:
+  - *id001
+  - *id002
+  - *id003
+  alert_rule_test:
+  - eval_time: 8m
+    alertname: HomeAssistantBackupUnsuccessful
+    exp_alerts: []
+- name: a newer successful backup clears the attempt alert
+  interval: 1m
+  input_series:
+  - *id001
+  - *id002
+  - series: homeassistant_sensor_timestamp_seconds{job="home-assistant",instance="ha-test",entity="sensor.backup_last_successful_automatic_backup"}
+    values: 0+0x14 900+0x15
+  alert_rule_test:
+  - eval_time: 16m
+    alertname: HomeAssistantBackupUnsuccessful
+    exp_alerts: []
+- name: the custom HA namespace is supported
+  interval: 1m
+  input_series:
+  - *id001
+  - series: hass_sensor_timestamp_seconds{job="home-assistant",instance="ha-test",entity="sensor.backup_last_attempted_automatic_backup"}
+    values: 60+0x30
+  - series: hass_sensor_timestamp_seconds{job="home-assistant",instance="ha-test",entity="sensor.backup_last_successful_automatic_backup"}
+    values: 0+0x30
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: HomeAssistantBackupUnsuccessful
+    exp_alerts:
+    - exp_labels:
+        job: home-assistant
+        instance: ha-test
+        severity: warning
+      exp_annotations: *id004
+- name: one missing backup result cannot look healthy
+  interval: 1m
+  input_series:
+  - *id001
+  - *id002
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: HomeAssistantBackupTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        job: home-assistant
+        instance: ha-test
+        severity: warning
+      exp_annotations:
+        summary: Home Assistant backup result telemetry is missing
+        description: HA is scrapeable but an automatic-backup attempt/success timestamp is absent. Check the Backup
+          integration sensors and the pinned Prometheus keep-list. Do not interpret missing data as a successful
+          backup.
+- name: a complete fresh result pair avoids a missing-data alert
+  interval: 1m
+  input_series:
+  - *id001
+  - *id002
+  - *id003
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: HomeAssistantBackupTelemetryMissing
+    exp_alerts: []
+- name: PBS data must not mask missing native HA archives
+  interval: 1m
+  input_series:
+  - &id005
+    series: homelab_backup_last_success_timestamp_seconds{type="pbs",group="vm/100"}
+    values: 0+0x120
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: HomeAssistantBackupMissing
+    exp_alerts:
+    - exp_labels:
+        type: ha
+        group: home-assistant
+        severity: warning
+      exp_annotations:
+        summary: Home Assistant backup archive is missing from Oneill
+        description: The backup inventory has no native HA archive, even if PBS groups are still present. Check
+          the Samba dataset, expected automatic backup filenames and HA backup destination.
+- name: old retained metrics cannot mask a stopped collector
+  interval: 1m
+  input_series:
+  - *id005
+  - series: homelab_backup_collector_last_check_timestamp_seconds{job="node",node="oneill",instance="oneill-test"}
+    values: 0+0x120
+  alert_rule_test:
+  - eval_time: 107m
+    alertname: BackupCollectorStale
+    exp_alerts:
+    - exp_labels:
+        job: node
+        node: oneill
+        instance: oneill-test
+        severity: warning
+      exp_annotations: &id006
+        summary: Backup inventory collector is missing or stale
+        description: The hourly backup-freshness collector is absent or has not completed for over 90 minutes. Check
+          backup-freshness.timer/service on Oneill; an old retained metrics file does not prove collection is running.
+- name: an entirely absent collector is also detected
+  interval: 1m
+  input_series:
+  - *id005
+  alert_rule_test:
+  - eval_time: 16m
+    alertname: BackupCollectorStale
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations: *id006
