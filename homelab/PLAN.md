@@ -4,8 +4,9 @@ Latest maintenance: [OS/security packages and controlled restarts, 2026-11-13](d
 
 Latest incident/recovery (2026-11-16): Oneill stopped responding on November 15 around 20:28 AEDT;
 the operator restarted it on November 16. All seven containers, three Glance pages, 18 monitoring
-targets and ZFS health passed recovery checks; the hang's cause remains unconfirmed. Five backup
-groups have pending freshness warnings after the outage and still need catch-up verification.
+targets and ZFS health passed recovery checks. The operator suspects an unplugged power lead
+caused a hard power-off, consistent with the abrupt journal cutoff. Five backup groups have pending
+freshness warnings after the outage and still need catch-up verification.
 The independent Apophis notifier was absent, explaining the monitoring-host alerting gap.
 Its [replacement timer and drift alerts](docs/components/monitoring.md#independent-oneill-outage-notifications)
 are deployed; isolated outage/recovery notifications reached ntfy with normal DNS deliberately
