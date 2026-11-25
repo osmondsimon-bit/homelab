@@ -1,12 +1,12 @@
 # Homelab Plan
 
-Latest maintenance: [OS/security packages and controlled restarts, 2026-11-13](docs/operations/maintenance-2026-11-13.md). All 21 running apt targets have zero eligible pending packages/security packages after 49 upgrades across ten machines. Oneill, Carter and their running guests completed verified restarts, followed by Apophis's five LXCs and VM 125. All 18 monitoring targets are up, no alerts are firing, all five backup groups are fresh, and quorum/replication are healthy. **Apophis's operator console reboot remains pending; management VM 100 retains the only reboot flag and will cycle with HA VM 200 during that host reboot.** The previous November 8 management restart was independently confirmed successful. HA appliance and pinned application upgrades remain outside this window by operator choice. Findings and active validation from the [2026-10-11 security audit](docs/operations/security-audit-2026-10-11.md) remain open.
+Latest maintenance: [fleet patching and controlled restarts, 2026-11-25](docs/operations/maintenance-2026-11-25.md). All 21 running apt targets have zero eligible pending packages/security packages after 353 package changes across ten machines. Oneill, Carter and their running guests completed verified restarts on the newest installed kernels. All 18 monitoring targets and their probes are healthy, all five backup groups are fresh, and quorum/replication are healthy. Host security-update alerts cleared; three deliberate-reboot alerts are pending. **Apophis's operator console reboot remains pending; management VM 100 and Seerr VM 125 retain their reboot flags and will cycle with HA VM 200 during that host reboot.** Exactly two approved unused Actual server images were removed; Actual has about 1.9 GiB free. HA appliance and pinned application upgrades remain separate work, along with the existing security-audit findings, recovery drills and backup-hardening decisions.
 
 Latest incident/recovery (2026-11-16): Oneill stopped responding on November 15 around 20:28 AEDT;
 the operator restarted it on November 16. All seven containers, three Glance pages, 18 monitoring
 targets and ZFS health passed recovery checks. The operator suspects an unplugged power lead
 caused a hard power-off, consistent with the abrupt journal cutoff. The missed HA native backup
-has been recovered (below); four PBS groups remain overdue after the outage.
+was recovered (below); the four overdue PBS groups were confirmed fresh during November 25 maintenance.
 The independent Apophis notifier was absent, explaining the monitoring-host alerting gap.
 Its [replacement timer and drift alerts](docs/components/monitoring.md#independent-oneill-outage-notifications)
 are deployed; isolated outage/recovery notifications reached ntfy with normal DNS deliberately
@@ -21,14 +21,15 @@ destination was unavailable. A catch-up using the existing automatic settings co
 fresh. [Backup result and collector alerts](docs/components/monitoring.md#backup-failure-and-missing-data-signals)
 are deployed: two retained HA result timestamps, missing-HA-data checks and a completed-scan
 heartbeat supplement the existing archive-age rules. All 18 monitoring targets remain up; the
-new checks are healthy/inactive. `BackupStale` is firing for PBS groups `vm/100`, `vm/118`, `vm/127`
-and `ct/129`, with their warning messages accepted by ntfy; those catch-ups remain outstanding.
+new checks were healthy/inactive. `BackupStale` fired for PBS groups `vm/100`, `vm/118`, `vm/127`
+and `ct/129`, with their warning messages accepted by ntfy. November 25 verification confirmed
+that those catch-ups completed; all five recurring backup groups are fresh.
 
 ## Current infrastructure
 
 ### apophis (Proxmox host)
 - Intel i7-8700T, **32 GB RAM** — restored to 32 GB on 2026-07-28 after the original Lenovo 16 GB SO-DIMM failed on 2026-07-22. ~500 GB SSD (**ZFS-on-root**, `rpool` 472 GB — migrated LVM-thin→ZFS in Phase 4b, 2026-06-25)
-- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.26, running newest installed kernel `7.0.14-28-pve`, verified on 2026-11-13. Security packages are current; no host kernel was installed this window. Host boot identity is preserved and the requested operator console reboot remains pending, including management/HA recovery afterward. **Cluster member** (2-node `homelab` with carter; ADR-009)
+- IP: YOUR_PROXMOX_IP — Proxmox VE 9.2.41, running kernel `7.0.14-28-pve` with newest installed kernel `7.0.14-30-pve`, verified on 2026-11-25. Eligible packages are current. Host boot identity is preserved and the operator console reboot remains pending, including management, Seerr and HA recovery afterward. **Cluster member** (2-node `homelab` with carter; ADR-009)
 - **ZFS corruption recovery completed 2026-07-23:** VM 100 was restored from the validated July 21
   PBS image; VM 118's corrupt Apophis replica was fully recreated from Carter. The installed 16 GB
   DIMM passed two MemTest86 passes and the NVMe passed an extended self-test. A recovery scrub
@@ -74,7 +75,7 @@ and `ct/129`, with their warning messages accepted by ntfy; those catch-ups rema
 
 ### oneill (KAMRUI Essenx E2, Proxmox host)
 - Intel N150, 4 cores / 4 threads, 16 GB RAM, single ~477 GB SSD (**ZFS-on-root**, `rpool` — ADR-009)
-- IP: YOUR_NUC_IP — Proxmox VE 9.2.26, running newest installed kernel `7.0.14-28-pve`, verified on 2026-11-13. Security packages are current; the host and all seven guests completed verified restarts and no reboot flag remains. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
+- IP: YOUR_NUC_IP — Proxmox VE 9.2.41, running newest installed kernel `7.0.14-30-pve`, verified on 2026-11-25. Eligible packages are current; the host and all seven guests completed verified restarts and no reboot flag remains. **Standalone** (NOT a cluster member — ADR-009 revised 2026-06-22; the cluster is apophis + carter only)
 - Firmware baseline (inventoried 2026-07-14): AMI BIOS `TWL_P0_AK_10_0108_AMI.15W` (2025-01-17), UEFI, Secure Boot disabled/platform Setup Mode. The purchase record identifies the machine as the KAMRUI Essenx E2 N150/16 GB/512 GB variant, but DMI contains only `Default string`; do not flash a BIOS unless KAMRUI confirms it is for this exact E2/N150 variant and firmware family. Settings and recovery behavior are recorded in the runbook.
 - The low-power "simple services" node, offloading apophis (ADR-009 hardware roadmap)
 
@@ -90,7 +91,7 @@ and `ct/129`, with their warning messages accepted by ntfy; those catch-ups rema
 
 ### carter (ThinkStation P330 Tiny type 30CE, Proxmox host — cluster member)
 - Intel i5-8500 (6c/6t, Coffee Lake — matched to apophis for live migration), **32 GB RAM**, ~256 GB SSD (**ZFS-on-root**, `rpool`)
-- IP: YOUR_CARTER_IP — Proxmox VE 9.2.26, running newest installed kernel `7.0.14-28-pve`, verified on 2026-11-13. Security packages are current; the host and its four running guests completed verified restarts, two-vote quorum recovered automatically and no reboot flags remain. Cold VMs 128/201 remain stopped. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
+- IP: YOUR_CARTER_IP — Proxmox VE 9.2.41, running newest installed kernel `7.0.14-30-pve`, verified on 2026-11-25. Eligible packages are current; the host and its four running guests completed verified restarts, two-vote quorum recovered automatically and no reboot flags remain. Cold VMs 128/201 remain stopped. **Cluster member** (2-node `homelab` with apophis; ADR-009). Arrived 2026-06-22.
 - Firmware updated and confirmed live 2026-07-19: BIOS `M1UKT79A`, DMI release date `2026-03-12`, machine type/model `30CES0DW00`. This is Lenovo's current model-compatible recommended release (package published 2026-03-30). The operator confirmed the recorded BIOS settings survived the update; controlled warm-reboot validation passed during maintenance on 2026-10-09.
 - Role: primary home for Vaultwarden + 2nd DNS resolver + Actual Budget + cold independent management. VM 118 replicates Carter→Apophis; Carter is the replica target for Apophis-owned VM 200. **Backup decision:** reproducible by reinstall + rejoin (4b runbook); no PBS image (hosts aren't imaged).
 
